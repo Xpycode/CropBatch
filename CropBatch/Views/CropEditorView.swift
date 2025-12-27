@@ -85,28 +85,53 @@ struct CropEditorView: View {
     private func handleKeyPress(_ keyPress: KeyPress) -> KeyPress.Result {
         let hasShift = keyPress.modifiers.contains(.shift)
         let hasControl = keyPress.modifiers.contains(.control)
-        let delta = hasControl ? 10 : 1
+        let hasOption = keyPress.modifiers.contains(.option)
+
+        // Base delta: 1px, or 10px with Control
+        let baseDelta = hasControl ? 10 : 1
 
         if hasShift {
             // Crop adjustment mode
-            switch keyPress.key {
-            case .upArrow:
-                appState.adjustCrop(edge: .top, delta: delta)
-                return .handled
-            case .downArrow:
-                appState.adjustCrop(edge: .bottom, delta: delta)
-                return .handled
-            case .leftArrow:
-                appState.adjustCrop(edge: .left, delta: delta)
-                return .handled
-            case .rightArrow:
-                appState.adjustCrop(edge: .right, delta: delta)
-                return .handled
-            default:
-                return .ignored
+            // Option reverses direction (uncrop instead of crop)
+            if hasOption {
+                // Uncrop: arrow direction = edge being pulled back
+                switch keyPress.key {
+                case .upArrow:
+                    appState.adjustCrop(edge: .top, delta: -baseDelta)    // Pull top edge up
+                    return .handled
+                case .downArrow:
+                    appState.adjustCrop(edge: .bottom, delta: -baseDelta) // Pull bottom edge down
+                    return .handled
+                case .leftArrow:
+                    appState.adjustCrop(edge: .left, delta: -baseDelta)   // Pull left edge left
+                    return .handled
+                case .rightArrow:
+                    appState.adjustCrop(edge: .right, delta: -baseDelta)  // Pull right edge right
+                    return .handled
+                default:
+                    return .ignored
+                }
+            } else {
+                // Crop: arrow direction = direction of crop movement
+                switch keyPress.key {
+                case .upArrow:
+                    appState.adjustCrop(edge: .bottom, delta: baseDelta)  // Push bottom edge up
+                    return .handled
+                case .downArrow:
+                    appState.adjustCrop(edge: .top, delta: baseDelta)     // Push top edge down
+                    return .handled
+                case .leftArrow:
+                    appState.adjustCrop(edge: .right, delta: baseDelta)   // Push right edge left
+                    return .handled
+                case .rightArrow:
+                    appState.adjustCrop(edge: .left, delta: baseDelta)    // Push left edge right
+                    return .handled
+                default:
+                    return .ignored
+                }
             }
         } else {
-            // Navigation mode (no modifiers)
+            // Navigation mode (no shift)
             switch keyPress.key {
             case .leftArrow:
                 appState.selectPreviousImage()
