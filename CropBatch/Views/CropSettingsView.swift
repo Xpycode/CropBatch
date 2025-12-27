@@ -27,22 +27,6 @@ struct CropSettingsView: View {
                 value: $state.cropSettings.cropRight
             )
 
-            if appState.cropSettings.hasAnyCrop, let firstImage = appState.images.first {
-                Divider()
-                    .padding(.vertical, 4)
-
-                let newSize = appState.cropSettings.croppedSize(from: firstImage.originalSize)
-                HStack {
-                    Text("Result size:")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    Text("\(Int(newSize.width)) × \(Int(newSize.height))")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-
             Button("Reset All") {
                 appState.cropSettings = CropSettings()
             }
