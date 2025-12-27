@@ -1,7 +1,7 @@
 import Foundation
 import UniformTypeIdentifiers
 
-enum ExportFormat: String, CaseIterable, Identifiable {
+enum ExportFormat: String, CaseIterable, Identifiable, Codable {
     case png = "PNG"
     case jpeg = "JPEG"
     case heic = "HEIC"
@@ -89,6 +89,11 @@ struct ExportSettings: Equatable {
     func wouldOverwriteOriginal(for inputURL: URL) -> Bool {
         return outputURL(for: inputURL) == inputURL
     }
+
+    /// Generates just the output filename (without directory) for a given input URL
+    func outputFilename(for inputURL: URL) -> String {
+        outputURL(for: inputURL).lastPathComponent
+    }
 }
 
 // MARK: - Presets
@@ -140,5 +145,96 @@ struct ExportPreset: Identifiable, Equatable {
 
     static func == (lhs: ExportPreset, rhs: ExportPreset) -> Bool {
         lhs.id == rhs.id
+    }
+}
+
+// MARK: - User Export Profiles
+
+struct UserExportProfile: Identifiable, Codable, Equatable {
+    let id: UUID
+    var name: String
+    var settings: ExportSettingsCodable
+
+    init(id: UUID = UUID(), name: String, settings: ExportSettings) {
+        self.id = id
+        self.name = name
+        self.settings = ExportSettingsCodable(from: settings)
+    }
+
+    var exportSettings: ExportSettings {
+        settings.toExportSettings()
+    }
+}
+
+/// Codable wrapper for ExportSettings (since OutputDirectory can't easily be Codable)
+struct ExportSettingsCodable: Codable, Equatable {
+    var format: ExportFormat
+    var quality: Double
+    var suffix: String
+    var preserveOriginalFormat: Bool
+
+    init(from settings: ExportSettings) {
+        self.format = settings.format
+        self.quality = settings.quality
+        self.suffix = settings.suffix
+        self.preserveOriginalFormat = settings.preserveOriginalFormat
+    }
+
+    func toExportSettings() -> ExportSettings {
+        ExportSettings(
+            format: format,
+            quality: quality,
+            suffix: suffix,
+            preserveOriginalFormat: preserveOriginalFormat
+        )
+    }
+}
+
+@MainActor
+@Observable
+final class ExportProfileManager {
+    static let shared = ExportProfileManager()
+
+    private let userDefaultsKey = "CropBatch.UserExportProfiles"
+
+    private(set) var userProfiles: [UserExportProfile] = []
+
+    private init() {
+        loadProfiles()
+    }
+
+    func saveProfile(name: String, settings: ExportSettings) {
+        let profile = UserExportProfile(name: name, settings: settings)
+        userProfiles.append(profile)
+        persist()
+    }
+
+    func deleteProfile(_ profile: UserExportProfile) {
+        userProfiles.removeAll { $0.id == profile.id }
+        persist()
+    }
+
+    func renameProfile(_ profile: UserExportProfile, to newName: String) {
+        guard let index = userProfiles.firstIndex(where: { $0.id == profile.id }) else { return }
+        userProfiles[index].name = newName
+        persist()
+    }
+
+    private func loadProfiles() {
+        guard let data = UserDefaults.standard.data(forKey: userDefaultsKey) else { return }
+        do {
+            userProfiles = try JSONDecoder().decode([UserExportProfile].self, from: data)
+        } catch {
+            print("Failed to load export profiles: \(error)")
+        }
+    }
+
+    private func persist() {
+        do {
+            let data = try JSONEncoder().encode(userProfiles)
+            UserDefaults.standard.set(data, forKey: userDefaultsKey)
+        } catch {
+            print("Failed to save export profiles: \(error)")
+        }
     }
 }

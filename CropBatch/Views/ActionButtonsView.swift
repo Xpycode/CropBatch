@@ -1,5 +1,6 @@
 import SwiftUI
 import UniformTypeIdentifiers
+import UserNotifications
 
 struct ActionButtonsView: View {
     @Environment(AppState.self) private var appState
@@ -11,6 +12,7 @@ struct ActionButtonsView: View {
     @State private var showSuccessAlert = false
     @State private var exportedCount = 0
     @State private var reviewBeforeExport = true
+    @State private var lastExportDirectory: URL?
 
     private var imagesToProcess: [ImageItem] {
         appState.selectedImageIDs.isEmpty
@@ -124,10 +126,31 @@ struct ActionButtonsView: View {
             Text(exportError ?? "Unknown error")
         }
         .alert("Export Complete", isPresented: $showSuccessAlert) {
+            if let dir = lastExportDirectory {
+                Button("Reveal in Finder") {
+                    NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: dir.path)
+                }
+            }
             Button("OK", role: .cancel) {}
         } message: {
             Text("Successfully exported \(exportedCount) cropped images")
         }
+    }
+
+    /// Send system notification for export completion
+    private func sendExportNotification(count: Int) {
+        let content = UNMutableNotificationContent()
+        content.title = "Export Complete"
+        content.body = "Successfully exported \(count) cropped images"
+        content.sound = .default
+
+        let request = UNNotificationRequest(
+            identifier: UUID().uuidString,
+            content: content,
+            trigger: nil
+        )
+
+        UNUserNotificationCenter.current().add(request)
     }
 
     private func processImages(_ images: [ImageItem], to outputDirectory: URL) async {
@@ -152,7 +175,13 @@ struct ActionButtonsView: View {
             await MainActor.run {
                 appState.isProcessing = false
                 exportedCount = results.count
+                lastExportDirectory = outputDirectory
                 showSuccessAlert = true
+
+                // Send system notification if app is not active
+                if !NSApp.isActive {
+                    sendExportNotification(count: results.count)
+                }
             }
         } catch {
             await MainActor.run {

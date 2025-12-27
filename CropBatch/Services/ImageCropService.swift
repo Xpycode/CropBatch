@@ -94,6 +94,43 @@ struct ImageCropService {
         }
     }
 
+    /// Encodes an NSImage to Data in the specified format
+    /// - Parameters:
+    ///   - image: The image to encode
+    ///   - format: Export format
+    ///   - quality: Compression quality (0.0 to 1.0) for lossy formats
+    /// - Returns: Encoded image data, or nil if encoding fails
+    static func encode(_ image: NSImage, format: ExportFormat, quality: Double = 0.9) -> Data? {
+        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+            return nil
+        }
+
+        let bitmapRep = NSBitmapImageRep(cgImage: cgImage)
+
+        switch format {
+        case .png:
+            return bitmapRep.representation(using: .png, properties: [:])
+        case .jpeg:
+            return bitmapRep.representation(using: .jpeg, properties: [.compressionFactor: quality])
+        case .heic:
+            // HEIC requires CGImageDestination
+            let data = NSMutableData()
+            guard let destination = CGImageDestinationCreateWithData(
+                data as CFMutableData,
+                UTType.heic.identifier as CFString,
+                1,
+                nil
+            ) else { return nil }
+            CGImageDestinationAddImage(destination, cgImage, [
+                kCGImageDestinationLossyCompressionQuality: quality
+            ] as CFDictionary)
+            guard CGImageDestinationFinalize(destination) else { return nil }
+            return data as Data
+        case .tiff:
+            return bitmapRep.representation(using: .tiff, properties: [:])
+        }
+    }
+
     /// Processes multiple images with the same crop and export settings
     /// - Parameters:
     ///   - items: Array of ImageItem to process

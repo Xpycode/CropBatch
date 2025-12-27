@@ -27,6 +27,16 @@ struct PresetPickerView: View {
         return presets
     }
 
+    private var recentPresets: [CropPreset] {
+        appState.recentPresetIDs.compactMap { id in
+            presetManager.allPresets.first { $0.id == id }
+        }
+    }
+
+    private var showRecentSection: Bool {
+        !recentPresets.isEmpty && searchText.isEmpty && selectedCategory == nil
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             // Header with save button
@@ -116,6 +126,30 @@ struct PresetPickerView: View {
             // Presets list
             ScrollView {
                 LazyVStack(spacing: 4) {
+                    // Recent section
+                    if showRecentSection {
+                        HStack {
+                            Image(systemName: "clock.arrow.circlepath")
+                                .font(.caption)
+                            Text("Recent")
+                                .font(.caption.weight(.medium))
+                            Spacer()
+                        }
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 8)
+                        .padding(.top, 4)
+
+                        ForEach(recentPresets) { preset in
+                            PresetRowView(preset: preset) {
+                                applyPreset(preset)
+                            }
+                        }
+
+                        Divider()
+                            .padding(.vertical, 4)
+                    }
+
+                    // All presets
                     ForEach(filteredPresets) { preset in
                         PresetRowView(preset: preset) {
                             applyPreset(preset)
@@ -144,6 +178,8 @@ struct PresetPickerView: View {
 
     private func applyPreset(_ preset: CropPreset) {
         appState.cropSettings = preset.cropSettings
+        appState.trackRecentPreset(preset.id)
+        appState.recordCropChange()
     }
 }
 

@@ -9,25 +9,81 @@ struct CropSettingsView: View {
         @Bindable var state = appState
 
         VStack(alignment: .leading, spacing: 12) {
-            CropEdgeField(
-                edge: .top,
-                value: $state.cropSettings.cropTop
-            )
+            CropEdgeField(edge: .top, value: $state.cropSettings.cropTop)
+                .onChange(of: appState.cropSettings.cropTop) { _, newValue in
+                    applyLinkedChange(edge: .top, value: newValue)
+                }
 
-            CropEdgeField(
-                edge: .bottom,
-                value: $state.cropSettings.cropBottom
-            )
+            CropEdgeField(edge: .bottom, value: $state.cropSettings.cropBottom)
+                .onChange(of: appState.cropSettings.cropBottom) { _, newValue in
+                    applyLinkedChange(edge: .bottom, value: newValue)
+                }
 
-            CropEdgeField(
-                edge: .left,
-                value: $state.cropSettings.cropLeft
-            )
+            CropEdgeField(edge: .left, value: $state.cropSettings.cropLeft)
+                .onChange(of: appState.cropSettings.cropLeft) { _, newValue in
+                    applyLinkedChange(edge: .left, value: newValue)
+                }
 
-            CropEdgeField(
-                edge: .right,
-                value: $state.cropSettings.cropRight
-            )
+            CropEdgeField(edge: .right, value: $state.cropSettings.cropRight)
+                .onChange(of: appState.cropSettings.cropRight) { _, newValue in
+                    applyLinkedChange(edge: .right, value: newValue)
+                }
+
+            // Edge linking - compact button group
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Link Edges")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                HStack(spacing: 4) {
+                    ForEach(EdgeLinkMode.allCases) { mode in
+                        Button {
+                            appState.edgeLinkMode = mode
+                        } label: {
+                            Image(systemName: mode.icon)
+                                .font(.caption)
+                                .frame(width: 28, height: 22)
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(appState.edgeLinkMode == mode ? .accentColor : .secondary)
+                        .help(mode.rawValue)
+                    }
+                }
+            }
+
+            // Aspect ratio guide - compact button group
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Aspect Guide")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                HStack(spacing: 4) {
+                    // None button
+                    Button {
+                        appState.showAspectRatioGuide = nil
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.caption)
+                            .frame(width: 28, height: 22)
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(appState.showAspectRatioGuide == nil ? .accentColor : .secondary)
+                    .help("None")
+
+                    ForEach(AspectRatioGuide.allCases) { guide in
+                        Button {
+                            appState.showAspectRatioGuide = guide
+                        } label: {
+                            Text(guide.rawValue)
+                                .font(.system(size: 9, weight: .medium))
+                                .frame(minWidth: 28, minHeight: 22)
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(appState.showAspectRatioGuide == guide ? .yellow : .secondary)
+                        .help(guide.description)
+                    }
+                }
+            }
 
             // Auto-detect button
             if !appState.images.isEmpty {
@@ -52,6 +108,34 @@ struct CropSettingsView: View {
                 Spacer()
             }
         }
+    }
+
+    @State private var isApplyingLinked = false
+
+    private func applyLinkedChange(edge: CropEdge, value: Int) {
+        guard !isApplyingLinked else { return }
+        isApplyingLinked = true
+
+        switch appState.edgeLinkMode {
+        case .none:
+            break
+        case .vertical:
+            if edge == .top {
+                appState.cropSettings.cropBottom = value
+            } else if edge == .bottom {
+                appState.cropSettings.cropTop = value
+            }
+        case .horizontal:
+            if edge == .left {
+                appState.cropSettings.cropRight = value
+            } else if edge == .right {
+                appState.cropSettings.cropLeft = value
+            }
+        case .all:
+            appState.cropSettings.setAllEdges(value)
+        }
+
+        isApplyingLinked = false
     }
 }
 

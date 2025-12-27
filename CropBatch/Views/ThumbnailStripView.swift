@@ -1,7 +1,9 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct ThumbnailStripView: View {
     @Environment(AppState.self) private var appState
+    @State private var draggedItem: ImageItem?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -10,7 +12,7 @@ struct ThumbnailStripView: View {
             ScrollView(.horizontal, showsIndicators: true) {
                 HStack(spacing: 12) {
                     ForEach(appState.images) { item in
-                        ThumbnailItemView(item: item)
+                        ThumbnailItemView(item: item, draggedItem: $draggedItem)
                     }
                 }
                 .padding(.horizontal, 16)
@@ -25,8 +27,11 @@ struct ThumbnailStripView: View {
 struct ThumbnailItemView: View {
     @Environment(AppState.self) private var appState
     let item: ImageItem
+    @Binding var draggedItem: ImageItem?
 
     @State private var isHovering = false
+    @State private var isTargeted = false
+    @State private var showQuickExport = false
 
     private var isActive: Bool {
         appState.activeImageID == item.id
@@ -36,67 +41,173 @@ struct ThumbnailItemView: View {
         appState.mismatchedImages.contains { $0.id == item.id }
     }
 
+    private var backgroundColor: Color {
+        if isActive {
+            return Color.accentColor.opacity(0.1)
+        } else if isHovering {
+            return Color.gray.opacity(0.1)
+        }
+        return Color.clear
+    }
+
     var body: some View {
+        thumbnailContent
+            .padding(6)
+            .background(RoundedRectangle(cornerRadius: 8).fill(backgroundColor))
+            .overlay(targetOverlay)
+            .opacity(draggedItem?.id == item.id ? 0.5 : 1.0)
+            .scaleEffect(isHovering && draggedItem == nil ? 1.05 : 1.0)
+            .animation(.easeInOut(duration: 0.15), value: isHovering)
+            .onHover { isHovering = $0 }
+            .onTapGesture { appState.setActiveImage(item.id) }
+            .draggable(item.id.uuidString) { dragPreview }
+            .dropDestination(for: String.self, action: handleDrop, isTargeted: { isTargeted = $0 })
+            .contextMenu { contextMenuItems }
+            .fileExporter(
+                isPresented: $showQuickExport,
+                document: makeExportDocument(),
+                contentType: appState.exportSettings.format.utType,
+                defaultFilename: appState.exportSettings.outputFilename(for: item.url)
+            ) { _ in }
+    }
+
+    private var thumbnailContent: some View {
         VStack(spacing: 4) {
-            ZStack(alignment: .topTrailing) {
-                // Thumbnail with crop preview
-                Image(nsImage: item.originalImage)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 100, height: 70)
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
-                    .overlay {
-                        if appState.cropSettings.hasAnyCrop {
-                            ThumbnailCropOverlay(
-                                imageSize: item.originalSize,
-                                cropSettings: appState.cropSettings
-                            )
-                            .clipShape(RoundedRectangle(cornerRadius: 6))
-                        }
-                    }
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 6)
-                            .strokeBorder(
-                                isActive ? Color.accentColor : Color.clear,
-                                lineWidth: 3
-                            )
-                    }
+            thumbnailImage
+            filenameLabel
+        }
+    }
 
-                // Mismatch warning badge
-                if isMismatched {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .font(.caption)
-                        .foregroundStyle(.yellow)
-                        .background(
-                            Circle()
-                                .fill(Color.black.opacity(0.6))
-                                .padding(-2)
-                        )
-                        .offset(x: 4, y: -4)
-                }
+    private var thumbnailImage: some View {
+        ZStack(alignment: .topTrailing) {
+            Image(nsImage: item.originalImage)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(width: 100, height: 70)
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .overlay(cropOverlay)
+                .overlay(selectionBorder)
+
+            if isMismatched {
+                mismatchBadge
             }
+        }
+    }
 
-            // Filename
-            Text(item.filename)
-                .font(.caption2)
-                .lineLimit(1)
-                .truncationMode(.middle)
-                .frame(width: 100)
-                .foregroundStyle(isActive ? .primary : .secondary)
+    @ViewBuilder
+    private var cropOverlay: some View {
+        if appState.cropSettings.hasAnyCrop {
+            ThumbnailCropOverlay(imageSize: item.originalSize, cropSettings: appState.cropSettings)
+                .clipShape(RoundedRectangle(cornerRadius: 6))
         }
-        .padding(6)
-        .background {
+    }
+
+    private var selectionBorder: some View {
+        RoundedRectangle(cornerRadius: 6)
+            .strokeBorder(isActive ? Color.accentColor : Color.clear, lineWidth: 3)
+    }
+
+    private var mismatchBadge: some View {
+        Image(systemName: "exclamationmark.triangle.fill")
+            .font(.caption)
+            .foregroundStyle(.yellow)
+            .background(Circle().fill(Color.black.opacity(0.6)).padding(-2))
+            .offset(x: 4, y: -4)
+    }
+
+    private var filenameLabel: some View {
+        Text(item.filename)
+            .font(.caption2)
+            .lineLimit(1)
+            .truncationMode(.middle)
+            .frame(width: 100)
+            .foregroundStyle(isActive ? .primary : .secondary)
+    }
+
+    @ViewBuilder
+    private var targetOverlay: some View {
+        if isTargeted {
             RoundedRectangle(cornerRadius: 8)
-                .fill(isActive ? Color.accentColor.opacity(0.1) : (isHovering ? Color.gray.opacity(0.1) : Color.clear))
+                .strokeBorder(Color.accentColor, lineWidth: 2, antialiased: true)
         }
-        .scaleEffect(isHovering ? 1.05 : 1.0)
-        .animation(.easeInOut(duration: 0.15), value: isHovering)
-        .onHover { hovering in
-            isHovering = hovering
+    }
+
+    private var dragPreview: some View {
+        Image(nsImage: item.originalImage)
+            .resizable()
+            .aspectRatio(contentMode: .fit)
+            .frame(width: 80, height: 56)
+            .clipShape(RoundedRectangle(cornerRadius: 4))
+            .onAppear { draggedItem = item }
+    }
+
+    @ViewBuilder
+    private var contextMenuItems: some View {
+        Button("Set as Active") { appState.setActiveImage(item.id) }
+        Divider()
+        Button("Copy Cropped to Clipboard") { copyToClipboard() }
+            .disabled(!appState.cropSettings.hasAnyCrop)
+        Button("Quick Export...") { showQuickExport = true }
+            .disabled(!appState.cropSettings.hasAnyCrop)
+        Divider()
+        Button("Remove", role: .destructive) { appState.removeImages(ids: [item.id]) }
+    }
+
+    private func handleDrop(_ items: [String], _ location: CGPoint) -> Bool {
+        guard let droppedID = items.first,
+              let sourceID = UUID(uuidString: droppedID),
+              let targetIndex = appState.images.firstIndex(where: { $0.id == item.id }) else {
+            return false
         }
-        .onTapGesture {
-            appState.setActiveImage(item.id)
+        appState.reorderImage(id: sourceID, toIndex: targetIndex)
+        draggedItem = nil
+        return true
+    }
+
+    private func makeExportDocument() -> CroppedImageDocument {
+        CroppedImageDocument(
+            image: item.originalImage,
+            cropSettings: appState.cropSettings,
+            exportSettings: appState.exportSettings
+        )
+    }
+
+    private func copyToClipboard() {
+        do {
+            let cropped = try ImageCropService.crop(item.originalImage, with: appState.cropSettings)
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.writeObjects([cropped])
+        } catch {
+            print("Copy failed: \(error)")
         }
+    }
+}
+
+// MARK: - Document for Quick Export
+
+struct CroppedImageDocument: FileDocument {
+    static let readableContentTypes: [UTType] = [.png, .jpeg]
+
+    let image: NSImage
+    let cropSettings: CropSettings
+    let exportSettings: ExportSettings
+
+    init(image: NSImage, cropSettings: CropSettings, exportSettings: ExportSettings) {
+        self.image = image
+        self.cropSettings = cropSettings
+        self.exportSettings = exportSettings
+    }
+
+    init(configuration: ReadConfiguration) throws {
+        fatalError("Reading not supported")
+    }
+
+    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
+        let cropped = try ImageCropService.crop(image, with: cropSettings)
+        guard let data = ImageCropService.encode(cropped, format: exportSettings.format, quality: exportSettings.quality) else {
+            throw NSError(domain: "CropBatch", code: 1, userInfo: [NSLocalizedDescriptionKey: "Failed to encode image"])
+        }
+        return FileWrapper(regularFileWithContents: data)
     }
 }
 

@@ -57,11 +57,75 @@ struct CropEditorView: View {
     // MARK: - Image Content
 
     private var imageWithOverlays: some View {
-        scaledImageView
-            .frame(width: scaledImageSize.width, height: scaledImageSize.height)
-            .overlay { cropOverlay }
-            .overlay { dimensionsOverlay }
-            .overlay { cropHandles }
+        ZStack {
+            scaledImageView
+                .frame(width: scaledImageSize.width, height: scaledImageSize.height)
+
+            // Only show crop overlays when not in Before/After mode
+            if !appState.showBeforeAfter {
+                cropOverlay
+                aspectRatioGuideOverlay
+                dimensionsOverlay
+                cropHandles
+            }
+
+            // Top-left info bubble
+            VStack {
+                HStack {
+                    zoomInfoBubble
+                    Spacer()
+                }
+                Spacer()
+            }
+            .padding(12)
+
+            // Before/After indicator
+            if appState.showBeforeAfter {
+                VStack {
+                    HStack {
+                        Spacer()
+                        Text("Original")
+                            .font(.caption)
+                            .fontWeight(.medium)
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 4)
+                            .background(Capsule().fill(Color.black.opacity(0.6)))
+                        Spacer()
+                    }
+                    Spacer()
+                }
+                .padding(.top, 8)
+            }
+        }
+    }
+
+    private var zoomInfoBubble: some View {
+        let zoomPercent = Int(currentScale * 100)
+        return HStack(spacing: 6) {
+            Text("\(zoomPercent)%")
+                .fontWeight(.medium)
+            Text("·")
+                .foregroundStyle(.secondary)
+            Text("\(Int(image.originalSize.width))×\(Int(image.originalSize.height))")
+        }
+        .font(.system(size: 11, design: .monospaced))
+        .foregroundStyle(.white)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background(Capsule().fill(Color.black.opacity(0.5)))
+    }
+
+    @ViewBuilder
+    private var aspectRatioGuideOverlay: some View {
+        if let guide = appState.showAspectRatioGuide {
+            AspectRatioGuideView(
+                imageSize: image.originalSize,
+                displayedSize: scaledImageSize,
+                cropSettings: appState.cropSettings,
+                aspectRatio: guide
+            )
+        }
     }
 
     /// High-quality scaled image using Core Graphics
@@ -436,6 +500,120 @@ struct CropHandlesView: View {
                 },
                 onReset: { cropSettings.cropRight = 0 }
             )
+
+            // MARK: Corner Handles
+
+            // Top-Left corner
+            CornerHandle(isSnapping: NSEvent.modifierFlags.contains(.control))
+                .position(
+                    x: offsetX + CGFloat(cropSettings.cropLeft) * scale,
+                    y: offsetY + CGFloat(cropSettings.cropTop) * scale
+                )
+                .gesture(
+                    DragGesture()
+                        .onChanged { gesture in
+                            let snapping = NSEvent.modifierFlags.contains(.control)
+                            let newX = gesture.location.x - offsetX
+                            let newY = gesture.location.y - offsetY
+                            var topValue = Int(newY / scale)
+                            var leftValue = Int(newX / scale)
+                            if snapping {
+                                topValue = (topValue / 10) * 10
+                                leftValue = (leftValue / 10) * 10
+                            }
+                            cropSettings.cropTop = max(0, min(topValue, Int(imageSize.height) - cropSettings.cropBottom - 10))
+                            cropSettings.cropLeft = max(0, min(leftValue, Int(imageSize.width) - cropSettings.cropRight - 10))
+                        }
+                )
+                .onTapGesture(count: 2) {
+                    cropSettings.cropTop = 0
+                    cropSettings.cropLeft = 0
+                }
+
+            // Top-Right corner
+            CornerHandle(isSnapping: NSEvent.modifierFlags.contains(.control))
+                .position(
+                    x: offsetX + displayedSize.width - CGFloat(cropSettings.cropRight) * scale,
+                    y: offsetY + CGFloat(cropSettings.cropTop) * scale
+                )
+                .gesture(
+                    DragGesture()
+                        .onChanged { gesture in
+                            let snapping = NSEvent.modifierFlags.contains(.control)
+                            let newX = gesture.location.x - offsetX
+                            let newY = gesture.location.y - offsetY
+                            let fromRight = displayedSize.width - newX
+                            var topValue = Int(newY / scale)
+                            var rightValue = Int(fromRight / scale)
+                            if snapping {
+                                topValue = (topValue / 10) * 10
+                                rightValue = (rightValue / 10) * 10
+                            }
+                            cropSettings.cropTop = max(0, min(topValue, Int(imageSize.height) - cropSettings.cropBottom - 10))
+                            cropSettings.cropRight = max(0, min(rightValue, Int(imageSize.width) - cropSettings.cropLeft - 10))
+                        }
+                )
+                .onTapGesture(count: 2) {
+                    cropSettings.cropTop = 0
+                    cropSettings.cropRight = 0
+                }
+
+            // Bottom-Left corner
+            CornerHandle(isSnapping: NSEvent.modifierFlags.contains(.control))
+                .position(
+                    x: offsetX + CGFloat(cropSettings.cropLeft) * scale,
+                    y: offsetY + displayedSize.height - CGFloat(cropSettings.cropBottom) * scale
+                )
+                .gesture(
+                    DragGesture()
+                        .onChanged { gesture in
+                            let snapping = NSEvent.modifierFlags.contains(.control)
+                            let newX = gesture.location.x - offsetX
+                            let newY = gesture.location.y - offsetY
+                            let fromBottom = displayedSize.height - newY
+                            var bottomValue = Int(fromBottom / scale)
+                            var leftValue = Int(newX / scale)
+                            if snapping {
+                                bottomValue = (bottomValue / 10) * 10
+                                leftValue = (leftValue / 10) * 10
+                            }
+                            cropSettings.cropBottom = max(0, min(bottomValue, Int(imageSize.height) - cropSettings.cropTop - 10))
+                            cropSettings.cropLeft = max(0, min(leftValue, Int(imageSize.width) - cropSettings.cropRight - 10))
+                        }
+                )
+                .onTapGesture(count: 2) {
+                    cropSettings.cropBottom = 0
+                    cropSettings.cropLeft = 0
+                }
+
+            // Bottom-Right corner
+            CornerHandle(isSnapping: NSEvent.modifierFlags.contains(.control))
+                .position(
+                    x: offsetX + displayedSize.width - CGFloat(cropSettings.cropRight) * scale,
+                    y: offsetY + displayedSize.height - CGFloat(cropSettings.cropBottom) * scale
+                )
+                .gesture(
+                    DragGesture()
+                        .onChanged { gesture in
+                            let snapping = NSEvent.modifierFlags.contains(.control)
+                            let newX = gesture.location.x - offsetX
+                            let newY = gesture.location.y - offsetY
+                            let fromRight = displayedSize.width - newX
+                            let fromBottom = displayedSize.height - newY
+                            var bottomValue = Int(fromBottom / scale)
+                            var rightValue = Int(fromRight / scale)
+                            if snapping {
+                                bottomValue = (bottomValue / 10) * 10
+                                rightValue = (rightValue / 10) * 10
+                            }
+                            cropSettings.cropBottom = max(0, min(bottomValue, Int(imageSize.height) - cropSettings.cropTop - 10))
+                            cropSettings.cropRight = max(0, min(rightValue, Int(imageSize.width) - cropSettings.cropLeft - 10))
+                        }
+                )
+                .onTapGesture(count: 2) {
+                    cropSettings.cropBottom = 0
+                    cropSettings.cropRight = 0
+                }
         }
     }
 
@@ -506,6 +684,26 @@ struct EdgeHandle: View {
     }
 }
 
+// MARK: - Corner Handle
+
+struct CornerHandle: View {
+    let isSnapping: Bool
+
+    var body: some View {
+        Circle()
+            .fill(isSnapping ? Color.orange : Color.accentColor)
+            .frame(width: 14, height: 14)
+            .overlay(
+                Circle()
+                    .fill(Color.white)
+                    .frame(width: 6, height: 6)
+            )
+            .shadow(color: .black.opacity(0.3), radius: 2, x: 0, y: 1)
+            .contentShape(Rectangle().size(width: 30, height: 30))
+            .cursor(.crosshair)
+    }
+}
+
 // MARK: - Pixel Label
 
 struct PixelLabel: View {
@@ -537,6 +735,82 @@ extension View {
                 NSCursor.pop()
             }
         }
+    }
+}
+
+// MARK: - Aspect Ratio Guide
+
+struct AspectRatioGuideView: View {
+    let imageSize: CGSize
+    let displayedSize: CGSize
+    let cropSettings: CropSettings
+    let aspectRatio: AspectRatioGuide
+
+    private var scale: CGFloat {
+        displayedSize.width / imageSize.width
+    }
+
+    var body: some View {
+        GeometryReader { geometry in
+            let offsetX = (geometry.size.width - displayedSize.width) / 2
+            let offsetY = (geometry.size.height - displayedSize.height) / 2
+
+            // Calculate the current crop area
+            let cropRect = CGRect(
+                x: offsetX + CGFloat(cropSettings.cropLeft) * scale,
+                y: offsetY + CGFloat(cropSettings.cropTop) * scale,
+                width: displayedSize.width - CGFloat(cropSettings.cropLeft + cropSettings.cropRight) * scale,
+                height: displayedSize.height - CGFloat(cropSettings.cropTop + cropSettings.cropBottom) * scale
+            )
+
+            // Calculate the guide rectangle that fits within the crop area
+            let guideRect = calculateGuideRect(within: cropRect)
+
+            // Draw the guide
+            ZStack {
+                // Guide rectangle outline
+                Rectangle()
+                    .strokeBorder(style: StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
+                    .foregroundStyle(Color.yellow.opacity(0.8))
+                    .frame(width: guideRect.width, height: guideRect.height)
+                    .position(x: guideRect.midX, y: guideRect.midY)
+
+                // Aspect ratio label
+                Text(aspectRatio.rawValue)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.yellow)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Capsule().fill(Color.black.opacity(0.5)))
+                    .position(x: guideRect.midX, y: guideRect.maxY + 12)
+            }
+        }
+        .allowsHitTesting(false)
+    }
+
+    private func calculateGuideRect(within cropRect: CGRect) -> CGRect {
+        let targetRatio = aspectRatio.ratio
+        let currentRatio = cropRect.width / cropRect.height
+
+        var guideWidth: CGFloat
+        var guideHeight: CGFloat
+
+        if currentRatio > targetRatio {
+            // Crop area is wider than target - fit to height
+            guideHeight = cropRect.height
+            guideWidth = guideHeight * targetRatio
+        } else {
+            // Crop area is taller than target - fit to width
+            guideWidth = cropRect.width
+            guideHeight = guideWidth / targetRatio
+        }
+
+        return CGRect(
+            x: cropRect.midX - guideWidth / 2,
+            y: cropRect.midY - guideHeight / 2,
+            width: guideWidth,
+            height: guideHeight
+        )
     }
 }
 

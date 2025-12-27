@@ -31,6 +31,10 @@ enum ZoomMode: String, CaseIterable, Identifiable {
 
 @Observable
 final class AppState {
+    init() {
+        loadRecentPresets()
+    }
+
     var images: [ImageItem] = []
     var cropSettings = CropSettings()
     var exportSettings = ExportSettings()
@@ -42,6 +46,84 @@ final class AppState {
     var selectedImageIDs: Set<UUID> = []
     var activeImageID: UUID?
     var zoomMode: ZoomMode = .fit  // Default to fit view
+    var showBeforeAfter = false  // Before/after preview toggle
+    var recentPresetIDs: [UUID] = []  // Recently used crop presets (max 5)
+
+    private let recentPresetsKey = "CropBatch.RecentPresetIDs"
+
+    /// Track a preset as recently used
+    func trackRecentPreset(_ presetID: UUID) {
+        // Remove if already exists (to move to front)
+        recentPresetIDs.removeAll { $0 == presetID }
+        // Insert at front
+        recentPresetIDs.insert(presetID, at: 0)
+        // Keep only last 5
+        if recentPresetIDs.count > 5 {
+            recentPresetIDs = Array(recentPresetIDs.prefix(5))
+        }
+        // Persist
+        let strings = recentPresetIDs.map { $0.uuidString }
+        UserDefaults.standard.set(strings, forKey: recentPresetsKey)
+    }
+
+    /// Load recent presets from UserDefaults
+    func loadRecentPresets() {
+        guard let strings = UserDefaults.standard.stringArray(forKey: recentPresetsKey) else { return }
+        recentPresetIDs = strings.compactMap { UUID(uuidString: $0) }
+    }
+    var edgeLinkMode: EdgeLinkMode = .none  // Linked edge cropping mode
+    var showAspectRatioGuide: AspectRatioGuide? = nil  // Aspect ratio guide overlay
+
+    // Undo/Redo history for crop settings
+    private var cropHistory: [CropSettings] = []
+    private var cropHistoryIndex: Int = -1
+    private var isUndoRedoAction = false
+
+    var canUndo: Bool { cropHistoryIndex > 0 }
+    var canRedo: Bool { cropHistoryIndex < cropHistory.count - 1 }
+
+    /// Record current crop settings in history
+    func recordCropChange() {
+        guard !isUndoRedoAction else { return }
+
+        // Remove any redo history
+        if cropHistoryIndex < cropHistory.count - 1 {
+            cropHistory.removeSubrange((cropHistoryIndex + 1)...)
+        }
+
+        cropHistory.append(cropSettings)
+        cropHistoryIndex = cropHistory.count - 1
+
+        // Limit history to 50 items
+        if cropHistory.count > 50 {
+            cropHistory.removeFirst()
+            cropHistoryIndex -= 1
+        }
+    }
+
+    /// Undo last crop change
+    func undo() {
+        guard canUndo else { return }
+        isUndoRedoAction = true
+        cropHistoryIndex -= 1
+        cropSettings = cropHistory[cropHistoryIndex]
+        isUndoRedoAction = false
+    }
+
+    /// Redo previously undone crop change
+    func redo() {
+        guard canRedo else { return }
+        isUndoRedoAction = true
+        cropHistoryIndex += 1
+        cropSettings = cropHistory[cropHistoryIndex]
+        isUndoRedoAction = false
+    }
+
+    /// Reset all crops
+    func resetCropSettings() {
+        cropSettings = CropSettings()
+        recordCropChange()
+    }
 
     /// Currently selected preset (if any)
     var selectedPreset: ExportPreset? {
@@ -134,6 +216,19 @@ final class AppState {
 
     func setActiveImage(_ id: UUID) {
         activeImageID = id
+    }
+
+    /// Move an image from one index to another
+    func moveImage(from source: IndexSet, to destination: Int) {
+        images.move(fromOffsets: source, toOffset: destination)
+    }
+
+    /// Reorder image by moving it to a new position
+    func reorderImage(id: UUID, toIndex: Int) {
+        guard let sourceIndex = images.firstIndex(where: { $0.id == id }) else { return }
+        let item = images.remove(at: sourceIndex)
+        let adjustedIndex = min(toIndex, images.count)
+        images.insert(item, at: adjustedIndex)
     }
 
     func selectNextImage() {

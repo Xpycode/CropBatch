@@ -70,19 +70,55 @@ struct ExportSettingsView: View {
 
 struct PresetPicker: View {
     @Environment(AppState.self) private var appState
+    @State private var profileManager = ExportProfileManager.shared
+    @State private var showSaveSheet = false
+    @State private var newProfileName = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Preset")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            HStack {
+                Text("Preset")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Spacer()
+
+                Button {
+                    newProfileName = "My Profile"
+                    showSaveSheet = true
+                } label: {
+                    Image(systemName: "plus.circle.fill")
+                        .foregroundStyle(Color.accentColor)
+                }
+                .buttonStyle(.plain)
+                .help("Save current settings as profile")
+            }
 
             Menu {
-                ForEach(ExportPreset.presets) { preset in
-                    Button {
-                        appState.applyPreset(preset)
-                    } label: {
-                        Label(preset.name, systemImage: preset.icon)
+                // Built-in presets
+                Section("Built-in") {
+                    ForEach(ExportPreset.presets) { preset in
+                        Button {
+                            appState.applyPreset(preset)
+                        } label: {
+                            Label(preset.name, systemImage: preset.icon)
+                        }
+                    }
+                }
+
+                // User profiles (if any)
+                if !profileManager.userProfiles.isEmpty {
+                    Divider()
+
+                    Section("My Profiles") {
+                        ForEach(profileManager.userProfiles) { profile in
+                            Button {
+                                appState.exportSettings = profile.exportSettings
+                                appState.selectedPresetID = nil
+                            } label: {
+                                Label(profile.name, systemImage: "person.crop.circle")
+                            }
+                        }
                     }
                 }
             } label: {
@@ -104,6 +140,82 @@ struct PresetPicker: View {
             }
             .buttonStyle(.plain)
         }
+        .sheet(isPresented: $showSaveSheet) {
+            SaveExportProfileSheet(profileName: $newProfileName) {
+                showSaveSheet = false
+            }
+        }
+    }
+}
+
+// MARK: - Save Export Profile Sheet
+
+struct SaveExportProfileSheet: View {
+    @Environment(AppState.self) private var appState
+    @Binding var profileName: String
+    let onDismiss: () -> Void
+    @State private var profileManager = ExportProfileManager.shared
+
+    var body: some View {
+        VStack(spacing: 16) {
+            Text("Save Export Profile")
+                .font(.headline)
+
+            TextField("Profile name", text: $profileName)
+                .textFieldStyle(.roundedBorder)
+
+            // Settings preview
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Settings")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                HStack {
+                    Text("Format:")
+                        .foregroundStyle(.secondary)
+                    Text(appState.exportSettings.preserveOriginalFormat ? "Original" : appState.exportSettings.format.rawValue)
+                }
+                .font(.caption)
+
+                if appState.exportSettings.format.supportsCompression && !appState.exportSettings.preserveOriginalFormat {
+                    HStack {
+                        Text("Quality:")
+                            .foregroundStyle(.secondary)
+                        Text("\(Int(appState.exportSettings.quality * 100))%")
+                    }
+                    .font(.caption)
+                }
+
+                HStack {
+                    Text("Suffix:")
+                        .foregroundStyle(.secondary)
+                    Text(appState.exportSettings.suffix.isEmpty ? "(none)" : appState.exportSettings.suffix)
+                        .fontDesign(.monospaced)
+                }
+                .font(.caption)
+            }
+            .padding()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: 8).fill(Color(nsColor: .controlBackgroundColor)))
+
+            HStack {
+                Button("Cancel", role: .cancel) {
+                    onDismiss()
+                }
+                .keyboardShortcut(.cancelAction)
+
+                Spacer()
+
+                Button("Save") {
+                    profileManager.saveProfile(name: profileName, settings: appState.exportSettings)
+                    onDismiss()
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(profileName.isEmpty)
+            }
+        }
+        .padding()
+        .frame(width: 300)
     }
 }
 

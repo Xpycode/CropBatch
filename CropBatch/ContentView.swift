@@ -66,16 +66,9 @@ struct ContentView: View {
                 }
             }
 
-            // Right side: Info + buttons
+            // Right side: buttons only
             ToolbarItemGroup(placement: .primaryAction) {
                 if !appState.images.isEmpty {
-                    // Zoom percentage and dimensions
-                    if let activeImage = appState.activeImage {
-                        Text(zoomInfoText(for: activeImage))
-                            .font(.system(size: 11, design: .monospaced))
-                            .foregroundStyle(.secondary)
-                    }
-
                     Button {
                         appState.showFileImporter = true
                     } label: {
