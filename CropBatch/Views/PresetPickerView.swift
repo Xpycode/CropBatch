@@ -67,27 +67,50 @@ struct PresetPickerView: View {
             .padding(6)
             .background(RoundedRectangle(cornerRadius: 6).fill(Color(nsColor: .controlBackgroundColor)))
 
-            // Category filter
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 6) {
-                    CategoryChip(
-                        title: "All",
-                        icon: "square.grid.2x2",
-                        isSelected: selectedCategory == nil
-                    ) {
+            // Category filter dropdown
+            HStack {
+                Text("Category")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+
+                Spacer()
+
+                Menu {
+                    Button {
                         selectedCategory = nil
+                    } label: {
+                        Label("All Categories", systemImage: "square.grid.2x2")
                     }
 
+                    Divider()
+
                     ForEach(PresetCategory.allCases) { category in
-                        CategoryChip(
-                            title: category.rawValue,
-                            icon: category.icon,
-                            isSelected: selectedCategory == category
-                        ) {
+                        Button {
                             selectedCategory = category
+                        } label: {
+                            Label(category.rawValue, systemImage: category.icon)
                         }
                     }
+                } label: {
+                    HStack(spacing: 4) {
+                        if let category = selectedCategory {
+                            Image(systemName: category.icon)
+                                .font(.caption)
+                            Text(category.rawValue)
+                        } else {
+                            Image(systemName: "square.grid.2x2")
+                                .font(.caption)
+                            Text("All")
+                        }
+                        Image(systemName: "chevron.up.chevron.down")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(RoundedRectangle(cornerRadius: 6).fill(Color(nsColor: .controlBackgroundColor)))
                 }
+                .buttonStyle(.plain)
             }
 
             // Presets list
@@ -121,33 +144,6 @@ struct PresetPickerView: View {
 
     private func applyPreset(_ preset: CropPreset) {
         appState.cropSettings = preset.cropSettings
-    }
-}
-
-// MARK: - Category Chip
-
-struct CategoryChip: View {
-    let title: String
-    let icon: String
-    let isSelected: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 4) {
-                Image(systemName: icon)
-                    .font(.caption2)
-                Text(title)
-                    .font(.caption)
-            }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(
-                Capsule().fill(isSelected ? Color.accentColor : Color(nsColor: .controlBackgroundColor))
-            )
-            .foregroundStyle(isSelected ? .white : .primary)
-        }
-        .buttonStyle(.plain)
     }
 }
 

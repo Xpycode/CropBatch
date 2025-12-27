@@ -32,6 +32,7 @@ enum PresetCategory: String, Codable, CaseIterable, Identifiable {
     case iPhone = "iPhone"
     case iPad = "iPad"
     case mac = "Mac"
+    case windows = "Windows"
     case browser = "Browser"
     case social = "Social Media"
     case custom = "Custom"
@@ -43,6 +44,7 @@ enum PresetCategory: String, Codable, CaseIterable, Identifiable {
         case .iPhone: return "iphone"
         case .iPad: return "ipad"
         case .mac: return "desktopcomputer"
+        case .windows: return "pc"
         case .browser: return "globe"
         case .social: return "square.and.arrow.up"
         case .custom: return "star"
@@ -150,7 +152,57 @@ extension CropPreset {
             description: "Remove Dock area (~80px)"
         ),
 
-        // Browser Templates
+        // Windows Templates
+        CropPreset(
+            name: "Windows 11 Title Bar",
+            icon: "pc",
+            cropSettings: CropSettings(cropTop: 32, cropBottom: 0, cropLeft: 0, cropRight: 0),
+            isBuiltIn: true,
+            category: .windows,
+            description: "Remove Windows 11 window title bar (32px)"
+        ),
+        CropPreset(
+            name: "Windows 10 Title Bar",
+            icon: "pc",
+            cropSettings: CropSettings(cropTop: 30, cropBottom: 0, cropLeft: 0, cropRight: 0),
+            isBuiltIn: true,
+            category: .windows,
+            description: "Remove Windows 10 window title bar (30px)"
+        ),
+        CropPreset(
+            name: "Windows 11 Taskbar",
+            icon: "pc",
+            cropSettings: CropSettings(cropTop: 0, cropBottom: 48, cropLeft: 0, cropRight: 0),
+            isBuiltIn: true,
+            category: .windows,
+            description: "Remove Windows 11 taskbar (48px)"
+        ),
+        CropPreset(
+            name: "Windows 10 Taskbar",
+            icon: "pc",
+            cropSettings: CropSettings(cropTop: 0, cropBottom: 40, cropLeft: 0, cropRight: 0),
+            isBuiltIn: true,
+            category: .windows,
+            description: "Remove Windows 10 taskbar (40px)"
+        ),
+        CropPreset(
+            name: "Windows Full Chrome",
+            icon: "pc",
+            cropSettings: CropSettings(cropTop: 32, cropBottom: 48, cropLeft: 0, cropRight: 0),
+            isBuiltIn: true,
+            category: .windows,
+            description: "Remove title bar + taskbar (Win 11)"
+        ),
+        CropPreset(
+            name: "Windows Window Border",
+            icon: "pc",
+            cropSettings: CropSettings(cropTop: 1, cropBottom: 1, cropLeft: 1, cropRight: 1),
+            isBuiltIn: true,
+            category: .windows,
+            description: "Remove 1px window border"
+        ),
+
+        // Browser Templates - Safari
         CropPreset(
             name: "Safari Tab Bar",
             icon: "safari",
@@ -167,6 +219,8 @@ extension CropPreset {
             category: .browser,
             description: "Remove Safari tabs + address bar (87px)"
         ),
+
+        // Browser Templates - Chrome
         CropPreset(
             name: "Chrome Tab Bar",
             icon: "globe",
@@ -182,6 +236,78 @@ extension CropPreset {
             isBuiltIn: true,
             category: .browser,
             description: "Remove Chrome tabs + address bar (92px)"
+        ),
+
+        // Browser Templates - Firefox
+        CropPreset(
+            name: "Firefox Tab Bar",
+            icon: "flame",
+            cropSettings: CropSettings(cropTop: 45, cropBottom: 0, cropLeft: 0, cropRight: 0),
+            isBuiltIn: true,
+            category: .browser,
+            description: "Remove Firefox tab bar (45px)"
+        ),
+        CropPreset(
+            name: "Firefox Full Chrome",
+            icon: "flame",
+            cropSettings: CropSettings(cropTop: 85, cropBottom: 0, cropLeft: 0, cropRight: 0),
+            isBuiltIn: true,
+            category: .browser,
+            description: "Remove Firefox tabs + address bar (85px)"
+        ),
+
+        // Browser Templates - Edge
+        CropPreset(
+            name: "Edge Tab Bar",
+            icon: "globe",
+            cropSettings: CropSettings(cropTop: 56, cropBottom: 0, cropLeft: 0, cropRight: 0),
+            isBuiltIn: true,
+            category: .browser,
+            description: "Remove Edge tab bar (56px)"
+        ),
+        CropPreset(
+            name: "Edge Full Chrome",
+            icon: "globe",
+            cropSettings: CropSettings(cropTop: 90, cropBottom: 0, cropLeft: 0, cropRight: 0),
+            isBuiltIn: true,
+            category: .browser,
+            description: "Remove Edge tabs + address bar (90px)"
+        ),
+
+        // Browser Templates - Arc
+        CropPreset(
+            name: "Arc Sidebar",
+            icon: "sidebar.left",
+            cropSettings: CropSettings(cropTop: 0, cropBottom: 0, cropLeft: 70, cropRight: 0),
+            isBuiltIn: true,
+            category: .browser,
+            description: "Remove Arc sidebar (70px)"
+        ),
+        CropPreset(
+            name: "Arc Full Chrome",
+            icon: "sidebar.left",
+            cropSettings: CropSettings(cropTop: 44, cropBottom: 0, cropLeft: 70, cropRight: 0),
+            isBuiltIn: true,
+            category: .browser,
+            description: "Remove Arc sidebar + top bar"
+        ),
+
+        // Browser Templates - Brave
+        CropPreset(
+            name: "Brave Tab Bar",
+            icon: "shield",
+            cropSettings: CropSettings(cropTop: 56, cropBottom: 0, cropLeft: 0, cropRight: 0),
+            isBuiltIn: true,
+            category: .browser,
+            description: "Remove Brave tab bar (56px)"
+        ),
+        CropPreset(
+            name: "Brave Full Chrome",
+            icon: "shield",
+            cropSettings: CropSettings(cropTop: 92, cropBottom: 0, cropLeft: 0, cropRight: 0),
+            isBuiltIn: true,
+            category: .browser,
+            description: "Remove Brave tabs + address bar (92px)"
         ),
 
         // Social Media Templates

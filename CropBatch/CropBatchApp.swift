@@ -18,6 +18,29 @@ struct CropBatchApp: App {
                 }
                 .keyboardShortcut("o", modifiers: .command)
             }
+
+            // Zoom commands
+            CommandMenu("View") {
+                Button("Actual Size (100%)") {
+                    appState.zoomMode = .actualSize
+                }
+                .keyboardShortcut("1", modifiers: .command)
+
+                Button("Fit to View") {
+                    appState.zoomMode = .fit
+                }
+                .keyboardShortcut("2", modifiers: .command)
+
+                Button("Fit Width") {
+                    appState.zoomMode = .fitWidth
+                }
+                .keyboardShortcut("3", modifiers: .command)
+
+                Button("Fit Height") {
+                    appState.zoomMode = .fitHeight
+                }
+                .keyboardShortcut("4", modifiers: .command)
+            }
         }
     }
 }

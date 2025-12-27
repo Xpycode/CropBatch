@@ -1,6 +1,34 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
+/// Zoom modes for the image preview
+enum ZoomMode: String, CaseIterable, Identifiable {
+    case actualSize = "100%"
+    case fit = "Fit"
+    case fitWidth = "Fit Width"
+    case fitHeight = "Fit Height"
+
+    var id: String { rawValue }
+
+    var icon: String {
+        switch self {
+        case .actualSize: return "1.circle"
+        case .fit: return "arrow.up.left.and.arrow.down.right"
+        case .fitWidth: return "arrow.left.and.right"
+        case .fitHeight: return "arrow.up.and.down"
+        }
+    }
+
+    var shortcut: String {
+        switch self {
+        case .actualSize: return "⌘1"
+        case .fit: return "⌘2"
+        case .fitWidth: return "⌘3"
+        case .fitHeight: return "⌘4"
+        }
+    }
+}
+
 @Observable
 final class AppState {
     var images: [ImageItem] = []
@@ -13,6 +41,7 @@ final class AppState {
     var processingProgress: Double = 0
     var selectedImageIDs: Set<UUID> = []
     var activeImageID: UUID?
+    var zoomMode: ZoomMode = .fit  // Default to fit view
 
     /// Currently selected preset (if any)
     var selectedPreset: ExportPreset? {

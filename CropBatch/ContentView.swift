@@ -50,8 +50,32 @@ struct ContentView: View {
             handleDrop(providers: providers)
         }
         .toolbar {
-            ToolbarItemGroup {
+            // Center: Zoom controls only
+            ToolbarItem(placement: .principal) {
                 if !appState.images.isEmpty {
+                    Picker("Zoom", selection: Binding(
+                        get: { appState.zoomMode },
+                        set: { appState.zoomMode = $0 }
+                    )) {
+                        ForEach(ZoomMode.allCases) { mode in
+                            Text(mode.rawValue).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: 240)
+                }
+            }
+
+            // Right side: Info + buttons
+            ToolbarItemGroup(placement: .primaryAction) {
+                if !appState.images.isEmpty {
+                    // Zoom percentage and dimensions
+                    if let activeImage = appState.activeImage {
+                        Text(zoomInfoText(for: activeImage))
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                    }
+
                     Button {
                         appState.showFileImporter = true
                     } label: {
@@ -65,6 +89,32 @@ struct ContentView: View {
                     }
                 }
             }
+        }
+    }
+
+    private func zoomInfoText(for image: ImageItem) -> String {
+        let scale = calculateZoomScale(for: image)
+        let percentage = Int(scale * 100)
+        return "\(percentage)%  \(Int(image.originalSize.width))×\(Int(image.originalSize.height))"
+    }
+
+    private func calculateZoomScale(for image: ImageItem) -> CGFloat {
+        // Approximate scale based on typical view size
+        // This is a simplified calculation for display purposes
+        let availableWidth: CGFloat = 500
+        let availableHeight: CGFloat = 400
+
+        switch appState.zoomMode {
+        case .actualSize:
+            return 1.0
+        case .fit:
+            let scaleX = availableWidth / image.originalSize.width
+            let scaleY = availableHeight / image.originalSize.height
+            return min(scaleX, scaleY, 1.0)
+        case .fitWidth:
+            return availableWidth / image.originalSize.width
+        case .fitHeight:
+            return availableHeight / image.originalSize.height
         }
     }
 
@@ -278,13 +328,40 @@ struct ImageInfoView: View {
 
 struct KeyboardShortcutsContentView: View {
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            ShortcutRow(keys: "← →", description: "Navigate images")
-            ShortcutRow(keys: "⇧ + arrows", description: "Adjust crop edges")
-            ShortcutRow(keys: "⇧⌥ + arrows", description: "Uncrop (reverse)")
-            ShortcutRow(keys: "⇧⌃ + arrows", description: "Adjust by 10px")
-            ShortcutRow(keys: "⌃ + drag", description: "Snap to 10px grid")
-            ShortcutRow(keys: "Double-click", description: "Reset edge to 0")
+        HStack(alignment: .top, spacing: 0) {
+            // Left column: Navigation & Crop
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Navigation & Crop")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .padding(.bottom, 2)
+
+                ShortcutRow(keys: "←  →", description: "Navigate")
+                ShortcutRow(keys: "⇧ Arrow", description: "Adjust crop")
+                ShortcutRow(keys: "⇧⌥ Arrow", description: "Uncrop")
+                ShortcutRow(keys: "⇧⌃ Arrow", description: "×10 adjust")
+                ShortcutRow(keys: "⌃ Drag", description: "Snap grid")
+                ShortcutRow(keys: "Dbl-click", description: "Reset")
+            }
+            .frame(width: 190, alignment: .leading)
+
+            Divider()
+                .padding(.horizontal, 8)
+
+            // Right column: Zoom
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Zoom")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .padding(.bottom, 2)
+
+                ZoomShortcutRow(keys: "⌘1", description: "100%")
+                ZoomShortcutRow(keys: "⌘2", description: "Fit")
+                ZoomShortcutRow(keys: "⌘3", description: "Width")
+                ZoomShortcutRow(keys: "⌘4", description: "Height")
+            }
+
+            Spacer()
         }
     }
 }
@@ -294,14 +371,33 @@ struct ShortcutRow: View {
     let description: String
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 12) {
             Text(keys)
                 .font(.system(size: 11, weight: .medium, design: .rounded))
                 .foregroundStyle(.primary)
-                .frame(width: 90, alignment: .leading)
+                .frame(width: 70, alignment: .leading)
 
             Text(description)
-                .font(.caption)
+                .font(.system(size: 10))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
+    }
+}
+
+struct ZoomShortcutRow: View {
+    let keys: String
+    let description: String
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Text(keys)
+                .font(.system(size: 11, weight: .medium, design: .rounded))
+                .foregroundStyle(.primary)
+                .frame(width: 24, alignment: .leading)
+
+            Text(description)
+                .font(.system(size: 10))
                 .foregroundStyle(.secondary)
         }
     }
