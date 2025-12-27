@@ -26,7 +26,7 @@ struct ActionButtonsView: View {
 
     private var canExport: Bool {
         !appState.images.isEmpty &&
-        appState.cropSettings.hasAnyCrop &&
+        (appState.cropSettings.hasAnyCrop || appState.hasAnyBlurRegions || appState.exportSettings.resizeSettings.isEnabled) &&
         !appState.isProcessing &&
         !wouldOverwriteAny
     }
@@ -65,8 +65,8 @@ struct ActionButtonsView: View {
             .disabled(!canExport)
 
             // Warning messages
-            if !appState.cropSettings.hasAnyCrop && !appState.images.isEmpty {
-                Text("Set crop values to enable export")
+            if !appState.cropSettings.hasAnyCrop && !appState.hasAnyBlurRegions && !appState.exportSettings.resizeSettings.isEnabled && !appState.images.isEmpty {
+                Text("Set crop, blur, or resize to enable export")
                     .font(.caption)
                     .foregroundStyle(.orange)
             } else if wouldOverwriteAny {
@@ -167,7 +167,8 @@ struct ActionButtonsView: View {
             let results = try await ImageCropService.batchCrop(
                 items: images,
                 cropSettings: appState.cropSettings,
-                exportSettings: exportSettings
+                exportSettings: exportSettings,
+                blurRegions: appState.blurRegions
             ) { progress in
                 appState.processingProgress = progress
             }

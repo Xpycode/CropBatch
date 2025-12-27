@@ -53,6 +53,11 @@ struct ExportSettingsView: View {
             ))
             .font(.callout)
 
+            Divider()
+
+            // Resize settings
+            ResizeSettingsSection()
+
             // Output preview
             if let firstImage = appState.images.first {
                 OutputPreview(inputURL: firstImage.url, exportSettings: appState.exportSettings)
@@ -332,6 +337,172 @@ struct OutputPreview: View {
         .padding(8)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: 6).fill(Color(nsColor: .controlBackgroundColor)))
+    }
+}
+
+// MARK: - Resize Settings Section
+
+struct ResizeSettingsSection: View {
+    @Environment(AppState.self) private var appState
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Resize")
+                    .font(.callout)
+
+                Spacer()
+
+                Picker("", selection: Binding(
+                    get: { appState.exportSettings.resizeSettings.mode },
+                    set: {
+                        appState.exportSettings.resizeSettings.mode = $0
+                        appState.markCustomSettings()
+                    }
+                )) {
+                    ForEach(ResizeMode.allCases) { mode in
+                        Text(mode.rawValue).tag(mode)
+                    }
+                }
+                .pickerStyle(.menu)
+                .frame(width: 120)
+            }
+
+            if appState.exportSettings.resizeSettings.mode != .none {
+                resizeControls
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var resizeControls: some View {
+        let mode = appState.exportSettings.resizeSettings.mode
+
+        switch mode {
+        case .none:
+            EmptyView()
+
+        case .exactSize:
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 8) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Width")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        TextField("Width", value: Binding(
+                            get: { appState.exportSettings.resizeSettings.width },
+                            set: {
+                                appState.exportSettings.resizeSettings.width = max(1, $0)
+                                appState.markCustomSettings()
+                            }
+                        ), format: .number)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 70)
+                    }
+
+                    Text("×")
+                        .foregroundStyle(.secondary)
+                        .padding(.top, 16)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Height")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        TextField("Height", value: Binding(
+                            get: { appState.exportSettings.resizeSettings.height },
+                            set: {
+                                appState.exportSettings.resizeSettings.height = max(1, $0)
+                                appState.markCustomSettings()
+                            }
+                        ), format: .number)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 70)
+                    }
+
+                    Spacer()
+                }
+
+                Toggle("Maintain aspect ratio", isOn: Binding(
+                    get: { appState.exportSettings.resizeSettings.maintainAspectRatio },
+                    set: {
+                        appState.exportSettings.resizeSettings.maintainAspectRatio = $0
+                        appState.markCustomSettings()
+                    }
+                ))
+                .font(.caption)
+            }
+            .padding(8)
+            .background(RoundedRectangle(cornerRadius: 6).fill(Color(nsColor: .controlBackgroundColor)))
+
+        case .maxWidth:
+            HStack {
+                Text("Max width")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Spacer()
+
+                TextField("Width", value: Binding(
+                    get: { appState.exportSettings.resizeSettings.width },
+                    set: {
+                        appState.exportSettings.resizeSettings.width = max(1, $0)
+                        appState.markCustomSettings()
+                    }
+                ), format: .number)
+                .textFieldStyle(.roundedBorder)
+                .frame(width: 80)
+
+                Text("px")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+        case .maxHeight:
+            HStack {
+                Text("Max height")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Spacer()
+
+                TextField("Height", value: Binding(
+                    get: { appState.exportSettings.resizeSettings.height },
+                    set: {
+                        appState.exportSettings.resizeSettings.height = max(1, $0)
+                        appState.markCustomSettings()
+                    }
+                ), format: .number)
+                .textFieldStyle(.roundedBorder)
+                .frame(width: 80)
+
+                Text("px")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+        case .percentage:
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text("Scale")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Text("\(Int(appState.exportSettings.resizeSettings.percentage))%")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                }
+
+                Slider(value: Binding(
+                    get: { appState.exportSettings.resizeSettings.percentage },
+                    set: {
+                        appState.exportSettings.resizeSettings.percentage = $0
+                        appState.markCustomSettings()
+                    }
+                ), in: 10...200, step: 5)
+                .controlSize(.small)
+            }
+        }
     }
 }
 

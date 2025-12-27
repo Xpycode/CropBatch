@@ -6,6 +6,7 @@ enum ExportFormat: String, CaseIterable, Identifiable, Codable {
     case jpeg = "JPEG"
     case heic = "HEIC"
     case tiff = "TIFF"
+    case webp = "WebP"
 
     var id: String { rawValue }
 
@@ -15,6 +16,7 @@ enum ExportFormat: String, CaseIterable, Identifiable, Codable {
         case .jpeg: return .jpeg
         case .heic: return .heic
         case .tiff: return .tiff
+        case .webp: return .webP
         }
     }
 
@@ -24,14 +26,39 @@ enum ExportFormat: String, CaseIterable, Identifiable, Codable {
         case .jpeg: return "jpg"
         case .heic: return "heic"
         case .tiff: return "tiff"
+        case .webp: return "webp"
         }
     }
 
     var supportsCompression: Bool {
         switch self {
-        case .jpeg, .heic: return true
+        case .jpeg, .heic, .webp: return true
         case .png, .tiff: return false
         }
+    }
+}
+
+/// Resize mode options
+enum ResizeMode: String, CaseIterable, Identifiable, Codable {
+    case none = "None"
+    case exactSize = "Exact Size"
+    case maxWidth = "Max Width"
+    case maxHeight = "Max Height"
+    case percentage = "Percentage"
+
+    var id: String { rawValue }
+}
+
+/// Resize settings for output images
+struct ResizeSettings: Equatable, Codable {
+    var mode: ResizeMode = .none
+    var width: Int = 1920
+    var height: Int = 1080
+    var percentage: Double = 50.0
+    var maintainAspectRatio: Bool = true
+
+    var isEnabled: Bool {
+        mode != .none
     }
 }
 
@@ -41,6 +68,7 @@ struct ExportSettings: Equatable {
     var suffix: String = "_cropped"
     var preserveOriginalFormat: Bool = false
     var outputDirectory: OutputDirectory = .sameAsSource
+    var resizeSettings: ResizeSettings = ResizeSettings()
 
     enum OutputDirectory: Equatable {
         case sameAsSource
@@ -136,6 +164,18 @@ struct ExportPreset: Identifiable, Equatable {
             settings: ExportSettings(format: .heic, quality: 0.9, suffix: "_cropped")
         ),
         ExportPreset(
+            id: "webp_high",
+            name: "WebP High (90%)",
+            icon: "globe",
+            settings: ExportSettings(format: .webp, quality: 0.9, suffix: "_cropped")
+        ),
+        ExportPreset(
+            id: "webp_web",
+            name: "WebP Web (75%)",
+            icon: "network",
+            settings: ExportSettings(format: .webp, quality: 0.75, suffix: "_cropped")
+        ),
+        ExportPreset(
             id: "preserve_format",
             name: "Keep Original Format",
             icon: "arrow.triangle.2.circlepath",
@@ -172,12 +212,14 @@ struct ExportSettingsCodable: Codable, Equatable {
     var quality: Double
     var suffix: String
     var preserveOriginalFormat: Bool
+    var resizeSettings: ResizeSettings
 
     init(from settings: ExportSettings) {
         self.format = settings.format
         self.quality = settings.quality
         self.suffix = settings.suffix
         self.preserveOriginalFormat = settings.preserveOriginalFormat
+        self.resizeSettings = settings.resizeSettings
     }
 
     func toExportSettings() -> ExportSettings {
@@ -185,7 +227,8 @@ struct ExportSettingsCodable: Codable, Equatable {
             format: format,
             quality: quality,
             suffix: suffix,
-            preserveOriginalFormat: preserveOriginalFormat
+            preserveOriginalFormat: preserveOriginalFormat,
+            resizeSettings: resizeSettings
         )
     }
 }

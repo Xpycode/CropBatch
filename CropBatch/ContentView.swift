@@ -137,6 +137,7 @@ struct SidebarView: View {
     // Collapsed state persistence
     @AppStorage("sidebar.presetsExpanded") private var presetsExpanded = true
     @AppStorage("sidebar.cropExpanded") private var cropExpanded = true
+    @AppStorage("sidebar.blurExpanded") private var blurExpanded = true
     @AppStorage("sidebar.exportExpanded") private var exportExpanded = true
     @AppStorage("sidebar.infoExpanded") private var infoExpanded = true
     @AppStorage("sidebar.autoProcessExpanded") private var autoProcessExpanded = false
@@ -160,6 +161,11 @@ struct SidebarView: View {
                 // Crop Settings
                 CollapsibleSection(title: "Crop Settings", icon: "crop", isExpanded: $cropExpanded) {
                     CropSettingsView()
+                }
+
+                // Blur/Redact Tool
+                CollapsibleSection(title: "Blur / Redact", icon: "eye.slash", isExpanded: $blurExpanded) {
+                    BlurToolSettings()
                 }
 
                 // Export Settings

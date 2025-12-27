@@ -29,6 +29,21 @@ enum ZoomMode: String, CaseIterable, Identifiable {
     }
 }
 
+/// Editor tool mode
+enum EditorTool: String, CaseIterable, Identifiable {
+    case crop = "Crop"
+    case blur = "Blur"
+
+    var id: String { rawValue }
+
+    var icon: String {
+        switch self {
+        case .crop: return "crop"
+        case .blur: return "eye.slash"
+        }
+    }
+}
+
 @Observable
 final class AppState {
     init() {
@@ -48,6 +63,11 @@ final class AppState {
     var zoomMode: ZoomMode = .fit  // Default to fit view
     var showBeforeAfter = false  // Before/after preview toggle
     var recentPresetIDs: [UUID] = []  // Recently used crop presets (max 5)
+
+    // Blur/redact tool
+    var currentTool: EditorTool = .crop
+    var blurStyle: BlurRegion.BlurStyle = .blur
+    var blurRegions: [UUID: ImageBlurData] = [:]  // Keyed by image ID
 
     private let recentPresetsKey = "CropBatch.RecentPresetIDs"
 
@@ -272,6 +292,45 @@ final class AppState {
             let newValue = cropSettings.cropRight + delta
             cropSettings.cropRight = max(0, min(newValue, maxWidth - cropSettings.cropLeft - 10))
         }
+    }
+
+    // MARK: - Blur Regions
+
+    /// Get blur regions for the active image
+    var activeImageBlurRegions: [BlurRegion] {
+        guard let id = activeImageID else { return [] }
+        return blurRegions[id]?.regions ?? []
+    }
+
+    /// Add a blur region to the active image
+    func addBlurRegion(_ region: BlurRegion) {
+        guard let id = activeImageID else { return }
+        if blurRegions[id] == nil {
+            blurRegions[id] = ImageBlurData()
+        }
+        blurRegions[id]?.regions.append(region)
+    }
+
+    /// Remove a blur region from the active image
+    func removeBlurRegion(_ regionID: UUID) {
+        guard let id = activeImageID else { return }
+        blurRegions[id]?.regions.removeAll { $0.id == regionID }
+    }
+
+    /// Clear all blur regions for the active image
+    func clearBlurRegions() {
+        guard let id = activeImageID else { return }
+        blurRegions[id] = ImageBlurData()
+    }
+
+    /// Check if any image has blur regions
+    var hasAnyBlurRegions: Bool {
+        blurRegions.values.contains { $0.hasRegions }
+    }
+
+    /// Get blur regions for a specific image
+    func blurRegionsForImage(_ imageID: UUID) -> [BlurRegion] {
+        blurRegions[imageID]?.regions ?? []
     }
 }
 

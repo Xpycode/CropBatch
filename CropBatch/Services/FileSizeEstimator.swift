@@ -104,7 +104,7 @@ struct FileSizeEstimator {
         to targetFormat: ExportFormat,
         quality: Double
     ) -> Double {
-        let sourceIsLossy = ["jpg", "jpeg", "heic"].contains(sourceExt)
+        let sourceIsLossy = ["jpg", "jpeg", "heic", "webp"].contains(sourceExt)
         let sourceIsPNG = sourceExt == "png"
 
         switch targetFormat {
@@ -142,6 +142,18 @@ struct FileSizeEstimator {
                 return qualityFactor * 0.7
             } else {
                 return qualityFactor * 0.2
+            }
+
+        case .webp:
+            // WebP is similar to HEIC in efficiency
+            let qualityFactor = 0.25 + (quality * 0.75)
+
+            if sourceIsPNG {
+                return qualityFactor * 0.18  // Very good compression
+            } else if sourceIsLossy {
+                return qualityFactor * 0.75
+            } else {
+                return qualityFactor * 0.22
             }
 
         case .tiff:
