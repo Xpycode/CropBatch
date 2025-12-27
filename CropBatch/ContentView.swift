@@ -9,12 +9,20 @@ struct ContentView: View {
 
         NavigationSplitView {
             SidebarView()
-                .navigationSplitViewColumnWidth(min: 220, ideal: 250, max: 300)
+                .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 320)
         } detail: {
             if appState.images.isEmpty {
                 DropZoneView()
             } else {
-                ImageGridView()
+                VStack(spacing: 0) {
+                    // Main crop editor
+                    if let activeImage = appState.activeImage {
+                        CropEditorView(image: activeImage)
+                    }
+
+                    // Thumbnail strip at bottom
+                    ThumbnailStripView()
+                }
             }
         }
         .fileImporter(
@@ -36,6 +44,23 @@ struct ContentView: View {
         }
         .onDrop(of: [.fileURL], isTargeted: nil) { providers in
             handleDrop(providers: providers)
+        }
+        .toolbar {
+            ToolbarItemGroup {
+                if !appState.images.isEmpty {
+                    Button {
+                        appState.showFileImporter = true
+                    } label: {
+                        Label("Add Images", systemImage: "plus")
+                    }
+
+                    Button(role: .destructive) {
+                        appState.clearAll()
+                    } label: {
+                        Label("Clear All", systemImage: "trash")
+                    }
+                }
+            }
         }
     }
 
@@ -63,23 +88,20 @@ struct SidebarView: View {
     @Environment(AppState.self) private var appState
 
     var body: some View {
-        @Bindable var state = appState
-
         List {
+            // Resolution warning
+            if appState.hasResolutionMismatch {
+                Section {
+                    ResolutionWarningView()
+                }
+            }
+
             Section("Crop Settings") {
                 CropSettingsView()
             }
 
-            Section("Images (\(appState.images.count))") {
-                if appState.images.isEmpty {
-                    Text("No images loaded")
-                        .foregroundStyle(.secondary)
-                        .font(.callout)
-                } else {
-                    ForEach(appState.images) { image in
-                        ImageRowView(item: image)
-                    }
-                }
+            Section("Info") {
+                ImageInfoView()
             }
 
             Section {
@@ -90,45 +112,80 @@ struct SidebarView: View {
     }
 }
 
-struct ImageRowView: View {
-    let item: ImageItem
+struct ResolutionWarningView: View {
     @Environment(AppState.self) private var appState
 
-    var isSelected: Bool {
-        appState.selectedImageIDs.contains(item.id)
-    }
-
     var body: some View {
-        HStack(spacing: 8) {
-            Image(nsImage: item.originalImage)
-                .resizable()
-                .aspectRatio(contentMode: .fill)
-                .frame(width: 32, height: 32)
-                .clipShape(RoundedRectangle(cornerRadius: 4))
+        VStack(alignment: .leading, spacing: 8) {
+            Label("Resolution Mismatch", systemImage: "exclamationmark.triangle.fill")
+                .font(.callout.weight(.medium))
+                .foregroundStyle(.yellow)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(item.filename)
-                    .font(.callout)
-                    .lineLimit(1)
-
-                Text("\(Int(item.originalSize.width)) × \(Int(item.originalSize.height))")
-                    .font(.caption2)
+            if let majority = appState.majorityResolution {
+                Text("\(appState.mismatchedImages.count) image(s) differ from the majority resolution of \(Int(majority.width))×\(Int(majority.height))")
+                    .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
-            Spacer()
-
-            if isSelected {
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(.blue)
+            // List mismatched files
+            VStack(alignment: .leading, spacing: 4) {
+                ForEach(appState.mismatchedImages.prefix(3)) { item in
+                    HStack(spacing: 4) {
+                        Image(systemName: "photo")
+                            .font(.caption2)
+                        Text(item.filename)
+                            .font(.caption2)
+                            .lineLimit(1)
+                        Spacer()
+                        Text("\(Int(item.originalSize.width))×\(Int(item.originalSize.height))")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                if appState.mismatchedImages.count > 3 {
+                    Text("...and \(appState.mismatchedImages.count - 3) more")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
             }
+            .padding(.top, 4)
         }
-        .contentShape(Rectangle())
-        .onTapGesture {
-            if isSelected {
-                appState.selectedImageIDs.remove(item.id)
-            } else {
-                appState.selectedImageIDs.insert(item.id)
+        .padding(.vertical, 4)
+    }
+}
+
+struct ImageInfoView: View {
+    @Environment(AppState.self) private var appState
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Images:")
+                Spacer()
+                Text("\(appState.images.count)")
+                    .foregroundStyle(.secondary)
+            }
+            .font(.callout)
+
+            if let majority = appState.majorityResolution {
+                HStack {
+                    Text("Resolution:")
+                    Spacer()
+                    Text("\(Int(majority.width)) × \(Int(majority.height))")
+                        .foregroundStyle(.secondary)
+                }
+                .font(.callout)
+            }
+
+            if appState.cropSettings.hasAnyCrop, let majority = appState.majorityResolution {
+                let newSize = appState.cropSettings.croppedSize(from: majority)
+                HStack {
+                    Text("Output size:")
+                    Spacer()
+                    Text("\(Int(newSize.width)) × \(Int(newSize.height))")
+                        .foregroundStyle(.green)
+                }
+                .font(.callout)
             }
         }
     }
@@ -137,5 +194,5 @@ struct ImageRowView: View {
 #Preview {
     ContentView()
         .environment(AppState())
-        .frame(width: 900, height: 600)
+        .frame(width: 1000, height: 700)
 }
