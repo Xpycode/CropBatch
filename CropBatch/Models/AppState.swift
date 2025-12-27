@@ -67,7 +67,9 @@ final class AppState {
     // Blur/redact tool
     var currentTool: EditorTool = .crop
     var blurStyle: BlurRegion.BlurStyle = .blur
+    var blurIntensity: Double = 1.0  // 0.0 to 1.0
     var blurRegions: [UUID: ImageBlurData] = [:]  // Keyed by image ID
+    var selectedBlurRegionID: UUID?  // Currently selected region for editing
 
     private let recentPresetsKey = "CropBatch.RecentPresetIDs"
 
@@ -221,9 +223,15 @@ final class AppState {
         images.removeAll { ids.contains($0.id) }
         selectedImageIDs.subtract(ids)
 
+        // Clean up blur regions for removed images
+        for id in ids {
+            blurRegions.removeValue(forKey: id)
+        }
+
         // Reset active image if it was removed
         if let activeID = activeImageID, ids.contains(activeID) {
             activeImageID = images.first?.id
+            selectedBlurRegionID = nil
         }
     }
 
@@ -232,6 +240,8 @@ final class AppState {
         selectedImageIDs.removeAll()
         activeImageID = nil
         cropSettings = CropSettings()
+        blurRegions.removeAll()
+        selectedBlurRegionID = nil
     }
 
     func setActiveImage(_ id: UUID) {
@@ -321,6 +331,7 @@ final class AppState {
     func clearBlurRegions() {
         guard let id = activeImageID else { return }
         blurRegions[id] = ImageBlurData()
+        selectedBlurRegionID = nil
     }
 
     /// Check if any image has blur regions
@@ -331,6 +342,49 @@ final class AppState {
     /// Get blur regions for a specific image
     func blurRegionsForImage(_ imageID: UUID) -> [BlurRegion] {
         blurRegions[imageID]?.regions ?? []
+    }
+
+    /// Select a blur region for editing
+    func selectBlurRegion(_ regionID: UUID?) {
+        selectedBlurRegionID = regionID
+    }
+
+    /// Get the currently selected blur region
+    var selectedBlurRegion: BlurRegion? {
+        guard let id = activeImageID,
+              let regionID = selectedBlurRegionID,
+              let data = blurRegions[id] else { return nil }
+        return data.regions.first { $0.id == regionID }
+    }
+
+    /// Update a blur region's properties
+    func updateBlurRegion(_ regionID: UUID, rect: CGRect? = nil, style: BlurRegion.BlurStyle? = nil, intensity: Double? = nil) {
+        guard let imageID = activeImageID,
+              var data = blurRegions[imageID],
+              let index = data.regions.firstIndex(where: { $0.id == regionID }) else { return }
+
+        if let rect = rect {
+            data.regions[index].rect = rect
+        }
+        if let style = style {
+            data.regions[index].style = style
+        }
+        if let intensity = intensity {
+            data.regions[index].intensity = intensity
+        }
+        blurRegions[imageID] = data
+    }
+
+    /// Count of blur regions that will be outside the crop area
+    var blurRegionsOutsideCropCount: Int {
+        guard let image = activeImage else { return 0 }
+        return activeImageBlurRegions.filter { $0.isOutsideCrop(cropSettings, imageSize: image.originalSize) }.count
+    }
+
+    /// Count of blur regions that will be partially cropped
+    var blurRegionsPartiallyCroppedCount: Int {
+        guard let image = activeImage else { return 0 }
+        return activeImageBlurRegions.filter { $0.isPartiallyCropped(cropSettings, imageSize: image.originalSize) }.count
     }
 }
 

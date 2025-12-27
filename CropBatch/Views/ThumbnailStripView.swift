@@ -41,6 +41,10 @@ struct ThumbnailItemView: View {
         appState.mismatchedImages.contains { $0.id == item.id }
     }
 
+    private var hasBlurRegions: Bool {
+        appState.blurRegionsForImage(item.id).count > 0
+    }
+
     private var backgroundColor: Color {
         if isActive {
             return Color.accentColor.opacity(0.1)
@@ -88,9 +92,17 @@ struct ThumbnailItemView: View {
                 .overlay(cropOverlay)
                 .overlay(selectionBorder)
 
-            if isMismatched {
-                mismatchBadge
+            // Badges stack
+            VStack(spacing: 2) {
+                if isMismatched {
+                    mismatchBadge
+                }
+                // Blur badge disabled for now
+                // if hasBlurRegions {
+                //     blurBadge
+                // }
             }
+            .offset(x: 4, y: -4)
         }
     }
 
@@ -112,7 +124,13 @@ struct ThumbnailItemView: View {
             .font(.caption)
             .foregroundStyle(.yellow)
             .background(Circle().fill(Color.black.opacity(0.6)).padding(-2))
-            .offset(x: 4, y: -4)
+    }
+
+    private var blurBadge: some View {
+        Image(systemName: "eye.slash.fill")
+            .font(.caption2)
+            .foregroundStyle(.blue)
+            .background(Circle().fill(Color.black.opacity(0.6)).padding(-2))
     }
 
     private var filenameLabel: some View {

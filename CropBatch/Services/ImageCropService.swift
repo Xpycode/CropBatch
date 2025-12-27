@@ -136,10 +136,12 @@ struct ImageCropService {
 
             switch region.style {
             case .blur:
-                applyGaussianBlur(to: ciImage, in: flippedRect, context: context, imageSize: image.size)
+                let radius = region.effectiveBlurRadius
+                applyGaussianBlur(to: ciImage, in: flippedRect, radius: radius, context: context, imageSize: image.size)
 
             case .pixelate:
-                applyPixelate(to: ciImage, in: flippedRect, context: context, imageSize: image.size)
+                let scale = region.effectivePixelateScale(for: flippedRect)
+                applyPixelate(to: ciImage, in: flippedRect, scale: scale, context: context, imageSize: image.size)
 
             case .solidBlack:
                 NSColor.black.setFill()
@@ -166,14 +168,14 @@ struct ImageCropService {
     }
 
     /// Applies gaussian blur to a region
-    private static func applyGaussianBlur(to ciImage: CIImage, in rect: CGRect, context: CIContext, imageSize: CGSize) {
+    private static func applyGaussianBlur(to ciImage: CIImage, in rect: CGRect, radius: Double, context: CIContext, imageSize: CGSize) {
         // Crop the region
         let cropped = ciImage.cropped(to: rect)
 
-        // Apply blur
+        // Apply blur with configurable radius
         guard let blurFilter = CIFilter(name: "CIGaussianBlur") else { return }
         blurFilter.setValue(cropped, forKey: kCIInputImageKey)
-        blurFilter.setValue(20.0, forKey: kCIInputRadiusKey)
+        blurFilter.setValue(radius, forKey: kCIInputRadiusKey)
 
         guard let blurred = blurFilter.outputImage else { return }
 
@@ -193,14 +195,14 @@ struct ImageCropService {
     }
 
     /// Applies pixelation to a region
-    private static func applyPixelate(to ciImage: CIImage, in rect: CGRect, context: CIContext, imageSize: CGSize) {
+    private static func applyPixelate(to ciImage: CIImage, in rect: CGRect, scale: Double, context: CIContext, imageSize: CGSize) {
         // Crop the region
         let cropped = ciImage.cropped(to: rect)
 
-        // Apply pixelate
+        // Apply pixelate with configurable scale
         guard let pixelateFilter = CIFilter(name: "CIPixellate") else { return }
         pixelateFilter.setValue(cropped, forKey: kCIInputImageKey)
-        pixelateFilter.setValue(max(rect.width, rect.height) / 15.0, forKey: kCIInputScaleKey)
+        pixelateFilter.setValue(scale, forKey: kCIInputScaleKey)
 
         // Center on the region
         let centerVector = CIVector(x: rect.midX, y: rect.midY)

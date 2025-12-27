@@ -163,10 +163,10 @@ struct SidebarView: View {
                     CropSettingsView()
                 }
 
-                // Blur/Redact Tool
-                CollapsibleSection(title: "Blur / Redact", icon: "eye.slash", isExpanded: $blurExpanded) {
-                    BlurToolSettings()
-                }
+                // Blur/Redact Tool - disabled for now, needs more work
+                // CollapsibleSection(title: "Blur / Redact", icon: "eye.slash", isExpanded: $blurExpanded) {
+                //     BlurToolSettings()
+                // }
 
                 // Export Settings
                 CollapsibleSection(title: "Export Settings", icon: "square.and.arrow.down", isExpanded: $exportExpanded) {
@@ -356,8 +356,6 @@ struct KeyboardShortcutsContentView: View {
 
                 ZoomShortcutRow(keys: "⌘1", description: "100%")
                 ZoomShortcutRow(keys: "⌘2", description: "Fit")
-                ZoomShortcutRow(keys: "⌘3", description: "Width")
-                ZoomShortcutRow(keys: "⌘4", description: "Height")
             }
 
             Spacer()

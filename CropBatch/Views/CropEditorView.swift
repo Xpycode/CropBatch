@@ -24,6 +24,23 @@ struct CropEditorView: View {
         .onKeyPress(keys: [.leftArrow, .rightArrow, .upArrow, .downArrow], phases: .down) { keyPress in
             handleKeyPress(keyPress)
         }
+        // Blur tool shortcuts disabled for now
+        // .onKeyPress(.init("b")) {
+        //     appState.currentTool = appState.currentTool == .blur ? .crop : .blur
+        //     return .handled
+        // }
+        // .onKeyPress(.init("c")) {
+        //     appState.currentTool = .crop
+        //     return .handled
+        // }
+        // .onKeyPress(.escape) {
+        //     if appState.selectedBlurRegionID != nil {
+        //         appState.selectBlurRegion(nil)
+        //     } else if appState.currentTool == .blur {
+        //         appState.currentTool = .crop
+        //     }
+        //     return .handled
+        // }
     }
 
     // MARK: - Editors
@@ -71,18 +88,20 @@ struct CropEditorView: View {
                     cropHandles
                 }
 
-                // Show blur tool overlay in blur mode
-                if appState.currentTool == .blur {
-                    BlurToolOverlay(
-                        imageSize: image.originalSize,
-                        displayedSize: scaledImageSize
-                    )
-                }
-
-                // Always show existing blur regions preview (semi-transparent in crop mode)
-                if appState.currentTool == .crop && !appState.activeImageBlurRegions.isEmpty {
-                    blurRegionsPreview
-                }
+                // Blur tool disabled for now - needs more work
+                // if appState.currentTool == .blur {
+                //     BlurToolOverlay(
+                //         imageSize: image.originalSize,
+                //         displayedSize: scaledImageSize,
+                //         displayedImage: image.originalImage
+                //     )
+                // }
+                // if appState.currentTool == .crop && !appState.activeImageBlurRegions.isEmpty {
+                //     BlurRegionsCropPreview(
+                //         imageSize: image.originalSize,
+                //         displayedSize: scaledImageSize
+                //     )
+                // }
             }
 
             // Top-left info bubble
@@ -209,43 +228,6 @@ struct CropEditorView: View {
                 set: { appState.cropSettings = $0 }
             )
         )
-    }
-
-    /// Preview of blur regions when in crop mode (non-interactive)
-    private var blurRegionsPreview: some View {
-        GeometryReader { geometry in
-            let offsetX = (geometry.size.width - scaledImageSize.width) / 2
-            let offsetY = (geometry.size.height - scaledImageSize.height) / 2
-            let scale = scaledImageSize.width / image.originalSize.width
-
-            ForEach(appState.activeImageBlurRegions) { region in
-                let displayRect = CGRect(
-                    x: offsetX + region.rect.origin.x * scale,
-                    y: offsetY + region.rect.origin.y * scale,
-                    width: region.rect.width * scale,
-                    height: region.rect.height * scale
-                )
-
-                Rectangle()
-                    .fill(blurStyleColor(region.style).opacity(0.15))
-                    .overlay(
-                        Rectangle()
-                            .strokeBorder(blurStyleColor(region.style).opacity(0.5), style: StrokeStyle(lineWidth: 1, dash: [4, 2]))
-                    )
-                    .frame(width: displayRect.width, height: displayRect.height)
-                    .position(x: displayRect.midX, y: displayRect.midY)
-            }
-        }
-        .allowsHitTesting(false)
-    }
-
-    private func blurStyleColor(_ style: BlurRegion.BlurStyle) -> Color {
-        switch style {
-        case .blur: return .blue
-        case .pixelate: return .purple
-        case .solidBlack: return .black
-        case .solidWhite: return .gray
-        }
     }
 
     // MARK: - Scale Calculations
