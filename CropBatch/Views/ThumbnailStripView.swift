@@ -116,6 +116,11 @@ struct ThumbnailCropOverlay: View {
             let offsetY = (geometry.size.height - displayedHeight) / 2
 
             ZStack {
+                // Calculate the middle section (between top and bottom crops)
+                let middleTop = offsetY + CGFloat(cropSettings.cropTop) * scale
+                let middleHeight = displayedHeight - CGFloat(cropSettings.cropTop + cropSettings.cropBottom) * scale
+                let middleCenterY = middleTop + middleHeight / 2
+
                 // Top
                 if cropSettings.cropTop > 0 {
                     Rectangle()
@@ -138,31 +143,31 @@ struct ThumbnailCropOverlay: View {
                         )
                 }
 
-                // Left
+                // Left (middle section only)
                 if cropSettings.cropLeft > 0 {
                     Rectangle()
                         .fill(Color.black.opacity(0.5))
                         .frame(
                             width: CGFloat(cropSettings.cropLeft) * scale,
-                            height: displayedHeight - CGFloat(cropSettings.cropTop + cropSettings.cropBottom) * scale
+                            height: middleHeight
                         )
                         .position(
                             x: offsetX + CGFloat(cropSettings.cropLeft) * scale / 2,
-                            y: offsetY + displayedHeight / 2
+                            y: middleCenterY
                         )
                 }
 
-                // Right
+                // Right (middle section only)
                 if cropSettings.cropRight > 0 {
                     Rectangle()
                         .fill(Color.black.opacity(0.5))
                         .frame(
                             width: CGFloat(cropSettings.cropRight) * scale,
-                            height: displayedHeight - CGFloat(cropSettings.cropTop + cropSettings.cropBottom) * scale
+                            height: middleHeight
                         )
                         .position(
                             x: offsetX + displayedWidth - CGFloat(cropSettings.cropRight) * scale / 2,
-                            y: offsetY + displayedHeight / 2
+                            y: middleCenterY
                         )
                 }
             }

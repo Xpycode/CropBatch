@@ -7,10 +7,8 @@ struct ContentView: View {
     var body: some View {
         @Bindable var state = appState
 
-        NavigationSplitView {
-            SidebarView()
-                .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 320)
-        } detail: {
+        HStack(spacing: 0) {
+            // Main content area (left)
             if appState.images.isEmpty {
                 DropZoneView()
             } else {
@@ -24,6 +22,12 @@ struct ContentView: View {
                     ThumbnailStripView()
                 }
             }
+
+            Divider()
+
+            // Sidebar (right)
+            SidebarView()
+                .frame(width: 260)
         }
         .fileImporter(
             isPresented: $state.showFileImporter,
@@ -88,27 +92,40 @@ struct SidebarView: View {
     @Environment(AppState.self) private var appState
 
     var body: some View {
-        List {
-            // Resolution warning
-            if appState.hasResolutionMismatch {
+        VStack(spacing: 0) {
+            // Top section with settings
+            List {
+                // Resolution warning
+                if appState.hasResolutionMismatch {
+                    Section {
+                        ResolutionWarningView()
+                    }
+                }
+
+                Section("Crop Settings") {
+                    CropSettingsView()
+                }
+
+                Section("Export Settings") {
+                    ExportSettingsView()
+                }
+
+                Section("Info") {
+                    ImageInfoView()
+                }
+
                 Section {
-                    ResolutionWarningView()
+                    ActionButtonsView()
                 }
             }
+            .listStyle(.sidebar)
 
-            Section("Crop Settings") {
-                CropSettingsView()
-            }
+            Divider()
 
-            Section("Info") {
-                ImageInfoView()
-            }
-
-            Section {
-                ActionButtonsView()
-            }
+            // Keyboard shortcuts at bottom
+            KeyboardShortcutsView()
         }
-        .listStyle(.sidebar)
+        .background(Color(nsColor: .windowBackgroundColor))
     }
 }
 
@@ -187,6 +204,45 @@ struct ImageInfoView: View {
                 }
                 .font(.callout)
             }
+        }
+    }
+}
+
+struct KeyboardShortcutsView: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Keyboard Shortcuts")
+                .font(.callout.weight(.semibold))
+                .foregroundStyle(.secondary)
+
+            VStack(alignment: .leading, spacing: 8) {
+                ShortcutRow(keys: "← →", description: "Navigate images")
+                ShortcutRow(keys: "⇧ + arrows", description: "Adjust crop edges")
+                ShortcutRow(keys: "⇧⌥ + arrows", description: "Uncrop (reverse)")
+                ShortcutRow(keys: "⇧⌃ + arrows", description: "Adjust by 10px")
+                ShortcutRow(keys: "⌃ + drag", description: "Snap to 10px grid")
+                ShortcutRow(keys: "Double-click", description: "Reset edge to 0")
+            }
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+struct ShortcutRow: View {
+    let keys: String
+    let description: String
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(keys)
+                .font(.system(size: 11, weight: .medium, design: .rounded))
+                .foregroundStyle(.primary)
+                .frame(width: 90, alignment: .leading)
+
+            Text(description)
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
     }
 }

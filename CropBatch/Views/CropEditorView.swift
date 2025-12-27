@@ -33,12 +33,21 @@ struct CropEditorView: View {
             .resizable()
             .aspectRatio(contentMode: .fit)
             .overlay { cropOverlay }
+            .overlay { dimensionsOverlay }
             .overlay { cropHandles }
             .background { frameMeasurer }
     }
 
     private var cropOverlay: some View {
         CropOverlayView(
+            imageSize: image.originalSize,
+            displayedSize: displayedImageSize,
+            cropSettings: appState.cropSettings
+        )
+    }
+
+    private var dimensionsOverlay: some View {
+        CropDimensionsOverlay(
             imageSize: image.originalSize,
             displayedSize: displayedImageSize,
             cropSettings: appState.cropSettings
@@ -86,52 +95,45 @@ struct CropEditorView: View {
         let hasShift = keyPress.modifiers.contains(.shift)
         let hasControl = keyPress.modifiers.contains(.control)
         let hasOption = keyPress.modifiers.contains(.option)
-
-        // Base delta: 1px, or 10px with Control
         let baseDelta = hasControl ? 10 : 1
 
         if hasShift {
-            // Crop adjustment mode
-            // Option reverses direction (uncrop instead of crop)
             if hasOption {
-                // Uncrop: arrow direction = edge being pulled back
                 switch keyPress.key {
                 case .upArrow:
-                    appState.adjustCrop(edge: .top, delta: -baseDelta)    // Pull top edge up
+                    appState.adjustCrop(edge: .top, delta: -baseDelta)
                     return .handled
                 case .downArrow:
-                    appState.adjustCrop(edge: .bottom, delta: -baseDelta) // Pull bottom edge down
+                    appState.adjustCrop(edge: .bottom, delta: -baseDelta)
                     return .handled
                 case .leftArrow:
-                    appState.adjustCrop(edge: .left, delta: -baseDelta)   // Pull left edge left
+                    appState.adjustCrop(edge: .left, delta: -baseDelta)
                     return .handled
                 case .rightArrow:
-                    appState.adjustCrop(edge: .right, delta: -baseDelta)  // Pull right edge right
+                    appState.adjustCrop(edge: .right, delta: -baseDelta)
                     return .handled
                 default:
                     return .ignored
                 }
             } else {
-                // Crop: arrow direction = direction of crop movement
                 switch keyPress.key {
                 case .upArrow:
-                    appState.adjustCrop(edge: .bottom, delta: baseDelta)  // Push bottom edge up
+                    appState.adjustCrop(edge: .bottom, delta: baseDelta)
                     return .handled
                 case .downArrow:
-                    appState.adjustCrop(edge: .top, delta: baseDelta)     // Push top edge down
+                    appState.adjustCrop(edge: .top, delta: baseDelta)
                     return .handled
                 case .leftArrow:
-                    appState.adjustCrop(edge: .right, delta: baseDelta)   // Push right edge left
+                    appState.adjustCrop(edge: .right, delta: baseDelta)
                     return .handled
                 case .rightArrow:
-                    appState.adjustCrop(edge: .left, delta: baseDelta)    // Push left edge right
+                    appState.adjustCrop(edge: .left, delta: baseDelta)
                     return .handled
                 default:
                     return .ignored
                 }
             }
         } else {
-            // Navigation mode (no shift)
             switch keyPress.key {
             case .leftArrow:
                 appState.selectPreviousImage()
@@ -145,6 +147,8 @@ struct CropEditorView: View {
         }
     }
 }
+
+// MARK: - Crop Overlay
 
 struct CropOverlayView: View {
     let imageSize: CGSize
@@ -170,47 +174,34 @@ struct CropOverlayView: View {
 
     @ViewBuilder
     private func cropRectangles(offsetX: CGFloat, offsetY: CGFloat) -> some View {
-        // Top
+        // Calculate the middle section bounds (between top and bottom crops)
+        let middleTop = offsetY + CGFloat(cropSettings.cropTop) * scale
+        let middleHeight = displayedSize.height - CGFloat(cropSettings.cropTop + cropSettings.cropBottom) * scale
+        let middleCenterY = middleTop + middleHeight / 2
+
+        // Top crop area (full width)
         Rectangle()
             .fill(Color.black.opacity(0.5))
             .frame(width: displayedSize.width, height: CGFloat(cropSettings.cropTop) * scale)
-            .position(
-                x: offsetX + displayedSize.width / 2,
-                y: offsetY + CGFloat(cropSettings.cropTop) * scale / 2
-            )
+            .position(x: offsetX + displayedSize.width / 2, y: offsetY + CGFloat(cropSettings.cropTop) * scale / 2)
 
-        // Bottom
+        // Bottom crop area (full width)
         Rectangle()
             .fill(Color.black.opacity(0.5))
             .frame(width: displayedSize.width, height: CGFloat(cropSettings.cropBottom) * scale)
-            .position(
-                x: offsetX + displayedSize.width / 2,
-                y: offsetY + displayedSize.height - CGFloat(cropSettings.cropBottom) * scale / 2
-            )
+            .position(x: offsetX + displayedSize.width / 2, y: offsetY + displayedSize.height - CGFloat(cropSettings.cropBottom) * scale / 2)
 
-        // Left
+        // Left crop area (middle section only - between top and bottom)
         Rectangle()
             .fill(Color.black.opacity(0.5))
-            .frame(
-                width: CGFloat(cropSettings.cropLeft) * scale,
-                height: displayedSize.height - CGFloat(cropSettings.cropTop + cropSettings.cropBottom) * scale
-            )
-            .position(
-                x: offsetX + CGFloat(cropSettings.cropLeft) * scale / 2,
-                y: offsetY + displayedSize.height / 2
-            )
+            .frame(width: CGFloat(cropSettings.cropLeft) * scale, height: middleHeight)
+            .position(x: offsetX + CGFloat(cropSettings.cropLeft) * scale / 2, y: middleCenterY)
 
-        // Right
+        // Right crop area (middle section only - between top and bottom)
         Rectangle()
             .fill(Color.black.opacity(0.5))
-            .frame(
-                width: CGFloat(cropSettings.cropRight) * scale,
-                height: displayedSize.height - CGFloat(cropSettings.cropTop + cropSettings.cropBottom) * scale
-            )
-            .position(
-                x: offsetX + displayedSize.width - CGFloat(cropSettings.cropRight) * scale / 2,
-                y: offsetY + displayedSize.height / 2
-            )
+            .frame(width: CGFloat(cropSettings.cropRight) * scale, height: middleHeight)
+            .position(x: offsetX + displayedSize.width - CGFloat(cropSettings.cropRight) * scale / 2, y: middleCenterY)
     }
 
     @ViewBuilder
@@ -229,6 +220,49 @@ struct CropOverlayView: View {
     }
 }
 
+// MARK: - Dimensions Overlay
+
+struct CropDimensionsOverlay: View {
+    let imageSize: CGSize
+    let displayedSize: CGSize
+    let cropSettings: CropSettings
+
+    private var scale: CGFloat {
+        displayedSize.width / imageSize.width
+    }
+
+    private var outputSize: CGSize {
+        cropSettings.croppedSize(from: imageSize)
+    }
+
+    var body: some View {
+        GeometryReader { geometry in
+            let offsetX = (geometry.size.width - displayedSize.width) / 2
+            let offsetY = (geometry.size.height - displayedSize.height) / 2
+
+            let cropRect = CGRect(
+                x: offsetX + CGFloat(cropSettings.cropLeft) * scale,
+                y: offsetY + CGFloat(cropSettings.cropTop) * scale,
+                width: displayedSize.width - CGFloat(cropSettings.cropLeft + cropSettings.cropRight) * scale,
+                height: displayedSize.height - CGFloat(cropSettings.cropTop + cropSettings.cropBottom) * scale
+            )
+
+            if cropSettings.hasAnyCrop {
+                Text("\(Int(outputSize.width)) × \(Int(outputSize.height))")
+                    .font(.system(size: 14, weight: .medium, design: .rounded))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Capsule().fill(Color.black.opacity(0.6)))
+                    .position(x: cropRect.midX, y: cropRect.midY)
+            }
+        }
+        .allowsHitTesting(false)
+    }
+}
+
+// MARK: - Crop Handles
+
 struct CropHandlesView: View {
     let imageSize: CGSize
     let displayedSize: CGSize
@@ -243,82 +277,120 @@ struct CropHandlesView: View {
             let offsetX = (geometry.size.width - displayedSize.width) / 2
             let offsetY = (geometry.size.height - displayedSize.height) / 2
 
-            topHandle(offsetX: offsetX, offsetY: offsetY)
-            bottomHandle(offsetX: offsetX, offsetY: offsetY)
-            leftHandle(offsetX: offsetX, offsetY: offsetY)
-            rightHandle(offsetX: offsetX, offsetY: offsetY)
+            // Top handle with label
+            handleWithLabel(
+                edge: .top,
+                value: cropSettings.cropTop,
+                position: CGPoint(
+                    x: offsetX + displayedSize.width / 2,
+                    y: offsetY + CGFloat(cropSettings.cropTop) * scale
+                ),
+                labelOffset: CGPoint(x: 0, y: -25),
+                onDrag: { location, snapping in
+                    let newY = location.y - offsetY
+                    var pixelValue = Int(newY / scale)
+                    if snapping { pixelValue = (pixelValue / 10) * 10 }
+                    cropSettings.cropTop = max(0, min(pixelValue, Int(imageSize.height) - cropSettings.cropBottom - 10))
+                },
+                onReset: { cropSettings.cropTop = 0 }
+            )
+
+            // Bottom handle with label
+            handleWithLabel(
+                edge: .bottom,
+                value: cropSettings.cropBottom,
+                position: CGPoint(
+                    x: offsetX + displayedSize.width / 2,
+                    y: offsetY + displayedSize.height - CGFloat(cropSettings.cropBottom) * scale
+                ),
+                labelOffset: CGPoint(x: 0, y: 25),
+                onDrag: { location, snapping in
+                    let newY = location.y - offsetY
+                    let fromBottom = displayedSize.height - newY
+                    var pixelValue = Int(fromBottom / scale)
+                    if snapping { pixelValue = (pixelValue / 10) * 10 }
+                    cropSettings.cropBottom = max(0, min(pixelValue, Int(imageSize.height) - cropSettings.cropTop - 10))
+                },
+                onReset: { cropSettings.cropBottom = 0 }
+            )
+
+            // Left handle with label
+            handleWithLabel(
+                edge: .left,
+                value: cropSettings.cropLeft,
+                position: CGPoint(
+                    x: offsetX + CGFloat(cropSettings.cropLeft) * scale,
+                    y: offsetY + displayedSize.height / 2
+                ),
+                labelOffset: CGPoint(x: -30, y: 0),
+                onDrag: { location, snapping in
+                    let newX = location.x - offsetX
+                    var pixelValue = Int(newX / scale)
+                    if snapping { pixelValue = (pixelValue / 10) * 10 }
+                    cropSettings.cropLeft = max(0, min(pixelValue, Int(imageSize.width) - cropSettings.cropRight - 10))
+                },
+                onReset: { cropSettings.cropLeft = 0 }
+            )
+
+            // Right handle with label
+            handleWithLabel(
+                edge: .right,
+                value: cropSettings.cropRight,
+                position: CGPoint(
+                    x: offsetX + displayedSize.width - CGFloat(cropSettings.cropRight) * scale,
+                    y: offsetY + displayedSize.height / 2
+                ),
+                labelOffset: CGPoint(x: 30, y: 0),
+                onDrag: { location, snapping in
+                    let newX = location.x - offsetX
+                    let fromRight = displayedSize.width - newX
+                    var pixelValue = Int(fromRight / scale)
+                    if snapping { pixelValue = (pixelValue / 10) * 10 }
+                    cropSettings.cropRight = max(0, min(pixelValue, Int(imageSize.width) - cropSettings.cropLeft - 10))
+                },
+                onReset: { cropSettings.cropRight = 0 }
+            )
         }
     }
 
-    private func topHandle(offsetX: CGFloat, offsetY: CGFloat) -> some View {
-        EdgeHandle(edge: .top)
-            .position(
-                x: offsetX + displayedSize.width / 2,
-                y: offsetY + CGFloat(cropSettings.cropTop) * scale
-            )
-            .gesture(
-                DragGesture()
-                    .onChanged { value in
-                        let newY = value.location.y - offsetY
-                        let pixelValue = Int(newY / scale)
-                        cropSettings.cropTop = max(0, min(pixelValue, Int(imageSize.height) - cropSettings.cropBottom - 10))
-                    }
-            )
-    }
+    @ViewBuilder
+    private func handleWithLabel(
+        edge: CropEdge,
+        value: Int,
+        position: CGPoint,
+        labelOffset: CGPoint,
+        onDrag: @escaping (CGPoint, Bool) -> Void,
+        onReset: @escaping () -> Void
+    ) -> some View {
+        ZStack {
+            EdgeHandle(edge: edge, value: value, isSnapping: NSEvent.modifierFlags.contains(.control))
+                .position(position)
+                .gesture(
+                    DragGesture()
+                        .onChanged { gesture in
+                            let snapping = NSEvent.modifierFlags.contains(.control)
+                            onDrag(gesture.location, snapping)
+                        }
+                )
+                .onTapGesture(count: 2) {
+                    onReset()
+                }
 
-    private func bottomHandle(offsetX: CGFloat, offsetY: CGFloat) -> some View {
-        EdgeHandle(edge: .bottom)
-            .position(
-                x: offsetX + displayedSize.width / 2,
-                y: offsetY + displayedSize.height - CGFloat(cropSettings.cropBottom) * scale
-            )
-            .gesture(
-                DragGesture()
-                    .onChanged { value in
-                        let newY = value.location.y - offsetY
-                        let fromBottom = displayedSize.height - newY
-                        let pixelValue = Int(fromBottom / scale)
-                        cropSettings.cropBottom = max(0, min(pixelValue, Int(imageSize.height) - cropSettings.cropTop - 10))
-                    }
-            )
-    }
-
-    private func leftHandle(offsetX: CGFloat, offsetY: CGFloat) -> some View {
-        EdgeHandle(edge: .left)
-            .position(
-                x: offsetX + CGFloat(cropSettings.cropLeft) * scale,
-                y: offsetY + displayedSize.height / 2
-            )
-            .gesture(
-                DragGesture()
-                    .onChanged { value in
-                        let newX = value.location.x - offsetX
-                        let pixelValue = Int(newX / scale)
-                        cropSettings.cropLeft = max(0, min(pixelValue, Int(imageSize.width) - cropSettings.cropRight - 10))
-                    }
-            )
-    }
-
-    private func rightHandle(offsetX: CGFloat, offsetY: CGFloat) -> some View {
-        EdgeHandle(edge: .right)
-            .position(
-                x: offsetX + displayedSize.width - CGFloat(cropSettings.cropRight) * scale,
-                y: offsetY + displayedSize.height / 2
-            )
-            .gesture(
-                DragGesture()
-                    .onChanged { value in
-                        let newX = value.location.x - offsetX
-                        let fromRight = displayedSize.width - newX
-                        let pixelValue = Int(fromRight / scale)
-                        cropSettings.cropRight = max(0, min(pixelValue, Int(imageSize.width) - cropSettings.cropLeft - 10))
-                    }
-            )
+            // Pixel label (only show if value > 0)
+            if value > 0 {
+                PixelLabel(value: value, isSnapping: NSEvent.modifierFlags.contains(.control))
+                    .position(x: position.x + labelOffset.x, y: position.y + labelOffset.y)
+            }
+        }
     }
 }
 
+// MARK: - Edge Handle
+
 struct EdgeHandle: View {
     let edge: CropEdge
+    let value: Int
+    let isSnapping: Bool
 
     private var isVertical: Bool {
         edge == .left || edge == .right
@@ -327,7 +399,7 @@ struct EdgeHandle: View {
     var body: some View {
         ZStack {
             Capsule()
-                .fill(Color.accentColor)
+                .fill(isSnapping ? Color.orange : Color.accentColor)
                 .frame(
                     width: isVertical ? 6 : 60,
                     height: isVertical ? 60 : 6
@@ -347,6 +419,28 @@ struct EdgeHandle: View {
         .cursor(isVertical ? .resizeLeftRight : .resizeUpDown)
     }
 }
+
+// MARK: - Pixel Label
+
+struct PixelLabel: View {
+    let value: Int
+    let isSnapping: Bool
+
+    var body: some View {
+        Text("\(value)")
+            .font(.system(size: 11, weight: .semibold, design: .rounded))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .background(
+                Capsule()
+                    .fill(isSnapping ? Color.orange : Color.accentColor)
+            )
+            .shadow(color: .black.opacity(0.2), radius: 2, x: 0, y: 1)
+    }
+}
+
+// MARK: - Cursor Extension
 
 extension View {
     func cursor(_ cursor: NSCursor) -> some View {

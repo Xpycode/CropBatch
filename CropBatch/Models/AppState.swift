@@ -5,11 +5,30 @@ import UniformTypeIdentifiers
 final class AppState {
     var images: [ImageItem] = []
     var cropSettings = CropSettings()
+    var exportSettings = ExportSettings()
+    var selectedPresetID: String? = "png_lossless"
     var showFileImporter = false
+    var showOutputDirectoryPicker = false
     var isProcessing = false
     var processingProgress: Double = 0
     var selectedImageIDs: Set<UUID> = []
     var activeImageID: UUID?
+
+    /// Currently selected preset (if any)
+    var selectedPreset: ExportPreset? {
+        ExportPreset.presets.first { $0.id == selectedPresetID }
+    }
+
+    /// Apply a preset to export settings
+    func applyPreset(_ preset: ExportPreset) {
+        selectedPresetID = preset.id
+        exportSettings = preset.settings
+    }
+
+    /// Called when export settings are manually changed
+    func markCustomSettings() {
+        selectedPresetID = nil
+    }
 
     var selectedImages: [ImageItem] {
         images.filter { selectedImageIDs.contains($0.id) }
@@ -136,7 +155,15 @@ struct ImageItem: Identifiable {
     let id = UUID()
     let url: URL
     let originalImage: NSImage
+    let fileSize: Int64  // in bytes
     var isProcessed = false
+
+    init(url: URL, originalImage: NSImage) {
+        self.url = url
+        self.originalImage = originalImage
+        // Get file size from disk
+        self.fileSize = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int64) ?? 0
+    }
 
     var filename: String {
         url.lastPathComponent
@@ -144,5 +171,15 @@ struct ImageItem: Identifiable {
 
     var originalSize: CGSize {
         originalImage.size
+    }
+
+    /// Original file extension (lowercase)
+    var fileExtension: String {
+        url.pathExtension.lowercased()
+    }
+
+    /// Whether the original is a lossy format
+    var isLossyFormat: Bool {
+        ["jpg", "jpeg", "heic"].contains(fileExtension)
     }
 }

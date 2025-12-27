@@ -7,6 +7,7 @@ enum ImageCropError: LocalizedError {
     case invalidCropRegion
     case failedToCreateDestination
     case failedToWriteImage
+    case wouldOverwriteOriginal(String)
 
     var errorDescription: String? {
         switch self {
@@ -18,6 +19,8 @@ enum ImageCropError: LocalizedError {
             return "Failed to create output file"
         case .failedToWriteImage:
             return "Failed to write cropped image"
+        case .wouldOverwriteOriginal(let filename):
+            return "Would overwrite original file: \(filename). Please use a different suffix."
         }
     }
 }
@@ -62,7 +65,8 @@ struct ImageCropService {
     ///   - image: The image to save
     ///   - url: Destination file URL
     ///   - format: Image format (png, jpeg, etc.)
-    static func save(_ image: NSImage, to url: URL, format: UTType = .png) throws {
+    ///   - quality: Compression quality (0.0 to 1.0) for JPEG/HEIC
+    static func save(_ image: NSImage, to url: URL, format: UTType = .png, quality: Double = 0.9) throws {
         guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
             throw ImageCropError.failedToGetCGImage
         }
@@ -76,41 +80,62 @@ struct ImageCropService {
             throw ImageCropError.failedToCreateDestination
         }
 
-        CGImageDestinationAddImage(destination, cgImage, nil)
+        // Build properties dictionary for compression
+        var properties: [CFString: Any] = [:]
+        if format == .jpeg || format == .heic {
+            properties[kCGImageDestinationLossyCompressionQuality] = quality
+        }
+
+        let cfProperties = properties.isEmpty ? nil : properties as CFDictionary
+        CGImageDestinationAddImage(destination, cgImage, cfProperties)
 
         guard CGImageDestinationFinalize(destination) else {
             throw ImageCropError.failedToWriteImage
         }
     }
 
-    /// Processes multiple images with the same crop settings
+    /// Processes multiple images with the same crop and export settings
     /// - Parameters:
     ///   - items: Array of ImageItem to process
-    ///   - settings: Crop settings to apply
-    ///   - outputDirectory: Directory to save cropped images
+    ///   - cropSettings: Crop settings to apply
+    ///   - exportSettings: Export format and quality settings
     ///   - progress: Closure called with progress updates (0.0 to 1.0)
     /// - Returns: Array of URLs for successfully cropped images
     @MainActor
     static func batchCrop(
         items: [ImageItem],
-        settings: CropSettings,
-        outputDirectory: URL,
+        cropSettings: CropSettings,
+        exportSettings: ExportSettings,
         progress: @escaping @MainActor (Double) -> Void
     ) async throws -> [URL] {
         var outputURLs: [URL] = []
         let total = Double(items.count)
 
+        // Pre-check: ensure no files would be overwritten
+        for item in items {
+            if exportSettings.wouldOverwriteOriginal(for: item.url) {
+                throw ImageCropError.wouldOverwriteOriginal(item.filename)
+            }
+        }
+
         for (index, item) in items.enumerated() {
-            let croppedImage = try crop(item.originalImage, with: settings)
+            let croppedImage = try crop(item.originalImage, with: cropSettings)
 
-            // Determine output format based on original file extension
-            let originalExtension = item.url.pathExtension.lowercased()
-            let outputFormat: UTType = originalExtension == "jpg" || originalExtension == "jpeg" ? .jpeg : .png
+            // Get output URL from export settings
+            let outputURL = exportSettings.outputURL(for: item.url)
 
-            let outputFilename = "cropped_\(item.filename)"
-            let outputURL = outputDirectory.appendingPathComponent(outputFilename)
+            // Determine the actual format to use
+            let format: UTType
+            if exportSettings.preserveOriginalFormat {
+                let ext = item.url.pathExtension.lowercased()
+                format = ExportFormat.allCases.first {
+                    $0.fileExtension == ext || (ext == "jpeg" && $0 == .jpeg)
+                }?.utType ?? exportSettings.format.utType
+            } else {
+                format = exportSettings.format.utType
+            }
 
-            try save(croppedImage, to: outputURL, format: outputFormat)
+            try save(croppedImage, to: outputURL, format: format, quality: exportSettings.quality)
             outputURLs.append(outputURL)
 
             progress(Double(index + 1) / total)

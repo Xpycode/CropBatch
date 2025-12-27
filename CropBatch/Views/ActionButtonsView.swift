@@ -15,6 +15,17 @@ struct ActionButtonsView: View {
             : appState.selectedImages
     }
 
+    private var wouldOverwriteAny: Bool {
+        imagesToProcess.contains { appState.exportSettings.wouldOverwriteOriginal(for: $0.url) }
+    }
+
+    private var canExport: Bool {
+        !appState.images.isEmpty &&
+        appState.cropSettings.hasAnyCrop &&
+        !appState.isProcessing &&
+        !wouldOverwriteAny
+    }
+
     var body: some View {
         VStack(spacing: 12) {
             if appState.isProcessing {
@@ -41,12 +52,17 @@ struct ActionButtonsView: View {
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
-            .disabled(appState.images.isEmpty || !appState.cropSettings.hasAnyCrop || appState.isProcessing)
+            .disabled(!canExport)
 
+            // Warning messages
             if !appState.cropSettings.hasAnyCrop && !appState.images.isEmpty {
-                Text("Set crop values above to enable export")
+                Text("Set crop values to enable export")
                     .font(.caption)
                     .foregroundStyle(.orange)
+            } else if wouldOverwriteAny {
+                Text("Change suffix to avoid overwriting originals")
+                    .font(.caption)
+                    .foregroundStyle(.red)
             }
         }
         .fileImporter(
@@ -90,11 +106,15 @@ struct ActionButtonsView: View {
             appState.processingProgress = 0
         }
 
+        // Create export settings with the selected output directory
+        var exportSettings = appState.exportSettings
+        exportSettings.outputDirectory = .custom(outputDirectory)
+
         do {
             let results = try await ImageCropService.batchCrop(
                 items: imagesToProcess,
-                settings: appState.cropSettings,
-                outputDirectory: outputDirectory
+                cropSettings: appState.cropSettings,
+                exportSettings: exportSettings
             ) { progress in
                 appState.processingProgress = progress
             }
