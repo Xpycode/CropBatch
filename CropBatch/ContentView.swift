@@ -27,7 +27,7 @@ struct ContentView: View {
 
             // Sidebar (right)
             SidebarView()
-                .frame(width: 260)
+                .frame(width: 420)
         }
         .fileImporter(
             isPresented: $state.showFileImporter,
@@ -91,41 +91,109 @@ struct ContentView: View {
 struct SidebarView: View {
     @Environment(AppState.self) private var appState
 
+    // Collapsed state persistence
+    @AppStorage("sidebar.presetsExpanded") private var presetsExpanded = true
+    @AppStorage("sidebar.cropExpanded") private var cropExpanded = true
+    @AppStorage("sidebar.exportExpanded") private var exportExpanded = true
+    @AppStorage("sidebar.infoExpanded") private var infoExpanded = true
+    @AppStorage("sidebar.autoProcessExpanded") private var autoProcessExpanded = false
+    @AppStorage("sidebar.shortcutsExpanded") private var shortcutsExpanded = true
+
     var body: some View {
-        VStack(spacing: 0) {
-            // Top section with settings
-            List {
-                // Resolution warning
+        ScrollView {
+            VStack(spacing: 0) {
+                // Resolution warning (always visible if needed)
                 if appState.hasResolutionMismatch {
-                    Section {
-                        ResolutionWarningView()
-                    }
+                    ResolutionWarningView()
+                        .padding()
+                    Divider()
                 }
 
-                Section("Crop Settings") {
+                // Crop Presets
+                CollapsibleSection(title: "Crop Presets", icon: "square.stack", isExpanded: $presetsExpanded) {
+                    PresetPickerView()
+                }
+
+                // Crop Settings
+                CollapsibleSection(title: "Crop Settings", icon: "crop", isExpanded: $cropExpanded) {
                     CropSettingsView()
                 }
 
-                Section("Export Settings") {
+                // Export Settings
+                CollapsibleSection(title: "Export Settings", icon: "square.and.arrow.down", isExpanded: $exportExpanded) {
                     ExportSettingsView()
                 }
 
-                Section("Info") {
-                    ImageInfoView()
+                // Info & Export
+                CollapsibleSection(title: "Info & Export", icon: "info.circle", isExpanded: $infoExpanded) {
+                    VStack(spacing: 12) {
+                        ImageInfoView()
+                        ActionButtonsView()
+                    }
                 }
 
-                Section {
-                    ActionButtonsView()
+                // Auto-Processing
+                CollapsibleSection(title: "Auto-Processing", icon: "eye", isExpanded: $autoProcessExpanded) {
+                    FolderWatchView()
+                }
+
+                // Keyboard Shortcuts
+                CollapsibleSection(title: "Keyboard Shortcuts", icon: "keyboard", isExpanded: $shortcutsExpanded) {
+                    KeyboardShortcutsContentView()
                 }
             }
-            .listStyle(.sidebar)
-
-            Divider()
-
-            // Keyboard shortcuts at bottom
-            KeyboardShortcutsView()
         }
         .background(Color(nsColor: .windowBackgroundColor))
+    }
+}
+
+// MARK: - Collapsible Section
+
+struct CollapsibleSection<Content: View>: View {
+    let title: String
+    let icon: String
+    @Binding var isExpanded: Bool
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    isExpanded.toggle()
+                }
+            } label: {
+                HStack {
+                    Image(systemName: icon)
+                        .foregroundStyle(.secondary)
+                        .frame(width: 16)
+
+                    Text(title)
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+
+                    Spacer()
+
+                    Image(systemName: "chevron.right")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            // Content
+            if isExpanded {
+                content()
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 12)
+            }
+
+            Divider()
+        }
     }
 }
 
@@ -208,24 +276,16 @@ struct ImageInfoView: View {
     }
 }
 
-struct KeyboardShortcutsView: View {
+struct KeyboardShortcutsContentView: View {
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Keyboard Shortcuts")
-                .font(.callout.weight(.semibold))
-                .foregroundStyle(.secondary)
-
-            VStack(alignment: .leading, spacing: 8) {
-                ShortcutRow(keys: "← →", description: "Navigate images")
-                ShortcutRow(keys: "⇧ + arrows", description: "Adjust crop edges")
-                ShortcutRow(keys: "⇧⌥ + arrows", description: "Uncrop (reverse)")
-                ShortcutRow(keys: "⇧⌃ + arrows", description: "Adjust by 10px")
-                ShortcutRow(keys: "⌃ + drag", description: "Snap to 10px grid")
-                ShortcutRow(keys: "Double-click", description: "Reset edge to 0")
-            }
+        VStack(alignment: .leading, spacing: 8) {
+            ShortcutRow(keys: "← →", description: "Navigate images")
+            ShortcutRow(keys: "⇧ + arrows", description: "Adjust crop edges")
+            ShortcutRow(keys: "⇧⌥ + arrows", description: "Uncrop (reverse)")
+            ShortcutRow(keys: "⇧⌃ + arrows", description: "Adjust by 10px")
+            ShortcutRow(keys: "⌃ + drag", description: "Snap to 10px grid")
+            ShortcutRow(keys: "Double-click", description: "Reset edge to 0")
         }
-        .padding()
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

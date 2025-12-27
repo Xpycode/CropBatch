@@ -4,10 +4,13 @@ import UniformTypeIdentifiers
 struct ActionButtonsView: View {
     @Environment(AppState.self) private var appState
     @State private var showExportPanel = false
+    @State private var showReviewSheet = false
+    @State private var pendingOutputDirectory: URL?
     @State private var exportError: String?
     @State private var showErrorAlert = false
     @State private var showSuccessAlert = false
     @State private var exportedCount = 0
+    @State private var reviewBeforeExport = true
 
     private var imagesToProcess: [ImageItem] {
         appState.selectedImageIDs.isEmpty
@@ -38,6 +41,11 @@ struct ActionButtonsView: View {
                         .foregroundStyle(.secondary)
                 }
             }
+
+            // Review toggle
+            Toggle("Review before export", isOn: $reviewBeforeExport)
+                .font(.caption)
+                .toggleStyle(.checkbox)
 
             Button {
                 showExportPanel = true
@@ -78,14 +86,36 @@ struct ActionButtonsView: View {
                         showErrorAlert = true
                         return
                     }
-                    Task {
-                        await processImages(to: outputDirectory)
-                        outputDirectory.stopAccessingSecurityScopedResource()
+
+                    if reviewBeforeExport {
+                        // Show review sheet
+                        pendingOutputDirectory = outputDirectory
+                        showReviewSheet = true
+                    } else {
+                        // Direct export
+                        Task {
+                            await processImages(imagesToProcess, to: outputDirectory)
+                            outputDirectory.stopAccessingSecurityScopedResource()
+                        }
                     }
                 }
             case .failure(let error):
                 exportError = error.localizedDescription
                 showErrorAlert = true
+            }
+        }
+        .sheet(isPresented: $showReviewSheet) {
+            if let outputDir = pendingOutputDirectory {
+                BatchReviewView(
+                    images: imagesToProcess,
+                    outputDirectory: outputDir
+                ) { selectedImages in
+                    Task {
+                        await processImages(selectedImages, to: outputDir)
+                        outputDir.stopAccessingSecurityScopedResource()
+                    }
+                }
+                .environment(appState)
             }
         }
         .alert("Export Failed", isPresented: $showErrorAlert) {
@@ -100,7 +130,7 @@ struct ActionButtonsView: View {
         }
     }
 
-    private func processImages(to outputDirectory: URL) async {
+    private func processImages(_ images: [ImageItem], to outputDirectory: URL) async {
         await MainActor.run {
             appState.isProcessing = true
             appState.processingProgress = 0
@@ -112,7 +142,7 @@ struct ActionButtonsView: View {
 
         do {
             let results = try await ImageCropService.batchCrop(
-                items: imagesToProcess,
+                items: images,
                 cropSettings: appState.cropSettings,
                 exportSettings: exportSettings
             ) { progress in

@@ -1,6 +1,6 @@
 import Foundation
 
-struct CropSettings: Equatable {
+struct CropSettings: Equatable, Codable {
     var cropTop: Int = 0
     var cropBottom: Int = 0
     var cropLeft: Int = 0

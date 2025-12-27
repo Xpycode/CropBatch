@@ -1,0 +1,168 @@
+import Foundation
+import AppKit
+
+@MainActor
+@Observable
+final class FolderWatcher {
+    static let shared = FolderWatcher()
+
+    // Configuration
+    var isWatching = false
+    var watchedFolder: URL?
+    var outputFolder: URL?
+    var cropSettings = CropSettings()
+    var exportSettings = ExportSettings()
+    var usePreset: CropPreset?
+
+    // State
+    var processedCount = 0
+    var lastProcessedFile: String?
+    var errorMessage: String?
+
+    // Internal
+    private var fileDescriptor: CInt = -1
+    private var dispatchSource: DispatchSourceFileSystemObject?
+    private var knownFiles: Set<String> = []
+
+    private init() {}
+
+    // MARK: - Watch Control
+
+    func startWatching(folder: URL, output: URL) {
+        guard !isWatching else { return }
+
+        watchedFolder = folder
+        outputFolder = output
+        errorMessage = nil
+
+        // Get initial list of files
+        knownFiles = Set(existingFiles(in: folder))
+
+        // Open folder for monitoring
+        fileDescriptor = open(folder.path, O_EVTONLY)
+        guard fileDescriptor >= 0 else {
+            errorMessage = "Cannot access folder"
+            return
+        }
+
+        // Create dispatch source for file system events
+        let source = DispatchSource.makeFileSystemObjectSource(
+            fileDescriptor: fileDescriptor,
+            eventMask: .write,
+            queue: .main
+        )
+
+        source.setEventHandler { [weak self] in
+            self?.checkForNewFiles()
+        }
+
+        source.setCancelHandler { [weak self] in
+            if let fd = self?.fileDescriptor, fd >= 0 {
+                close(fd)
+            }
+            self?.fileDescriptor = -1
+        }
+
+        dispatchSource = source
+        source.resume()
+        isWatching = true
+    }
+
+    func stopWatching() {
+        dispatchSource?.cancel()
+        dispatchSource = nil
+        isWatching = false
+        knownFiles.removeAll()
+    }
+
+    // MARK: - File Processing
+
+    private func checkForNewFiles() {
+        guard let folder = watchedFolder else { return }
+
+        let currentFiles = Set(existingFiles(in: folder))
+        let newFiles = currentFiles.subtracting(knownFiles)
+
+        for filename in newFiles {
+            let url = folder.appendingPathComponent(filename)
+            processNewFile(url)
+        }
+
+        knownFiles = currentFiles
+    }
+
+    private func existingFiles(in folder: URL) -> [String] {
+        let supportedExtensions = ["png", "jpg", "jpeg", "heic", "tiff", "bmp"]
+        let contents = (try? FileManager.default.contentsOfDirectory(atPath: folder.path)) ?? []
+        return contents.filter { filename in
+            let ext = (filename as NSString).pathExtension.lowercased()
+            return supportedExtensions.contains(ext)
+        }
+    }
+
+    private func processNewFile(_ url: URL) {
+        guard let outputFolder = outputFolder else { return }
+
+        // Small delay to ensure file is fully written
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            guard let self = self else { return }
+
+            do {
+                // Load image
+                guard let image = NSImage(contentsOf: url) else {
+                    self.errorMessage = "Cannot read: \(url.lastPathComponent)"
+                    return
+                }
+
+                // Use preset settings if available, otherwise use configured settings
+                let settings = self.usePreset?.cropSettings ?? self.cropSettings
+
+                // Crop
+                let cropped = try ImageCropService.crop(image, with: settings)
+
+                // Determine output URL
+                var exportSettings = self.exportSettings
+                exportSettings.outputDirectory = .custom(outputFolder)
+                let outputURL = exportSettings.outputURL(for: url)
+
+                // Save
+                let format = exportSettings.preserveOriginalFormat
+                    ? self.formatFromExtension(url.pathExtension)
+                    : exportSettings.format.utType
+
+                try ImageCropService.save(cropped, to: outputURL, format: format, quality: exportSettings.quality)
+
+                self.processedCount += 1
+                self.lastProcessedFile = url.lastPathComponent
+                self.errorMessage = nil
+
+                // Show notification
+                self.showNotification(for: url.lastPathComponent)
+
+            } catch {
+                self.errorMessage = "Error: \(error.localizedDescription)"
+            }
+        }
+    }
+
+    private func formatFromExtension(_ ext: String) -> UTType {
+        switch ext.lowercased() {
+        case "jpg", "jpeg": return .jpeg
+        case "png": return .png
+        case "heic": return .heic
+        case "tiff", "tif": return .tiff
+        default: return .png
+        }
+    }
+
+    private func showNotification(for filename: String) {
+        let notification = NSUserNotification()
+        notification.title = "Screenshot Cropped"
+        notification.informativeText = filename
+        notification.soundName = nil
+        NSUserNotificationCenter.default.deliver(notification)
+    }
+}
+
+// MARK: - UTType import
+import UniformTypeIdentifiers
