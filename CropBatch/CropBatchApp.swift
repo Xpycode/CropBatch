@@ -57,6 +57,42 @@ struct CropBatchApp: App {
                 .disabled(appState.activeImage == nil || !appState.cropSettings.hasAnyCrop)
             }
 
+            // Image transform commands
+            CommandMenu("Image") {
+                Button("Rotate Left") {
+                    appState.rotateActiveImage(clockwise: false)
+                }
+                .keyboardShortcut("[", modifiers: .command)
+                .disabled(appState.activeImage == nil)
+
+                Button("Rotate Right") {
+                    appState.rotateActiveImage(clockwise: true)
+                }
+                .keyboardShortcut("]", modifiers: .command)
+                .disabled(appState.activeImage == nil)
+
+                Divider()
+
+                Button("Flip Horizontal") {
+                    appState.flipActiveImage(horizontal: true)
+                }
+                .keyboardShortcut("h", modifiers: [.command, .option])
+                .disabled(appState.activeImage == nil)
+
+                Button("Flip Vertical") {
+                    appState.flipActiveImage(horizontal: false)
+                }
+                .keyboardShortcut("v", modifiers: [.command, .option])
+                .disabled(appState.activeImage == nil)
+
+                Divider()
+
+                Button("Reset Transform") {
+                    appState.resetActiveImageTransform()
+                }
+                .disabled(appState.activeImageTransform.isIdentity)
+            }
+
             // Zoom commands
             CommandMenu("View") {
                 Button("Actual Size (100%)") {

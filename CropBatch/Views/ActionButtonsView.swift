@@ -1,10 +1,10 @@
 import SwiftUI
+import AppKit
 import UniformTypeIdentifiers
 import UserNotifications
 
 struct ActionButtonsView: View {
     @Environment(AppState.self) private var appState
-    @State private var showExportPanel = false
     @State private var showReviewSheet = false
     @State private var pendingOutputDirectory: URL?
     @State private var exportError: String?
@@ -26,13 +26,82 @@ struct ActionButtonsView: View {
 
     private var canExport: Bool {
         !appState.images.isEmpty &&
-        (appState.cropSettings.hasAnyCrop || appState.hasAnyBlurRegions || appState.exportSettings.resizeSettings.isEnabled) &&
+        (appState.cropSettings.hasAnyCrop || appState.hasAnyBlurRegions || appState.hasAnyTransforms || appState.exportSettings.resizeSettings.isEnabled || appState.exportSettings.renameSettings.mode == .pattern) &&
         !appState.isProcessing &&
         !wouldOverwriteAny
     }
 
     var body: some View {
         VStack(spacing: 12) {
+            // Undo/Redo and Transform buttons
+            HStack(spacing: 8) {
+                Button {
+                    appState.undo()
+                } label: {
+                    Label("Undo", systemImage: "arrow.uturn.backward")
+                        .labelStyle(.iconOnly)
+                }
+                .buttonStyle(.bordered)
+                .disabled(!appState.canUndo)
+                .help("Undo (⌘Z)")
+
+                Button {
+                    appState.redo()
+                } label: {
+                    Label("Redo", systemImage: "arrow.uturn.forward")
+                        .labelStyle(.iconOnly)
+                }
+                .buttonStyle(.bordered)
+                .disabled(!appState.canRedo)
+                .help("Redo (⇧⌘Z)")
+
+                Spacer()
+
+                // Rotation buttons
+                Button {
+                    appState.rotateActiveImage(clockwise: false)
+                } label: {
+                    Label("Rotate Left", systemImage: "rotate.left")
+                        .labelStyle(.iconOnly)
+                }
+                .buttonStyle(.bordered)
+                .disabled(appState.activeImage == nil)
+                .help("Rotate CCW (⌘[)")
+
+                Button {
+                    appState.rotateActiveImage(clockwise: true)
+                } label: {
+                    Label("Rotate Right", systemImage: "rotate.right")
+                        .labelStyle(.iconOnly)
+                }
+                .buttonStyle(.bordered)
+                .disabled(appState.activeImage == nil)
+                .help("Rotate CW (⌘])")
+
+                // Flip buttons
+                Button {
+                    appState.flipActiveImage(horizontal: true)
+                } label: {
+                    Label("Flip H", systemImage: "arrow.left.and.right.righttriangle.left.righttriangle.right")
+                        .labelStyle(.iconOnly)
+                }
+                .buttonStyle(.bordered)
+                .disabled(appState.activeImage == nil)
+                .help("Flip Horizontal")
+
+                Button {
+                    appState.flipActiveImage(horizontal: false)
+                } label: {
+                    Label("Flip V", systemImage: "arrow.up.and.down.righttriangle.up.righttriangle.down")
+                        .labelStyle(.iconOnly)
+                }
+                .buttonStyle(.bordered)
+                .disabled(appState.activeImage == nil)
+                .help("Flip Vertical")
+            }
+
+            Divider()
+
             if appState.isProcessing {
                 VStack(spacing: 8) {
                     ProgressView(value: appState.processingProgress)
@@ -50,7 +119,7 @@ struct ActionButtonsView: View {
                 .toggleStyle(.checkbox)
 
             Button {
-                showExportPanel = true
+                selectOutputFolder()
             } label: {
                 Label(
                     appState.selectedImageIDs.isEmpty
@@ -65,45 +134,14 @@ struct ActionButtonsView: View {
             .disabled(!canExport)
 
             // Warning messages
-            if !appState.cropSettings.hasAnyCrop && !appState.hasAnyBlurRegions && !appState.exportSettings.resizeSettings.isEnabled && !appState.images.isEmpty {
-                Text("Set crop, blur, or resize to enable export")
+            if !appState.cropSettings.hasAnyCrop && !appState.hasAnyBlurRegions && !appState.hasAnyTransforms && !appState.exportSettings.resizeSettings.isEnabled && appState.exportSettings.renameSettings.mode != .pattern && !appState.images.isEmpty {
+                Text("Apply crop, rotate, resize, or rename to export")
                     .font(.caption)
                     .foregroundStyle(.orange)
             } else if wouldOverwriteAny {
                 Text("Change suffix to avoid overwriting originals")
                     .font(.caption)
                     .foregroundStyle(.red)
-            }
-        }
-        .fileImporter(
-            isPresented: $showExportPanel,
-            allowedContentTypes: [.folder],
-            allowsMultipleSelection: false
-        ) { result in
-            switch result {
-            case .success(let urls):
-                if let outputDirectory = urls.first {
-                    guard outputDirectory.startAccessingSecurityScopedResource() else {
-                        exportError = "Cannot access the selected folder"
-                        showErrorAlert = true
-                        return
-                    }
-
-                    if reviewBeforeExport {
-                        // Show review sheet
-                        pendingOutputDirectory = outputDirectory
-                        showReviewSheet = true
-                    } else {
-                        // Direct export
-                        Task {
-                            await processImages(imagesToProcess, to: outputDirectory)
-                            outputDirectory.stopAccessingSecurityScopedResource()
-                        }
-                    }
-                }
-            case .failure(let error):
-                exportError = error.localizedDescription
-                showErrorAlert = true
             }
         }
         .sheet(isPresented: $showReviewSheet) {
@@ -134,6 +172,31 @@ struct ActionButtonsView: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text("Successfully exported \(exportedCount) cropped images")
+        }
+    }
+
+    /// Opens NSOpenPanel to select output folder
+    private func selectOutputFolder() {
+        let panel = NSOpenPanel()
+        panel.title = "Choose Export Folder"
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.canCreateDirectories = true
+
+        panel.begin { response in
+            guard response == .OK, let outputDirectory = panel.url else { return }
+
+            if reviewBeforeExport {
+                // Show review sheet
+                pendingOutputDirectory = outputDirectory
+                showReviewSheet = true
+            } else {
+                // Direct export
+                Task {
+                    await processImages(imagesToProcess, to: outputDirectory)
+                }
+            }
         }
     }
 
@@ -168,6 +231,7 @@ struct ActionButtonsView: View {
                 items: images,
                 cropSettings: appState.cropSettings,
                 exportSettings: exportSettings,
+                transforms: appState.imageTransforms,
                 blurRegions: appState.blurRegions
             ) { progress in
                 appState.processingProgress = progress

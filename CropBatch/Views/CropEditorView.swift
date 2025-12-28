@@ -137,12 +137,20 @@ struct CropEditorView: View {
 
     private var zoomInfoBubble: some View {
         let zoomPercent = Int(currentScale * 100)
+        let size = displayedImageSize
         return HStack(spacing: 6) {
             Text("\(zoomPercent)%")
                 .fontWeight(.medium)
             Text("·")
                 .foregroundStyle(.secondary)
-            Text("\(Int(image.originalSize.width))×\(Int(image.originalSize.height))")
+            Text("\(Int(size.width))×\(Int(size.height))")
+            // Show rotation indicator if transformed
+            if !currentTransform.isIdentity {
+                Text("·")
+                    .foregroundStyle(.secondary)
+                Image(systemName: currentTransform.rotation != .none ? "rotate.right" : "arrow.left.and.right.righttriangle.left.righttriangle.right")
+                    .font(.system(size: 9))
+            }
         }
         .font(.system(size: 11, design: .monospaced))
         .foregroundStyle(.white)
@@ -167,8 +175,8 @@ struct CropEditorView: View {
     @ViewBuilder
     private var scaledImageView: some View {
         if currentScale >= 1.0 {
-            // At 100% or above, use original image
-            Image(nsImage: image.originalImage)
+            // At 100% or above, use displayed image (with transform applied)
+            Image(nsImage: displayedImage)
                 .interpolation(.high)
                 .resizable()
                 .aspectRatio(contentMode: .fill)
@@ -182,8 +190,9 @@ struct CropEditorView: View {
     /// Creates a high-quality downscaled version of the image using Core Graphics
     private var highQualityScaledImage: NSImage {
         let targetSize = scaledImageSize
+        let sourceImage = displayedImage
         guard targetSize.width > 0, targetSize.height > 0 else {
-            return image.originalImage
+            return sourceImage
         }
 
         let newImage = NSImage(size: targetSize)
@@ -192,9 +201,9 @@ struct CropEditorView: View {
         // Set high-quality interpolation
         NSGraphicsContext.current?.imageInterpolation = .high
 
-        image.originalImage.draw(
+        sourceImage.draw(
             in: NSRect(origin: .zero, size: targetSize),
-            from: NSRect(origin: .zero, size: image.originalSize),
+            from: NSRect(origin: .zero, size: displayedImageSize),
             operation: .copy,
             fraction: 1.0
         )
@@ -205,7 +214,7 @@ struct CropEditorView: View {
 
     private var cropOverlay: some View {
         CropOverlayView(
-            imageSize: image.originalSize,
+            imageSize: displayedImageSize,
             displayedSize: scaledImageSize,
             cropSettings: appState.cropSettings
         )
@@ -213,7 +222,7 @@ struct CropEditorView: View {
 
     private var dimensionsOverlay: some View {
         CropDimensionsOverlay(
-            imageSize: image.originalSize,
+            imageSize: displayedImageSize,
             displayedSize: scaledImageSize,
             cropSettings: appState.cropSettings
         )
@@ -221,13 +230,34 @@ struct CropEditorView: View {
 
     private var cropHandles: some View {
         CropHandlesView(
-            imageSize: image.originalSize,
+            imageSize: displayedImageSize,
             displayedSize: scaledImageSize,
             cropSettings: Binding(
                 get: { appState.cropSettings },
                 set: { appState.cropSettings = $0 }
-            )
+            ),
+            onDragEnded: { appState.recordCropChange() }
         )
+    }
+
+    // MARK: - Transform Support
+
+    /// The current transform applied to this image
+    private var currentTransform: ImageTransform {
+        appState.activeImageTransform
+    }
+
+    /// The image with transform applied (for display)
+    private var displayedImage: NSImage {
+        if currentTransform.isIdentity {
+            return image.originalImage
+        }
+        return ImageCropService.applyTransform(image.originalImage, transform: currentTransform)
+    }
+
+    /// Size of the image after transform (accounts for rotation dimension swap)
+    private var displayedImageSize: CGSize {
+        currentTransform.transformedSize(image.originalSize)
     }
 
     // MARK: - Scale Calculations
@@ -238,18 +268,19 @@ struct CropEditorView: View {
 
         let availableWidth = viewSize.width - 80  // padding
         let availableHeight = viewSize.height - 80
+        let imageSize = displayedImageSize
 
         switch appState.zoomMode {
         case .fit:
-            let scaleX = availableWidth / image.originalSize.width
-            let scaleY = availableHeight / image.originalSize.height
+            let scaleX = availableWidth / imageSize.width
+            let scaleY = availableHeight / imageSize.height
             return min(scaleX, scaleY, 1.0)  // Don't upscale beyond 100%
 
         case .fitWidth:
-            return availableWidth / image.originalSize.width
+            return availableWidth / imageSize.width
 
         case .fitHeight:
-            return availableHeight / image.originalSize.height
+            return availableHeight / imageSize.height
 
         case .actualSize:
             return 1.0
@@ -259,8 +290,8 @@ struct CropEditorView: View {
     /// Size of image at current scale
     private var scaledImageSize: CGSize {
         CGSize(
-            width: image.originalSize.width * currentScale,
-            height: image.originalSize.height * currentScale
+            width: displayedImageSize.width * currentScale,
+            height: displayedImageSize.height * currentScale
         )
     }
 
@@ -287,15 +318,19 @@ struct CropEditorView: View {
                 switch keyPress.key {
                 case .upArrow:
                     appState.adjustCrop(edge: .top, delta: -baseDelta)
+                    appState.recordCropChange()
                     return .handled
                 case .downArrow:
                     appState.adjustCrop(edge: .bottom, delta: -baseDelta)
+                    appState.recordCropChange()
                     return .handled
                 case .leftArrow:
                     appState.adjustCrop(edge: .left, delta: -baseDelta)
+                    appState.recordCropChange()
                     return .handled
                 case .rightArrow:
                     appState.adjustCrop(edge: .right, delta: -baseDelta)
+                    appState.recordCropChange()
                     return .handled
                 default:
                     return .ignored
@@ -304,15 +339,19 @@ struct CropEditorView: View {
                 switch keyPress.key {
                 case .upArrow:
                     appState.adjustCrop(edge: .bottom, delta: baseDelta)
+                    appState.recordCropChange()
                     return .handled
                 case .downArrow:
                     appState.adjustCrop(edge: .top, delta: baseDelta)
+                    appState.recordCropChange()
                     return .handled
                 case .leftArrow:
                     appState.adjustCrop(edge: .right, delta: baseDelta)
+                    appState.recordCropChange()
                     return .handled
                 case .rightArrow:
                     appState.adjustCrop(edge: .left, delta: baseDelta)
+                    appState.recordCropChange()
                     return .handled
                 default:
                     return .ignored
@@ -452,6 +491,7 @@ struct CropHandlesView: View {
     let imageSize: CGSize
     let displayedSize: CGSize
     @Binding var cropSettings: CropSettings
+    var onDragEnded: (() -> Void)? = nil
 
     private var scale: CGFloat {
         displayedSize.width / imageSize.width
@@ -559,10 +599,12 @@ struct CropHandlesView: View {
                             cropSettings.cropTop = max(0, min(topValue, Int(imageSize.height) - cropSettings.cropBottom - 10))
                             cropSettings.cropLeft = max(0, min(leftValue, Int(imageSize.width) - cropSettings.cropRight - 10))
                         }
+                        .onEnded { _ in onDragEnded?() }
                 )
                 .onTapGesture(count: 2) {
                     cropSettings.cropTop = 0
                     cropSettings.cropLeft = 0
+                    onDragEnded?()
                 }
 
             // Top-Right corner
@@ -587,10 +629,12 @@ struct CropHandlesView: View {
                             cropSettings.cropTop = max(0, min(topValue, Int(imageSize.height) - cropSettings.cropBottom - 10))
                             cropSettings.cropRight = max(0, min(rightValue, Int(imageSize.width) - cropSettings.cropLeft - 10))
                         }
+                        .onEnded { _ in onDragEnded?() }
                 )
                 .onTapGesture(count: 2) {
                     cropSettings.cropTop = 0
                     cropSettings.cropRight = 0
+                    onDragEnded?()
                 }
 
             // Bottom-Left corner
@@ -615,10 +659,12 @@ struct CropHandlesView: View {
                             cropSettings.cropBottom = max(0, min(bottomValue, Int(imageSize.height) - cropSettings.cropTop - 10))
                             cropSettings.cropLeft = max(0, min(leftValue, Int(imageSize.width) - cropSettings.cropRight - 10))
                         }
+                        .onEnded { _ in onDragEnded?() }
                 )
                 .onTapGesture(count: 2) {
                     cropSettings.cropBottom = 0
                     cropSettings.cropLeft = 0
+                    onDragEnded?()
                 }
 
             // Bottom-Right corner
@@ -644,10 +690,12 @@ struct CropHandlesView: View {
                             cropSettings.cropBottom = max(0, min(bottomValue, Int(imageSize.height) - cropSettings.cropTop - 10))
                             cropSettings.cropRight = max(0, min(rightValue, Int(imageSize.width) - cropSettings.cropLeft - 10))
                         }
+                        .onEnded { _ in onDragEnded?() }
                 )
                 .onTapGesture(count: 2) {
                     cropSettings.cropBottom = 0
                     cropSettings.cropRight = 0
+                    onDragEnded?()
                 }
         }
     }
@@ -670,9 +718,13 @@ struct CropHandlesView: View {
                             let snapping = NSEvent.modifierFlags.contains(.control)
                             onDrag(gesture.location, snapping)
                         }
+                        .onEnded { _ in
+                            onDragEnded?()
+                        }
                 )
                 .onTapGesture(count: 2) {
                     onReset()
+                    onDragEnded?()
                 }
 
             // Pixel label (only show if value > 0)
