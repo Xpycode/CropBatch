@@ -188,6 +188,24 @@ struct ExportSettings: Equatable {
     func outputFilename(for inputURL: URL, index: Int = 0) -> String {
         outputURL(for: inputURL, index: index).lastPathComponent
     }
+
+    /// Validates that no filename collisions exist in batch export
+    /// - Parameter items: The items to be exported
+    /// - Returns: nil if no collisions, otherwise the first colliding filename
+    func findBatchCollision(items: [ImageItem]) -> String? {
+        var plannedURLs = Set<URL>()
+
+        for (index, item) in items.enumerated() {
+            let destURL = outputURL(for: item.url, index: index)
+
+            if plannedURLs.contains(destURL) {
+                return destURL.lastPathComponent
+            }
+            plannedURLs.insert(destURL)
+        }
+
+        return nil
+    }
 }
 
 // MARK: - Presets

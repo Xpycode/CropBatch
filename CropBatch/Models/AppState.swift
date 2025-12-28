@@ -335,6 +335,20 @@ final class AppState {
         }
     }
 
+    /// Validates and clamps crop values to ensure they don't exceed image dimensions
+    /// Call this after any direct crop value changes to prevent invalid states
+    func validateAndClampCrop() {
+        guard let image = activeImage else { return }
+        let maxWidth = Int(image.originalSize.width)
+        let maxHeight = Int(image.originalSize.height)
+
+        // Clamp each edge, ensuring at least 1 pixel remains after cropping
+        cropSettings.cropLeft = min(max(0, cropSettings.cropLeft), maxWidth - cropSettings.cropRight - 1)
+        cropSettings.cropRight = min(max(0, cropSettings.cropRight), maxWidth - cropSettings.cropLeft - 1)
+        cropSettings.cropTop = min(max(0, cropSettings.cropTop), maxHeight - cropSettings.cropBottom - 1)
+        cropSettings.cropBottom = min(max(0, cropSettings.cropBottom), maxHeight - cropSettings.cropTop - 1)
+    }
+
     // MARK: - Blur Regions
 
     /// Get blur regions for the active image
@@ -476,7 +490,8 @@ final class AppState {
          hasAnyBlurRegions ||
          hasAnyTransforms ||
          exportSettings.resizeSettings.isEnabled ||
-         exportSettings.renameSettings.mode == .pattern)
+         exportSettings.renameSettings.mode == .pattern ||
+         !exportSettings.preserveOriginalFormat)  // Format conversion counts as exportable change
     }
 
     /// Process and export images to the specified directory

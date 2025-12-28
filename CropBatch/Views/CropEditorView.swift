@@ -8,14 +8,22 @@ struct CropEditorView: View {
     @State private var scrollOffset: CGPoint = .zero
     @FocusState private var isFocused: Bool
 
+    // Image scaling cache to prevent expensive recomputation
+    @State private var cachedScaledImage: NSImage?
+    @State private var cachedImageID: UUID?
+    @State private var cachedTargetSize: CGSize?
+
     var body: some View {
         GeometryReader { geometry in
-            let _ = updateViewSize(geometry.size)
-
-            if needsScrollView {
-                scrollableEditor
-            } else {
-                fittedEditor
+            Group {
+                if needsScrollView {
+                    scrollableEditor
+                } else {
+                    fittedEditor
+                }
+            }
+            .onChange(of: geometry.size, initial: true) { _, newSize in
+                viewSize = newSize
             }
         }
         .focusable()
@@ -193,27 +201,52 @@ struct CropEditorView: View {
     }
 
     /// Creates a high-quality downscaled version of the image using Core Graphics
+    /// Uses caching to prevent expensive recomputation on every UI update
     private var highQualityScaledImage: NSImage {
         let targetSize = scaledImageSize
+        let currentID = image.id
+
+        // Return cached image if valid
+        if let cached = cachedScaledImage,
+           cachedImageID == currentID,
+           cachedTargetSize == targetSize {
+            return cached
+        }
+
+        // Generate new scaled image
         let sourceImage = displayedImage
         guard targetSize.width > 0, targetSize.height > 0 else {
             return sourceImage
         }
 
-        let newImage = NSImage(size: targetSize)
-        newImage.lockFocus()
+        guard let cgImage = sourceImage.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+            return sourceImage
+        }
 
-        // Set high-quality interpolation
-        NSGraphicsContext.current?.imageInterpolation = .high
+        let colorSpace = cgImage.colorSpace ?? CGColorSpaceCreateDeviceRGB()
+        guard let context = CGContext(
+            data: nil,
+            width: Int(targetSize.width),
+            height: Int(targetSize.height),
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: colorSpace,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return sourceImage }
 
-        sourceImage.draw(
-            in: NSRect(origin: .zero, size: targetSize),
-            from: NSRect(origin: .zero, size: displayedImageSize),
-            operation: .copy,
-            fraction: 1.0
-        )
+        context.interpolationQuality = .high
+        context.draw(cgImage, in: CGRect(origin: .zero, size: targetSize))
 
-        newImage.unlockFocus()
+        guard let scaledCGImage = context.makeImage() else { return sourceImage }
+        let newImage = NSImage(cgImage: scaledCGImage, size: targetSize)
+
+        // Update cache (async to avoid modifying state during view update)
+        Task { @MainActor in
+            cachedScaledImage = newImage
+            cachedImageID = currentID
+            cachedTargetSize = targetSize
+        }
+
         return newImage
     }
 
@@ -298,16 +331,6 @@ struct CropEditorView: View {
             width: displayedImageSize.width * currentScale,
             height: displayedImageSize.height * currentScale
         )
-    }
-
-    // MARK: - Helpers
-
-    private func updateViewSize(_ size: CGSize) {
-        if viewSize != size {
-            DispatchQueue.main.async {
-                viewSize = size
-            }
-        }
     }
 
     // MARK: - Keyboard Handling

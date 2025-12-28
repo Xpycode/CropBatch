@@ -9,6 +9,7 @@ enum ImageCropError: LocalizedError {
     case failedToCreateDestination
     case failedToWriteImage
     case wouldOverwriteOriginal(String)
+    case filenameCollision(String)
 
     var errorDescription: String? {
         switch self {
@@ -22,6 +23,8 @@ enum ImageCropError: LocalizedError {
             return "Failed to write cropped image"
         case .wouldOverwriteOriginal(let filename):
             return "Would overwrite original file: \(filename). Please use a different suffix."
+        case .filenameCollision(let filename):
+            return "Filename collision detected: \(filename). Multiple images would export to the same file."
         }
     }
 }
@@ -78,28 +81,37 @@ struct ImageCropService {
         }
     }
 
-    /// Resizes an NSImage to the specified size
+    /// Resizes an NSImage to the specified size using CGContext (thread-safe)
     /// - Parameters:
     ///   - image: The source image to resize
     ///   - targetSize: The target size
     /// - Returns: A new resized NSImage
     static func resize(_ image: NSImage, to targetSize: CGSize) -> NSImage {
-        let newImage = NSImage(size: targetSize)
-        newImage.lockFocus()
-        NSGraphicsContext.current?.imageInterpolation = .high
-        image.draw(
-            in: NSRect(origin: .zero, size: targetSize),
-            from: NSRect(origin: .zero, size: image.size),
-            operation: .copy,
-            fraction: 1.0
-        )
-        newImage.unlockFocus()
-        return newImage
+        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+            return image
+        }
+
+        let colorSpace = cgImage.colorSpace ?? CGColorSpaceCreateDeviceRGB()
+        guard let context = CGContext(
+            data: nil,
+            width: Int(targetSize.width),
+            height: Int(targetSize.height),
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: colorSpace,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return image }
+
+        context.interpolationQuality = .high
+        context.draw(cgImage, in: CGRect(origin: .zero, size: targetSize))
+
+        guard let resizedCGImage = context.makeImage() else { return image }
+        return NSImage(cgImage: resizedCGImage, size: targetSize)
     }
 
     // MARK: - Rotation and Flip
 
-    /// Rotates an image by the specified angle
+    /// Rotates an image by the specified angle using CGContext (thread-safe)
     /// - Parameters:
     ///   - image: The source image
     ///   - angle: Rotation angle (90, 180, or 270 degrees)
@@ -115,13 +127,16 @@ struct ImageCropService {
             ? CGSize(width: image.size.height, height: image.size.width)
             : image.size
 
-        let newImage = NSImage(size: rotatedSize)
-        newImage.lockFocus()
-
-        guard let context = NSGraphicsContext.current?.cgContext else {
-            newImage.unlockFocus()
-            return image
-        }
+        let colorSpace = cgImage.colorSpace ?? CGColorSpaceCreateDeviceRGB()
+        guard let context = CGContext(
+            data: nil,
+            width: Int(rotatedSize.width),
+            height: Int(rotatedSize.height),
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: colorSpace,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return image }
 
         // Move origin to center, rotate, then draw
         context.translateBy(x: rotatedSize.width / 2, y: rotatedSize.height / 2)
@@ -129,11 +144,11 @@ struct ImageCropService {
         context.translateBy(x: -image.size.width / 2, y: -image.size.height / 2)
         context.draw(cgImage, in: CGRect(origin: .zero, size: image.size))
 
-        newImage.unlockFocus()
-        return newImage
+        guard let rotatedCGImage = context.makeImage() else { return image }
+        return NSImage(cgImage: rotatedCGImage, size: rotatedSize)
     }
 
-    /// Flips an image horizontally and/or vertically
+    /// Flips an image horizontally and/or vertically using CGContext (thread-safe)
     /// - Parameters:
     ///   - image: The source image
     ///   - horizontal: Flip horizontally
@@ -141,28 +156,34 @@ struct ImageCropService {
     /// - Returns: Flipped image
     static func flip(_ image: NSImage, horizontal: Bool, vertical: Bool) -> NSImage {
         guard horizontal || vertical else { return image }
-
-        let newImage = NSImage(size: image.size)
-        newImage.lockFocus()
-
-        guard let context = NSGraphicsContext.current else {
-            newImage.unlockFocus()
+        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
             return image
         }
 
-        context.saveGraphicsState()
+        let colorSpace = cgImage.colorSpace ?? CGColorSpaceCreateDeviceRGB()
+        guard let context = CGContext(
+            data: nil,
+            width: Int(image.size.width),
+            height: Int(image.size.height),
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: colorSpace,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return image }
 
-        let transform = NSAffineTransform()
-        transform.translateX(by: horizontal ? image.size.width : 0,
-                             yBy: vertical ? image.size.height : 0)
-        transform.scaleX(by: horizontal ? -1 : 1, yBy: vertical ? -1 : 1)
-        transform.concat()
+        // Apply flip transforms
+        context.translateBy(
+            x: horizontal ? image.size.width : 0,
+            y: vertical ? image.size.height : 0
+        )
+        context.scaleBy(
+            x: horizontal ? -1 : 1,
+            y: vertical ? -1 : 1
+        )
+        context.draw(cgImage, in: CGRect(origin: .zero, size: image.size))
 
-        image.draw(at: .zero, from: .zero, operation: .copy, fraction: 1.0)
-
-        context.restoreGraphicsState()
-        newImage.unlockFocus()
-        return newImage
+        guard let flippedCGImage = context.makeImage() else { return image }
+        return NSImage(cgImage: flippedCGImage, size: image.size)
     }
 
     /// Applies a complete transform (rotation + flip) to an image
@@ -188,7 +209,7 @@ struct ImageCropService {
         return result
     }
 
-    /// Applies blur regions to an image
+    /// Applies blur regions to an image using CGContext (thread-safe)
     /// - Parameters:
     ///   - image: The source image
     ///   - regions: Array of blur regions to apply
@@ -201,23 +222,26 @@ struct ImageCropService {
         }
 
         let ciImage = CIImage(cgImage: cgImage)
-        let context = CIContext(options: [.useSoftwareRenderer: false])
+        let ciContext = CIContext(options: [.useSoftwareRenderer: false])
 
-        // Create mutable copy to draw on
-        let newImage = NSImage(size: image.size)
-        newImage.lockFocus()
+        // Create CGContext for drawing
+        let colorSpace = cgImage.colorSpace ?? CGColorSpaceCreateDeviceRGB()
+        guard let context = CGContext(
+            data: nil,
+            width: Int(image.size.width),
+            height: Int(image.size.height),
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: colorSpace,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return image }
 
         // Draw original image first
-        image.draw(
-            in: NSRect(origin: .zero, size: image.size),
-            from: NSRect(origin: .zero, size: image.size),
-            operation: .copy,
-            fraction: 1.0
-        )
+        context.draw(cgImage, in: CGRect(origin: .zero, size: image.size))
 
         // Apply each blur region
         for region in regions {
-            // Convert rect to image coordinates (flip Y for CG coordinate system)
+            // Convert rect to CG coordinates (origin at bottom-left)
             let flippedRect = CGRect(
                 x: region.rect.origin.x,
                 y: image.size.height - region.rect.origin.y - region.rect.height,
@@ -228,92 +252,62 @@ struct ImageCropService {
             switch region.style {
             case .blur:
                 let radius = region.effectiveBlurRadius
-                applyGaussianBlur(to: ciImage, in: flippedRect, radius: radius, context: context, imageSize: image.size)
+                if let blurredRegion = createBlurredRegion(from: ciImage, in: flippedRect, radius: radius, ciContext: ciContext) {
+                    context.draw(blurredRegion, in: flippedRect)
+                }
 
             case .pixelate:
                 let scale = region.effectivePixelateScale(for: flippedRect)
-                applyPixelate(to: ciImage, in: flippedRect, scale: scale, context: context, imageSize: image.size)
+                if let pixelatedRegion = createPixelatedRegion(from: ciImage, in: flippedRect, scale: scale, ciContext: ciContext) {
+                    context.draw(pixelatedRegion, in: flippedRect)
+                }
 
             case .solidBlack:
-                NSColor.black.setFill()
-                NSBezierPath(rect: NSRect(
-                    x: region.rect.origin.x,
-                    y: image.size.height - region.rect.origin.y - region.rect.height,
-                    width: region.rect.width,
-                    height: region.rect.height
-                )).fill()
+                context.setFillColor(CGColor(gray: 0, alpha: 1))
+                context.fill(flippedRect)
 
             case .solidWhite:
-                NSColor.white.setFill()
-                NSBezierPath(rect: NSRect(
-                    x: region.rect.origin.x,
-                    y: image.size.height - region.rect.origin.y - region.rect.height,
-                    width: region.rect.width,
-                    height: region.rect.height
-                )).fill()
+                context.setFillColor(CGColor(gray: 1, alpha: 1))
+                context.fill(flippedRect)
             }
         }
 
-        newImage.unlockFocus()
-        return newImage
+        guard let resultImage = context.makeImage() else { return image }
+        return NSImage(cgImage: resultImage, size: image.size)
     }
 
-    /// Applies gaussian blur to a region
-    private static func applyGaussianBlur(to ciImage: CIImage, in rect: CGRect, radius: Double, context: CIContext, imageSize: CGSize) {
-        // Crop the region
+    /// Creates a blurred CGImage for a region
+    private static func createBlurredRegion(from ciImage: CIImage, in rect: CGRect, radius: Double, ciContext: CIContext) -> CGImage? {
         let cropped = ciImage.cropped(to: rect)
 
-        // Apply blur with configurable radius
-        guard let blurFilter = CIFilter(name: "CIGaussianBlur") else { return }
+        guard let blurFilter = CIFilter(name: "CIGaussianBlur") else { return nil }
         blurFilter.setValue(cropped, forKey: kCIInputImageKey)
         blurFilter.setValue(radius, forKey: kCIInputRadiusKey)
 
-        guard let blurred = blurFilter.outputImage else { return }
+        guard let blurred = blurFilter.outputImage else { return nil }
 
         // Crop back to original rect (blur extends beyond bounds)
         let clipped = blurred.cropped(to: rect)
 
-        // Render and draw
-        guard let cgResult = context.createCGImage(clipped, from: rect) else { return }
-        let nsResult = NSImage(cgImage: cgResult, size: rect.size)
-
-        nsResult.draw(
-            in: NSRect(origin: CGPoint(x: rect.origin.x, y: rect.origin.y), size: rect.size),
-            from: NSRect(origin: .zero, size: rect.size),
-            operation: .sourceOver,
-            fraction: 1.0
-        )
+        return ciContext.createCGImage(clipped, from: rect)
     }
 
-    /// Applies pixelation to a region
-    private static func applyPixelate(to ciImage: CIImage, in rect: CGRect, scale: Double, context: CIContext, imageSize: CGSize) {
-        // Crop the region
+    /// Creates a pixelated CGImage for a region
+    private static func createPixelatedRegion(from ciImage: CIImage, in rect: CGRect, scale: Double, ciContext: CIContext) -> CGImage? {
         let cropped = ciImage.cropped(to: rect)
 
-        // Apply pixelate with configurable scale
-        guard let pixelateFilter = CIFilter(name: "CIPixellate") else { return }
+        guard let pixelateFilter = CIFilter(name: "CIPixellate") else { return nil }
         pixelateFilter.setValue(cropped, forKey: kCIInputImageKey)
         pixelateFilter.setValue(scale, forKey: kCIInputScaleKey)
 
-        // Center on the region
         let centerVector = CIVector(x: rect.midX, y: rect.midY)
         pixelateFilter.setValue(centerVector, forKey: kCIInputCenterKey)
 
-        guard let pixelated = pixelateFilter.outputImage else { return }
+        guard let pixelated = pixelateFilter.outputImage else { return nil }
 
-        // Crop back to original rect
         let clipped = pixelated.cropped(to: rect)
 
-        // Render and draw
-        guard let cgResult = context.createCGImage(clipped, from: rect) else { return }
-        let nsResult = NSImage(cgImage: cgResult, size: rect.size)
-
-        nsResult.draw(
-            in: NSRect(origin: CGPoint(x: rect.origin.x, y: rect.origin.y), size: rect.size),
-            from: NSRect(origin: .zero, size: rect.size),
-            operation: .sourceOver,
-            fraction: 1.0
-        )
+        return ciContext.createCGImage(clipped, from: rect)
     }
 
     /// Crops an NSImage according to the provided settings
@@ -329,10 +323,11 @@ struct ImageCropService {
         let originalWidth = cgImage.width
         let originalHeight = cgImage.height
 
-        // Calculate crop rectangle (CGImage origin is bottom-left, but cropping uses top-left)
+        // Calculate crop rectangle in CGImage coordinates (origin at bottom-left)
+        // cropBottom is the distance from the bottom edge, which is where y starts in CG coords
         let cropRect = CGRect(
             x: settings.cropLeft,
-            y: settings.cropTop,  // Top in image coordinates
+            y: settings.cropBottom,  // Distance from bottom edge in CG coordinates
             width: originalWidth - settings.cropLeft - settings.cropRight,
             height: originalHeight - settings.cropTop - settings.cropBottom
         )
@@ -422,6 +417,7 @@ struct ImageCropService {
     }
 
     /// Processes multiple images with the same crop and export settings
+    /// Uses parallel processing with TaskGroup for better performance
     /// - Parameters:
     ///   - items: Array of ImageItem to process
     ///   - cropSettings: Crop settings to apply
@@ -430,7 +426,6 @@ struct ImageCropService {
     ///   - blurRegions: Dictionary of blur regions keyed by image ID
     ///   - progress: Closure called with progress updates (0.0 to 1.0)
     /// - Returns: Array of URLs for successfully cropped images
-    @MainActor
     static func batchCrop(
         items: [ImageItem],
         cropSettings: CropSettings,
@@ -439,7 +434,6 @@ struct ImageCropService {
         blurRegions: [UUID: ImageBlurData] = [:],
         progress: @escaping @MainActor (Double) -> Void
     ) async throws -> [URL] {
-        var outputURLs: [URL] = []
         let total = Double(items.count)
 
         // Pre-check: ensure no files would be overwritten
@@ -449,49 +443,87 @@ struct ImageCropService {
             }
         }
 
-        for (index, item) in items.enumerated() {
-            var processedImage = item.originalImage
-
-            // Pipeline order: Transform -> Blur -> Crop -> Resize
-
-            // 1. Apply transform (rotation/flip) FIRST
-            if let transform = transforms[item.id], !transform.isIdentity {
-                processedImage = applyTransform(processedImage, transform: transform)
-            }
-
-            // 2. Apply blur regions (in transformed image coordinates)
-            if let imageBlurData = blurRegions[item.id], imageBlurData.hasRegions {
-                processedImage = applyBlurRegions(processedImage, regions: imageBlurData.regions)
-            }
-
-            // 3. Apply crop
-            processedImage = try crop(processedImage, with: cropSettings)
-
-            // 4. Apply resize if enabled
-            if let targetSize = calculateResizedSize(from: processedImage.size, with: exportSettings.resizeSettings) {
-                processedImage = resize(processedImage, to: targetSize)
-            }
-
-            // Get output URL from export settings (with index for batch rename)
-            let outputURL = exportSettings.outputURL(for: item.url, index: index)
-
-            // Determine the actual format to use
-            let format: UTType
-            if exportSettings.preserveOriginalFormat {
-                let ext = item.url.pathExtension.lowercased()
-                format = ExportFormat.allCases.first {
-                    $0.fileExtension == ext || (ext == "jpeg" && $0 == .jpeg)
-                }?.utType ?? exportSettings.format.utType
-            } else {
-                format = exportSettings.format.utType
-            }
-
-            try save(processedImage, to: outputURL, format: format, quality: exportSettings.quality)
-            outputURLs.append(outputURL)
-
-            progress(Double(index + 1) / total)
+        // Pre-check: ensure no filename collisions in batch
+        if let collidingFilename = exportSettings.findBatchCollision(items: items) {
+            throw ImageCropError.filenameCollision(collidingFilename)
         }
 
-        return outputURLs
+        // Process images in parallel using TaskGroup
+        return try await withThrowingTaskGroup(of: (Int, URL).self) { group in
+            for (index, item) in items.enumerated() {
+                group.addTask {
+                    let outputURL = try processSingleImage(
+                        item: item,
+                        index: index,
+                        cropSettings: cropSettings,
+                        exportSettings: exportSettings,
+                        transforms: transforms,
+                        blurRegions: blurRegions
+                    )
+                    return (index, outputURL)
+                }
+            }
+
+            // Collect results and update progress
+            var results = [(Int, URL)]()
+            for try await result in group {
+                results.append(result)
+                await MainActor.run {
+                    progress(Double(results.count) / total)
+                }
+            }
+
+            // Sort by original index to maintain order
+            return results.sorted { $0.0 < $1.0 }.map { $0.1 }
+        }
+    }
+
+    /// Processes a single image through the full pipeline
+    private static func processSingleImage(
+        item: ImageItem,
+        index: Int,
+        cropSettings: CropSettings,
+        exportSettings: ExportSettings,
+        transforms: [UUID: ImageTransform],
+        blurRegions: [UUID: ImageBlurData]
+    ) throws -> URL {
+        var processedImage = item.originalImage
+
+        // Pipeline order: Transform -> Blur -> Crop -> Resize
+
+        // 1. Apply transform (rotation/flip) FIRST
+        if let transform = transforms[item.id], !transform.isIdentity {
+            processedImage = applyTransform(processedImage, transform: transform)
+        }
+
+        // 2. Apply blur regions (in transformed image coordinates)
+        if let imageBlurData = blurRegions[item.id], imageBlurData.hasRegions {
+            processedImage = applyBlurRegions(processedImage, regions: imageBlurData.regions)
+        }
+
+        // 3. Apply crop
+        processedImage = try crop(processedImage, with: cropSettings)
+
+        // 4. Apply resize if enabled
+        if let targetSize = calculateResizedSize(from: processedImage.size, with: exportSettings.resizeSettings) {
+            processedImage = resize(processedImage, to: targetSize)
+        }
+
+        // Get output URL from export settings (with index for batch rename)
+        let outputURL = exportSettings.outputURL(for: item.url, index: index)
+
+        // Determine the actual format to use
+        let format: UTType
+        if exportSettings.preserveOriginalFormat {
+            let ext = item.url.pathExtension.lowercased()
+            format = ExportFormat.allCases.first {
+                $0.fileExtension == ext || (ext == "jpeg" && $0 == .jpeg)
+            }?.utType ?? exportSettings.format.utType
+        } else {
+            format = exportSettings.format.utType
+        }
+
+        try save(processedImage, to: outputURL, format: format, quality: exportSettings.quality)
+        return outputURL
     }
 }

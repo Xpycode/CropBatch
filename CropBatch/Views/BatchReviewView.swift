@@ -152,18 +152,19 @@ struct BatchReviewView: View {
 
         for image in images {
             do {
-                let cropped = try ImageCropService.crop(image.originalImage, with: appState.cropSettings)
+                // Apply full processing pipeline to match export output
+                let processed = try await generatePreview(for: image)
                 let croppedSize = appState.cropSettings.croppedSize(from: image.originalSize)
 
                 items.append(PreviewItem(
                     id: image.id,
                     filename: image.filename,
                     originalImage: image.originalImage,
-                    croppedImage: cropped,
+                    croppedImage: processed,
                     croppedSize: croppedSize
                 ))
             } catch {
-                // Skip images that fail to crop
+                // Skip images that fail to process
                 continue
             }
         }
@@ -173,6 +174,38 @@ struct BatchReviewView: View {
             selectedIDs = Set(items.map { $0.id })  // Select all by default
             isGenerating = false
         }
+    }
+
+    /// Generates a preview by applying the full processing pipeline
+    /// Matches the export pipeline: Transform -> Blur -> Crop -> Resize
+    private func generatePreview(for item: ImageItem) async throws -> NSImage {
+        var result = item.originalImage
+
+        // 1. Apply transforms (rotation, flip)
+        if let transform = appState.imageTransforms[item.id] {
+            result = ImageCropService.applyTransform(result, transform: transform)
+        }
+
+        // 2. Apply blur regions
+        if let blurData = appState.blurRegions[item.id], !blurData.regions.isEmpty {
+            result = ImageCropService.applyBlurRegions(result, regions: blurData.regions)
+        }
+
+        // 3. Apply crop
+        if appState.cropSettings.hasAnyCrop {
+            result = try ImageCropService.crop(result, with: appState.cropSettings)
+        }
+
+        // 4. Apply resize if enabled
+        if appState.exportSettings.resizeSettings.isEnabled,
+           let targetSize = ImageCropService.calculateResizedSize(
+               from: result.size,
+               with: appState.exportSettings.resizeSettings
+           ) {
+            result = ImageCropService.resize(result, to: targetSize)
+        }
+
+        return result
     }
 }
 

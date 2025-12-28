@@ -144,6 +144,9 @@ struct CropSettingsView: View {
             appState.cropSettings.setAllEdges(value)
         }
 
+        // Validate and clamp all crop values to prevent exceeding image dimensions
+        appState.validateAndClampCrop()
+
         isApplyingLinked = false
     }
 }

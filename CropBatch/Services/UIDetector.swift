@@ -95,7 +95,10 @@ struct UIDetector {
         ]
 
         // Get the edge color from first row/column
-        let edgeY = edge == .top ? 0 : height - 1
+        // CGContext bitmap data has origin at bottom-left, so:
+        // - top of image = height - 1 in buffer
+        // - bottom of image = 0 in buffer
+        let edgeY = edge == .top ? height - 1 : 0
         guard let edgeColor = getAverageColor(data: data, y: edgeY, width: width, bytesPerRow: bytesPerRow, bytesPerPixel: bytesPerPixel, samplePositions: samplePositions) else {
             return nil
         }
@@ -105,7 +108,8 @@ struct UIDetector {
         var barHeight = 0
 
         for offset in 1..<maxScan {
-            let y = edge == .top ? offset : height - 1 - offset
+            // Scan inward from the edge (in CG coords: top=height-1-offset, bottom=offset)
+            let y = edge == .top ? height - 1 - offset : offset
 
             guard let rowColor = getAverageColor(data: data, y: y, width: width, bytesPerRow: bytesPerRow, bytesPerPixel: bytesPerPixel, samplePositions: samplePositions) else {
                 break

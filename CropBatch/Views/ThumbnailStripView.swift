@@ -10,6 +10,11 @@ struct ThumbnailStripView: View {
     // Number of items to duplicate at each end for seamless looping
     private let bufferCount = 6
 
+    // Cached buffer items to prevent recomputation on every UI update
+    @State private var cachedLeadingBuffer: [BufferItem] = []
+    @State private var cachedTrailingBuffer: [BufferItem] = []
+    @State private var cachedImageCount: Int = 0
+
     var body: some View {
         VStack(spacing: 0) {
             Divider()
@@ -26,7 +31,7 @@ struct ThumbnailStripView: View {
                             // In loop mode: create infinite carousel illusion
                             if appState.loopNavigation && appState.images.count > bufferCount {
                                 // Buffer: copies of last N items (for scrolling left past start)
-                                ForEach(leadingBufferItems, id: \.id) { item in
+                                ForEach(cachedLeadingBuffer, id: \.id) { item in
                                     carouselThumbnail(item: item.item, id: item.id, isBuffer: true)
                                 }
                             }
@@ -38,7 +43,7 @@ struct ThumbnailStripView: View {
 
                             // In loop mode: copies of first N items (for scrolling right past end)
                             if appState.loopNavigation && appState.images.count > bufferCount {
-                                ForEach(trailingBufferItems, id: \.id) { item in
+                                ForEach(cachedTrailingBuffer, id: \.id) { item in
                                     carouselThumbnail(item: item.item, id: item.id, isBuffer: true)
                                 }
                             }
@@ -65,9 +70,13 @@ struct ThumbnailStripView: View {
                         }
                     }
                     .onAppear {
+                        updateBufferCache()
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                             scrollToActiveImage(appState.activeImageID)
                         }
+                    }
+                    .onChange(of: appState.images.count) { _, _ in
+                        updateBufferCache()
                     }
                 }
                 .frame(height: 110)
@@ -85,6 +94,32 @@ struct ThumbnailStripView: View {
     private struct BufferItem: Identifiable {
         let id: String
         let item: ImageItem
+    }
+
+    /// Updates the cached buffer items when images change
+    private func updateBufferCache() {
+        guard appState.images.count > bufferCount else {
+            cachedLeadingBuffer = []
+            cachedTrailingBuffer = []
+            cachedImageCount = appState.images.count
+            return
+        }
+
+        // Only update if image count changed
+        guard cachedImageCount != appState.images.count else { return }
+
+        cachedLeadingBuffer = (0..<bufferCount).compactMap { i in
+            let sourceIndex = appState.images.count - bufferCount + i
+            guard sourceIndex >= 0, sourceIndex < appState.images.count else { return nil }
+            return BufferItem(id: "buffer-start-\(i)", item: appState.images[sourceIndex])
+        }
+
+        cachedTrailingBuffer = (0..<bufferCount).compactMap { i in
+            guard i < appState.images.count else { return nil }
+            return BufferItem(id: "buffer-end-\(i)", item: appState.images[i])
+        }
+
+        cachedImageCount = appState.images.count
     }
 
     private var leadingBufferItems: [BufferItem] {
