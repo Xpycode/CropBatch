@@ -26,14 +26,30 @@ struct CropBatchApp: App {
         .windowResizability(.contentSize)
         .defaultSize(width: 900, height: 600)
         .commands {
+            // MARK: - File Menu
             CommandGroup(replacing: .newItem) {
                 Button("Import Images...") {
                     appState.showImportPanel()
                 }
                 .keyboardShortcut("o", modifiers: .command)
+
+                Divider()
+
+                Button("Export...") {
+                    showExportPanel()
+                }
+                .keyboardShortcut("e", modifiers: [.command, .shift])
+                .disabled(appState.images.isEmpty || !canExport)
+
+                Divider()
+
+                Button("Clear All") {
+                    appState.clearAll()
+                }
+                .disabled(appState.images.isEmpty)
             }
 
-            // Undo/Redo commands
+            // MARK: - Edit Menu
             CommandGroup(replacing: .undoRedo) {
                 Button("Undo") {
                     appState.undo()
@@ -48,18 +64,95 @@ struct CropBatchApp: App {
                 .disabled(!appState.canRedo)
             }
 
-            // Copy cropped image command (adds to Edit menu, keeps standard items)
             CommandGroup(after: .pasteboard) {
                 Divider()
+
                 Button("Copy Cropped Image") {
                     copyActiveImageToClipboard()
                 }
                 .keyboardShortcut("c", modifiers: [.command, .shift])
                 .disabled(appState.activeImage == nil || !appState.cropSettings.hasAnyCrop)
+
+                Divider()
+
+                Button("Select All") {
+                    appState.selectedImageIDs = Set(appState.images.map { $0.id })
+                }
+                .keyboardShortcut("a", modifiers: .command)
+                .disabled(appState.images.isEmpty)
+
+                Button("Deselect All") {
+                    appState.selectedImageIDs.removeAll()
+                }
+                .keyboardShortcut("a", modifiers: [.command, .shift])
+                .disabled(appState.selectedImageIDs.isEmpty)
             }
 
-            // Image transform commands
+            // MARK: - View Menu (add to existing)
+            CommandGroup(after: .toolbar) {
+                Divider()
+
+                Button("Actual Size (100%)") {
+                    appState.zoomMode = .actualSize
+                }
+                .keyboardShortcut("1", modifiers: .command)
+
+                Button("Fit to View") {
+                    appState.zoomMode = .fit
+                }
+                .keyboardShortcut("2", modifiers: .command)
+
+                Button("Fit Width") {
+                    appState.zoomMode = .fitWidth
+                }
+                .keyboardShortcut("3", modifiers: .command)
+
+                Button("Fit Height") {
+                    appState.zoomMode = .fitHeight
+                }
+                .keyboardShortcut("4", modifiers: .command)
+
+                Divider()
+
+                Toggle("Show Before/After", isOn: Binding(
+                    get: { appState.showBeforeAfter },
+                    set: { appState.showBeforeAfter = $0 }
+                ))
+                .keyboardShortcut("b", modifiers: .command)
+
+                Divider()
+
+                Menu("Aspect Guide") {
+                    Button("None") {
+                        appState.showAspectRatioGuide = nil
+                    }
+
+                    Divider()
+
+                    ForEach(AspectRatioGuide.allCases) { guide in
+                        Button(guide.rawValue) {
+                            appState.showAspectRatioGuide = guide
+                        }
+                    }
+                }
+            }
+
+            // MARK: - Image Menu
             CommandMenu("Image") {
+                Button("Previous Image") {
+                    appState.selectPreviousImage()
+                }
+                .keyboardShortcut(.upArrow, modifiers: .command)
+                .disabled(appState.images.count < 2)
+
+                Button("Next Image") {
+                    appState.selectNextImage()
+                }
+                .keyboardShortcut(.downArrow, modifiers: .command)
+                .disabled(appState.images.count < 2)
+
+                Divider()
+
                 Button("Rotate Left") {
                     appState.rotateActiveImage(clockwise: false)
                 }
@@ -92,39 +185,102 @@ struct CropBatchApp: App {
                     appState.resetActiveImageTransform()
                 }
                 .disabled(appState.activeImageTransform.isIdentity)
-            }
-
-            // Zoom commands
-            CommandMenu("View") {
-                Button("Actual Size (100%)") {
-                    appState.zoomMode = .actualSize
-                }
-                .keyboardShortcut("1", modifiers: .command)
-
-                Button("Fit to View") {
-                    appState.zoomMode = .fit
-                }
-                .keyboardShortcut("2", modifiers: .command)
-
-                Button("Fit Width") {
-                    appState.zoomMode = .fitWidth
-                }
-                .keyboardShortcut("3", modifiers: .command)
-
-                Button("Fit Height") {
-                    appState.zoomMode = .fitHeight
-                }
-                .keyboardShortcut("4", modifiers: .command)
 
                 Divider()
 
-                Toggle("Show Before/After", isOn: Binding(
-                    get: { appState.showBeforeAfter },
-                    set: { appState.showBeforeAfter = $0 }
-                ))
-                .keyboardShortcut("b", modifiers: .command)
+                Button("Remove Selected") {
+                    appState.removeImages(ids: appState.selectedImageIDs.isEmpty
+                        ? (appState.activeImage.map { Set([$0.id]) } ?? Set())
+                        : appState.selectedImageIDs)
+                }
+                .keyboardShortcut(.delete, modifiers: .command)
+                .disabled(appState.activeImage == nil && appState.selectedImageIDs.isEmpty)
+            }
+
+            // MARK: - Crop Menu
+            CommandMenu("Crop") {
+                Button("Reset Crop") {
+                    appState.resetCropSettings()
+                }
+                .keyboardShortcut("r", modifiers: .command)
+                .disabled(!appState.cropSettings.hasAnyCrop)
+
+                Divider()
+
+                Menu("Link Mode") {
+                    ForEach(EdgeLinkMode.allCases) { mode in
+                        Button {
+                            appState.edgeLinkMode = mode
+                        } label: {
+                            if appState.edgeLinkMode == mode {
+                                Text("✓ \(mode.rawValue)")
+                            } else {
+                                Text("    \(mode.rawValue)")
+                            }
+                        }
+                    }
+                }
+
+                Divider()
+
+                Menu("Presets") {
+                    Button("None (Reset)") {
+                        appState.cropSettings = CropSettings()
+                    }
+
+                    Divider()
+
+                    ForEach(PresetCategory.allCases) { category in
+                        let categoryPresets = PresetManager.shared.allPresets.filter { $0.category == category }
+                        if !categoryPresets.isEmpty {
+                            Menu(category.rawValue) {
+                                ForEach(categoryPresets) { preset in
+                                    Button(preset.name) {
+                                        appState.cropSettings = preset.cropSettings
+                                        appState.trackRecentPreset(preset.id)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Divider()
+
+                // Quick crop adjustments
+                Button("Increase Top") {
+                    appState.adjustCrop(edge: .top, delta: 1)
+                }
+                .keyboardShortcut(.upArrow, modifiers: [.command, .option])
+                .disabled(appState.images.isEmpty)
+
+                Button("Decrease Top") {
+                    appState.adjustCrop(edge: .top, delta: -1)
+                }
+                .keyboardShortcut(.upArrow, modifiers: [.command, .option, .shift])
+                .disabled(appState.cropSettings.cropTop == 0)
+
+                Button("Increase Bottom") {
+                    appState.adjustCrop(edge: .bottom, delta: 1)
+                }
+                .keyboardShortcut(.downArrow, modifiers: [.command, .option])
+                .disabled(appState.images.isEmpty)
+
+                Button("Decrease Bottom") {
+                    appState.adjustCrop(edge: .bottom, delta: -1)
+                }
+                .keyboardShortcut(.downArrow, modifiers: [.command, .option, .shift])
+                .disabled(appState.cropSettings.cropBottom == 0)
             }
         }
+    }
+
+    private var canExport: Bool {
+        appState.cropSettings.hasAnyCrop ||
+        appState.hasAnyBlurRegions ||
+        appState.hasAnyTransforms ||
+        appState.exportSettings.resizeSettings.isEnabled ||
+        appState.exportSettings.renameSettings.mode == .pattern
     }
 
     private func copyActiveImageToClipboard() {
@@ -141,6 +297,57 @@ struct CropBatchApp: App {
             pasteboard.writeObjects([croppedImage])
         } catch {
             print("Failed to copy image: \(error)")
+        }
+    }
+
+    private func showExportPanel() {
+        let panel = NSOpenPanel()
+        panel.title = "Choose Export Folder"
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.canCreateDirectories = true
+
+        panel.begin { response in
+            guard response == .OK, let outputDirectory = panel.url else { return }
+            Task {
+                await processImages(to: outputDirectory)
+            }
+        }
+    }
+
+    private func processImages(to outputDirectory: URL) async {
+        let imagesToProcess = appState.selectedImageIDs.isEmpty
+            ? appState.images
+            : appState.selectedImages
+
+        await MainActor.run {
+            appState.isProcessing = true
+            appState.processingProgress = 0
+        }
+
+        var exportSettings = appState.exportSettings
+        exportSettings.outputDirectory = .custom(outputDirectory)
+
+        do {
+            _ = try await ImageCropService.batchCrop(
+                items: imagesToProcess,
+                cropSettings: appState.cropSettings,
+                exportSettings: exportSettings,
+                transforms: appState.imageTransforms,
+                blurRegions: appState.blurRegions
+            ) { progress in
+                appState.processingProgress = progress
+            }
+
+            await MainActor.run {
+                appState.isProcessing = false
+            }
+        } catch {
+            await MainActor.run {
+                appState.isProcessing = false
+            }
+            print("Export failed: \(error)")
         }
     }
 }
