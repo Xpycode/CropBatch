@@ -29,23 +29,6 @@ struct ContentView: View {
             SidebarView()
                 .frame(width: 420)
         }
-        .fileImporter(
-            isPresented: $state.showFileImporter,
-            allowedContentTypes: [.png, .jpeg, .heic, .tiff, .bmp],
-            allowsMultipleSelection: true
-        ) { result in
-            switch result {
-            case .success(let urls):
-                let accessibleURLs = urls.compactMap { url -> URL? in
-                    guard url.startAccessingSecurityScopedResource() else { return nil }
-                    return url
-                }
-                appState.addImages(from: accessibleURLs)
-                accessibleURLs.forEach { $0.stopAccessingSecurityScopedResource() }
-            case .failure(let error):
-                print("File import error: \(error.localizedDescription)")
-            }
-        }
         .onDrop(of: [.fileURL], isTargeted: nil) { providers in
             handleDrop(providers: providers)
         }
@@ -70,7 +53,7 @@ struct ContentView: View {
             ToolbarItemGroup(placement: .primaryAction) {
                 if !appState.images.isEmpty {
                     Button {
-                        appState.showFileImporter = true
+                        appState.showImportPanel()
                     } label: {
                         Label("Add Images", systemImage: "plus")
                     }

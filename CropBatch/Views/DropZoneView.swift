@@ -22,7 +22,7 @@ struct DropZoneView: View {
             }
 
             Button {
-                appState.showFileImporter = true
+                appState.showImportPanel()
             } label: {
                 Label("Import Images", systemImage: "folder")
                     .padding(.horizontal, 20)

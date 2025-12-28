@@ -28,7 +28,7 @@ struct CropBatchApp: App {
         .commands {
             CommandGroup(replacing: .newItem) {
                 Button("Import Images...") {
-                    appState.showFileImporter = true
+                    appState.showImportPanel()
                 }
                 .keyboardShortcut("o", modifiers: .command)
             }
@@ -48,12 +48,13 @@ struct CropBatchApp: App {
                 .disabled(!appState.canRedo)
             }
 
-            // Copy command
-            CommandGroup(replacing: .pasteboard) {
+            // Copy cropped image command (adds to Edit menu, keeps standard items)
+            CommandGroup(after: .pasteboard) {
+                Divider()
                 Button("Copy Cropped Image") {
                     copyActiveImageToClipboard()
                 }
-                .keyboardShortcut("c", modifiers: .command)
+                .keyboardShortcut("c", modifiers: [.command, .shift])
                 .disabled(appState.activeImage == nil || !appState.cropSettings.hasAnyCrop)
             }
 

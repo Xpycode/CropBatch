@@ -36,7 +36,7 @@ struct ImageGridView: View {
                 Divider()
 
                 Button {
-                    appState.showFileImporter = true
+                    appState.showImportPanel()
                 } label: {
                     Label("Add Images", systemImage: "plus")
                 }

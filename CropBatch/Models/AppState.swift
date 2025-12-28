@@ -54,7 +54,6 @@ final class AppState {
     var cropSettings = CropSettings()
     var exportSettings = ExportSettings()
     var selectedPresetID: String? = "png_lossless"
-    var showFileImporter = false
     var showOutputDirectoryPicker = false
     var isProcessing = false
     var processingProgress: Double = 0
@@ -219,6 +218,25 @@ final class AppState {
         // Set first image as active if none selected
         if activeImageID == nil {
             activeImageID = images.first?.id
+        }
+    }
+
+    /// Shows NSOpenPanel to import images
+    @MainActor
+    func showImportPanel() {
+        let panel = NSOpenPanel()
+        panel.title = "Import Images"
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = true
+        panel.allowedContentTypes = [.png, .jpeg, .heic, .tiff, .bmp]
+
+        panel.begin { [weak self] response in
+            guard response == .OK else { return }
+            let urls = panel.urls
+            Task { @MainActor in
+                self?.addImages(from: urls)
+            }
         }
     }
 
