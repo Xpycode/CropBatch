@@ -472,8 +472,8 @@ struct ImageCropService {
                 processedImage = resize(processedImage, to: targetSize)
             }
 
-            // Get output URL from export settings
-            let outputURL = exportSettings.outputURL(for: item.url)
+            // Get output URL from export settings (with index for batch rename)
+            let outputURL = exportSettings.outputURL(for: item.url, index: index)
 
             // Determine the actual format to use
             let format: UTType

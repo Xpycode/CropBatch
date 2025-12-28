@@ -62,6 +62,59 @@ struct ResizeSettings: Equatable, Codable {
     }
 }
 
+/// Rename mode for batch export
+enum RenameMode: String, CaseIterable, Identifiable, Codable {
+    case keepOriginal = "Keep Original"
+    case pattern = "Pattern"
+
+    var id: String { rawValue }
+}
+
+/// Settings for batch rename on export
+struct RenameSettings: Equatable, Codable {
+    var mode: RenameMode = .keepOriginal
+    var pattern: String = "{name}_{counter}"
+    var startIndex: Int = 1
+    var zeroPadding: Int = 2  // 01, 02, ... 99
+
+    static let `default` = RenameSettings()
+
+    /// Available tokens for pattern replacement
+    static let availableTokens: [(token: String, description: String)] = [
+        ("{name}", "Original filename"),
+        ("{counter}", "Padded counter (01, 02...)"),
+        ("{index}", "Position in batch (1, 2...)"),
+        ("{date}", "Current date (YYYY-MM-DD)"),
+        ("{time}", "Current time (HH-MM-SS)")
+    ]
+
+    /// Preview of what the pattern will produce
+    func preview(originalName: String = "screenshot", index: Int = 0) -> String {
+        processPattern(originalName: originalName, index: index)
+    }
+
+    /// Process the pattern with actual values
+    func processPattern(originalName: String, index: Int) -> String {
+        let now = Date()
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd"
+        let dateString = dateFormatter.string(from: now)
+        dateFormatter.dateFormat = "HH-mm-ss"
+        let timeString = dateFormatter.string(from: now)
+
+        let paddedCounter = String(format: "%0\(zeroPadding)d", startIndex + index)
+
+        var result = pattern
+        result = result.replacingOccurrences(of: "{name}", with: originalName)
+        result = result.replacingOccurrences(of: "{counter}", with: paddedCounter)
+        result = result.replacingOccurrences(of: "{index}", with: "\(index + 1)")
+        result = result.replacingOccurrences(of: "{date}", with: dateString)
+        result = result.replacingOccurrences(of: "{time}", with: timeString)
+
+        return result
+    }
+}
+
 struct ExportSettings: Equatable {
     var format: ExportFormat = .png
     var quality: Double = 0.9  // 0.0 to 1.0, only for JPEG/HEIC
@@ -69,6 +122,7 @@ struct ExportSettings: Equatable {
     var preserveOriginalFormat: Bool = false
     var outputDirectory: OutputDirectory = .sameAsSource
     var resizeSettings: ResizeSettings = ResizeSettings()
+    var renameSettings: RenameSettings = RenameSettings()
 
     enum OutputDirectory: Equatable {
         case sameAsSource
@@ -82,8 +136,13 @@ struct ExportSettings: Equatable {
         }
     }
 
-    /// Generates the output filename for a given input URL
+    /// Generates the output URL for a given input URL (without index, uses suffix mode)
     func outputURL(for inputURL: URL) -> URL {
+        outputURL(for: inputURL, index: 0)
+    }
+
+    /// Generates the output URL for a given input URL with batch index
+    func outputURL(for inputURL: URL, index: Int) -> URL {
         let originalName = inputURL.deletingPathExtension().lastPathComponent
         let originalExtension = inputURL.pathExtension.lowercased()
 
@@ -98,8 +157,15 @@ struct ExportSettings: Equatable {
             outputFormat = format
         }
 
-        // Build new filename
-        let newFilename = "\(originalName)\(suffix).\(outputFormat.fileExtension)"
+        // Build new filename based on rename mode
+        let baseName: String
+        if renameSettings.mode == .pattern {
+            baseName = renameSettings.processPattern(originalName: originalName, index: index)
+        } else {
+            baseName = "\(originalName)\(suffix)"
+        }
+
+        let newFilename = "\(baseName).\(outputFormat.fileExtension)"
 
         // Determine output directory
         let outputDir: URL
@@ -119,8 +185,8 @@ struct ExportSettings: Equatable {
     }
 
     /// Generates just the output filename (without directory) for a given input URL
-    func outputFilename(for inputURL: URL) -> String {
-        outputURL(for: inputURL).lastPathComponent
+    func outputFilename(for inputURL: URL, index: Int = 0) -> String {
+        outputURL(for: inputURL, index: index).lastPathComponent
     }
 }
 
@@ -213,6 +279,7 @@ struct ExportSettingsCodable: Codable, Equatable {
     var suffix: String
     var preserveOriginalFormat: Bool
     var resizeSettings: ResizeSettings
+    var renameSettings: RenameSettings
 
     init(from settings: ExportSettings) {
         self.format = settings.format
@@ -220,6 +287,7 @@ struct ExportSettingsCodable: Codable, Equatable {
         self.suffix = settings.suffix
         self.preserveOriginalFormat = settings.preserveOriginalFormat
         self.resizeSettings = settings.resizeSettings
+        self.renameSettings = settings.renameSettings
     }
 
     func toExportSettings() -> ExportSettings {
@@ -228,7 +296,8 @@ struct ExportSettingsCodable: Codable, Equatable {
             quality: quality,
             suffix: suffix,
             preserveOriginalFormat: preserveOriginalFormat,
-            resizeSettings: resizeSettings
+            resizeSettings: resizeSettings,
+            renameSettings: renameSettings
         )
     }
 }

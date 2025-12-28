@@ -34,14 +34,8 @@ struct ExportSettingsView: View {
                 ))
             }
 
-            // Suffix field
-            SuffixField(suffix: Binding(
-                get: { appState.exportSettings.suffix },
-                set: {
-                    appState.exportSettings.suffix = $0
-                    appState.markCustomSettings()
-                }
-            ))
+            // Rename settings
+            RenameSettingsSection()
 
             // Preserve original format toggle
             Toggle("Keep original format", isOn: Binding(
@@ -274,26 +268,6 @@ struct QualitySlider: View {
     }
 }
 
-// MARK: - Suffix Field
-
-struct SuffixField: View {
-    @Binding var suffix: String
-
-    var body: some View {
-        HStack {
-            Text("Suffix")
-                .font(.callout)
-
-            Spacer()
-
-            TextField("_cropped", text: $suffix)
-                .textFieldStyle(.roundedBorder)
-                .frame(width: 100)
-                .multilineTextAlignment(.trailing)
-        }
-    }
-}
-
 // MARK: - Output Preview
 
 struct OutputPreview: View {
@@ -503,6 +477,157 @@ struct ResizeSettingsSection: View {
                 .controlSize(.small)
             }
         }
+    }
+}
+
+// MARK: - Rename Settings Section
+
+struct RenameSettingsSection: View {
+    @Environment(AppState.self) private var appState
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Naming")
+                    .font(.callout)
+
+                Spacer()
+
+                Picker("", selection: Binding(
+                    get: { appState.exportSettings.renameSettings.mode },
+                    set: {
+                        appState.exportSettings.renameSettings.mode = $0
+                        appState.markCustomSettings()
+                    }
+                )) {
+                    ForEach(RenameMode.allCases) { mode in
+                        Text(mode.rawValue).tag(mode)
+                    }
+                }
+                .pickerStyle(.menu)
+                .frame(width: 120)
+            }
+
+            // Show suffix field for keep original mode, pattern field for pattern mode
+            if appState.exportSettings.renameSettings.mode == .keepOriginal {
+                HStack {
+                    Text("Suffix")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    Spacer()
+
+                    TextField("_cropped", text: Binding(
+                        get: { appState.exportSettings.suffix },
+                        set: {
+                            appState.exportSettings.suffix = $0
+                            appState.markCustomSettings()
+                        }
+                    ))
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 100)
+                    .multilineTextAlignment(.trailing)
+                }
+            } else {
+                patternEditor
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var patternEditor: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // Pattern field
+            HStack {
+                Text("Pattern")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Spacer()
+
+                TextField("{name}_{counter}", text: Binding(
+                    get: { appState.exportSettings.renameSettings.pattern },
+                    set: {
+                        appState.exportSettings.renameSettings.pattern = $0
+                        appState.markCustomSettings()
+                    }
+                ))
+                .textFieldStyle(.roundedBorder)
+                .frame(width: 140)
+                .font(.system(size: 11, design: .monospaced))
+            }
+
+            // Token buttons
+            HStack(spacing: 4) {
+                ForEach(RenameSettings.availableTokens, id: \.token) { token in
+                    Button(token.token) {
+                        appState.exportSettings.renameSettings.pattern += token.token
+                        appState.markCustomSettings()
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.mini)
+                    .help(token.description)
+                }
+            }
+
+            // Counter settings
+            HStack(spacing: 12) {
+                HStack(spacing: 4) {
+                    Text("Start:")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    TextField("1", value: Binding(
+                        get: { appState.exportSettings.renameSettings.startIndex },
+                        set: {
+                            appState.exportSettings.renameSettings.startIndex = max(0, $0)
+                            appState.markCustomSettings()
+                        }
+                    ), format: .number)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 50)
+                }
+
+                HStack(spacing: 4) {
+                    Text("Digits:")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    Picker("", selection: Binding(
+                        get: { appState.exportSettings.renameSettings.zeroPadding },
+                        set: {
+                            appState.exportSettings.renameSettings.zeroPadding = $0
+                            appState.markCustomSettings()
+                        }
+                    )) {
+                        Text("1").tag(1)
+                        Text("2").tag(2)
+                        Text("3").tag(3)
+                        Text("4").tag(4)
+                    }
+                    .pickerStyle(.menu)
+                    .frame(width: 55)
+                }
+            }
+
+            // Preview
+            if let firstImage = appState.images.first {
+                let preview = appState.exportSettings.renameSettings.preview(
+                    originalName: firstImage.url.deletingPathExtension().lastPathComponent,
+                    index: 0
+                )
+                HStack(spacing: 4) {
+                    Text("Preview:")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text(preview)
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(.blue)
+                }
+            }
+        }
+        .padding(8)
+        .background(RoundedRectangle(cornerRadius: 6).fill(Color(nsColor: .controlBackgroundColor)))
     }
 }
 
