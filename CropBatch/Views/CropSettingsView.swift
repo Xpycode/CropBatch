@@ -9,25 +9,33 @@ struct CropSettingsView: View {
         @Bindable var state = appState
 
         VStack(alignment: .leading, spacing: 12) {
-            CropEdgeField(edge: .top, value: $state.cropSettings.cropTop)
-                .onChange(of: appState.cropSettings.cropTop) { _, newValue in
-                    applyLinkedChange(edge: .top, value: newValue)
-                }
+            CropEdgeField(edge: .top, value: $state.cropSettings.cropTop) {
+                appState.recordCropChange()
+            }
+            .onChange(of: appState.cropSettings.cropTop) { _, newValue in
+                applyLinkedChange(edge: .top, value: newValue)
+            }
 
-            CropEdgeField(edge: .bottom, value: $state.cropSettings.cropBottom)
-                .onChange(of: appState.cropSettings.cropBottom) { _, newValue in
-                    applyLinkedChange(edge: .bottom, value: newValue)
-                }
+            CropEdgeField(edge: .bottom, value: $state.cropSettings.cropBottom) {
+                appState.recordCropChange()
+            }
+            .onChange(of: appState.cropSettings.cropBottom) { _, newValue in
+                applyLinkedChange(edge: .bottom, value: newValue)
+            }
 
-            CropEdgeField(edge: .left, value: $state.cropSettings.cropLeft)
-                .onChange(of: appState.cropSettings.cropLeft) { _, newValue in
-                    applyLinkedChange(edge: .left, value: newValue)
-                }
+            CropEdgeField(edge: .left, value: $state.cropSettings.cropLeft) {
+                appState.recordCropChange()
+            }
+            .onChange(of: appState.cropSettings.cropLeft) { _, newValue in
+                applyLinkedChange(edge: .left, value: newValue)
+            }
 
-            CropEdgeField(edge: .right, value: $state.cropSettings.cropRight)
-                .onChange(of: appState.cropSettings.cropRight) { _, newValue in
-                    applyLinkedChange(edge: .right, value: newValue)
-                }
+            CropEdgeField(edge: .right, value: $state.cropSettings.cropRight) {
+                appState.recordCropChange()
+            }
+            .onChange(of: appState.cropSettings.cropRight) { _, newValue in
+                applyLinkedChange(edge: .right, value: newValue)
+            }
 
             // Edge linking - compact button group
             VStack(alignment: .leading, spacing: 4) {
@@ -98,6 +106,7 @@ struct CropSettingsView: View {
             HStack {
                 Button("Reset All") {
                     appState.cropSettings = CropSettings()
+                    appState.recordCropChange()
                     detectionResult = nil
                 }
                 .buttonStyle(.plain)
@@ -181,6 +190,7 @@ struct AutoDetectView: View {
                             description: result.topDescription
                         ) {
                             appState.cropSettings.cropTop = result.suggestedTop
+                            appState.recordCropChange()
                         }
                     }
 
@@ -191,12 +201,14 @@ struct AutoDetectView: View {
                             description: result.bottomDescription
                         ) {
                             appState.cropSettings.cropBottom = result.suggestedBottom
+                            appState.recordCropChange()
                         }
                     }
 
                     // Apply all button
                     Button("Apply All Detected") {
                         appState.cropSettings = result.asCropSettings
+                        appState.recordCropChange()
                     }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.small)
@@ -273,6 +285,7 @@ struct DetectionResultRow: View {
 struct CropEdgeField: View {
     let edge: CropEdge
     @Binding var value: Int
+    var onCommit: (() -> Void)? = nil
 
     var body: some View {
         HStack {
@@ -289,6 +302,7 @@ struct CropEdgeField: View {
                 .textFieldStyle(.roundedBorder)
                 .frame(width: 60)
                 .multilineTextAlignment(.trailing)
+                .onSubmit { onCommit?() }
 
             Text("px")
                 .font(.caption)

@@ -33,6 +33,33 @@ struct ActionButtonsView: View {
 
     var body: some View {
         VStack(spacing: 12) {
+            // Undo/Redo buttons
+            HStack(spacing: 8) {
+                Button {
+                    appState.undo()
+                } label: {
+                    Label("Undo", systemImage: "arrow.uturn.backward")
+                        .labelStyle(.iconOnly)
+                }
+                .buttonStyle(.bordered)
+                .disabled(!appState.canUndo)
+                .help("Undo (⌘Z)")
+
+                Button {
+                    appState.redo()
+                } label: {
+                    Label("Redo", systemImage: "arrow.uturn.forward")
+                        .labelStyle(.iconOnly)
+                }
+                .buttonStyle(.bordered)
+                .disabled(!appState.canRedo)
+                .help("Redo (⇧⌘Z)")
+
+                Spacer()
+            }
+
+            Divider()
+
             if appState.isProcessing {
                 VStack(spacing: 8) {
                     ProgressView(value: appState.processingProgress)

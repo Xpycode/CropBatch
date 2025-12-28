@@ -96,9 +96,9 @@ final class AppState {
     var edgeLinkMode: EdgeLinkMode = .none  // Linked edge cropping mode
     var showAspectRatioGuide: AspectRatioGuide? = nil  // Aspect ratio guide overlay
 
-    // Undo/Redo history for crop settings
-    private var cropHistory: [CropSettings] = []
-    private var cropHistoryIndex: Int = -1
+    // Undo/Redo history for crop settings (initialized with default state)
+    private var cropHistory: [CropSettings] = [CropSettings()]
+    private var cropHistoryIndex: Int = 0
     private var isUndoRedoAction = false
 
     var canUndo: Bool { cropHistoryIndex > 0 }

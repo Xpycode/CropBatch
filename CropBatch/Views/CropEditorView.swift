@@ -226,7 +226,8 @@ struct CropEditorView: View {
             cropSettings: Binding(
                 get: { appState.cropSettings },
                 set: { appState.cropSettings = $0 }
-            )
+            ),
+            onDragEnded: { appState.recordCropChange() }
         )
     }
 
@@ -287,15 +288,19 @@ struct CropEditorView: View {
                 switch keyPress.key {
                 case .upArrow:
                     appState.adjustCrop(edge: .top, delta: -baseDelta)
+                    appState.recordCropChange()
                     return .handled
                 case .downArrow:
                     appState.adjustCrop(edge: .bottom, delta: -baseDelta)
+                    appState.recordCropChange()
                     return .handled
                 case .leftArrow:
                     appState.adjustCrop(edge: .left, delta: -baseDelta)
+                    appState.recordCropChange()
                     return .handled
                 case .rightArrow:
                     appState.adjustCrop(edge: .right, delta: -baseDelta)
+                    appState.recordCropChange()
                     return .handled
                 default:
                     return .ignored
@@ -304,15 +309,19 @@ struct CropEditorView: View {
                 switch keyPress.key {
                 case .upArrow:
                     appState.adjustCrop(edge: .bottom, delta: baseDelta)
+                    appState.recordCropChange()
                     return .handled
                 case .downArrow:
                     appState.adjustCrop(edge: .top, delta: baseDelta)
+                    appState.recordCropChange()
                     return .handled
                 case .leftArrow:
                     appState.adjustCrop(edge: .right, delta: baseDelta)
+                    appState.recordCropChange()
                     return .handled
                 case .rightArrow:
                     appState.adjustCrop(edge: .left, delta: baseDelta)
+                    appState.recordCropChange()
                     return .handled
                 default:
                     return .ignored
@@ -452,6 +461,7 @@ struct CropHandlesView: View {
     let imageSize: CGSize
     let displayedSize: CGSize
     @Binding var cropSettings: CropSettings
+    var onDragEnded: (() -> Void)? = nil
 
     private var scale: CGFloat {
         displayedSize.width / imageSize.width
@@ -559,10 +569,12 @@ struct CropHandlesView: View {
                             cropSettings.cropTop = max(0, min(topValue, Int(imageSize.height) - cropSettings.cropBottom - 10))
                             cropSettings.cropLeft = max(0, min(leftValue, Int(imageSize.width) - cropSettings.cropRight - 10))
                         }
+                        .onEnded { _ in onDragEnded?() }
                 )
                 .onTapGesture(count: 2) {
                     cropSettings.cropTop = 0
                     cropSettings.cropLeft = 0
+                    onDragEnded?()
                 }
 
             // Top-Right corner
@@ -587,10 +599,12 @@ struct CropHandlesView: View {
                             cropSettings.cropTop = max(0, min(topValue, Int(imageSize.height) - cropSettings.cropBottom - 10))
                             cropSettings.cropRight = max(0, min(rightValue, Int(imageSize.width) - cropSettings.cropLeft - 10))
                         }
+                        .onEnded { _ in onDragEnded?() }
                 )
                 .onTapGesture(count: 2) {
                     cropSettings.cropTop = 0
                     cropSettings.cropRight = 0
+                    onDragEnded?()
                 }
 
             // Bottom-Left corner
@@ -615,10 +629,12 @@ struct CropHandlesView: View {
                             cropSettings.cropBottom = max(0, min(bottomValue, Int(imageSize.height) - cropSettings.cropTop - 10))
                             cropSettings.cropLeft = max(0, min(leftValue, Int(imageSize.width) - cropSettings.cropRight - 10))
                         }
+                        .onEnded { _ in onDragEnded?() }
                 )
                 .onTapGesture(count: 2) {
                     cropSettings.cropBottom = 0
                     cropSettings.cropLeft = 0
+                    onDragEnded?()
                 }
 
             // Bottom-Right corner
@@ -644,10 +660,12 @@ struct CropHandlesView: View {
                             cropSettings.cropBottom = max(0, min(bottomValue, Int(imageSize.height) - cropSettings.cropTop - 10))
                             cropSettings.cropRight = max(0, min(rightValue, Int(imageSize.width) - cropSettings.cropLeft - 10))
                         }
+                        .onEnded { _ in onDragEnded?() }
                 )
                 .onTapGesture(count: 2) {
                     cropSettings.cropBottom = 0
                     cropSettings.cropRight = 0
+                    onDragEnded?()
                 }
         }
     }
@@ -670,9 +688,13 @@ struct CropHandlesView: View {
                             let snapping = NSEvent.modifierFlags.contains(.control)
                             onDrag(gesture.location, snapping)
                         }
+                        .onEnded { _ in
+                            onDragEnded?()
+                        }
                 )
                 .onTapGesture(count: 2) {
                     onReset()
+                    onDragEnded?()
                 }
 
             // Pixel label (only show if value > 0)
