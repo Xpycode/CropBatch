@@ -21,7 +21,7 @@ struct CropEditorView: View {
         .focusable()
         .focused($isFocused)
         .onAppear { isFocused = true }
-        .onKeyPress(keys: [.leftArrow, .rightArrow, .upArrow, .downArrow], phases: .down) { keyPress in
+        .onKeyPress(keys: [.leftArrow, .rightArrow, .upArrow, .downArrow], phases: [.down, .repeat]) { keyPress in
             handleKeyPress(keyPress)
         }
         // Blur tool shortcuts disabled for now

@@ -4,31 +4,74 @@ import UniformTypeIdentifiers
 struct ThumbnailStripView: View {
     @Environment(AppState.self) private var appState
     @State private var draggedItem: ImageItem?
+    @State private var scrollPosition = ScrollPosition(idType: String.self)
+
+    // Number of items to duplicate at each end for seamless looping
+    private let bufferCount = 6
 
     var body: some View {
         VStack(spacing: 0) {
             Divider()
 
             HStack(spacing: 0) {
-                ScrollViewReader { proxy in
-                    ScrollView(.horizontal, showsIndicators: true) {
+                GeometryReader { geometry in
+                    let halfWidth = geometry.size.width / 2 - 56
+
+                    ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 12) {
-                            ForEach(appState.images) { item in
-                                ThumbnailItemView(item: item, draggedItem: $draggedItem)
-                                    .id(item.id)
+                            // Leading spacer
+                            Color.clear.frame(width: halfWidth, height: 1)
+
+                            // In loop mode: create infinite carousel illusion
+                            if appState.loopNavigation && appState.images.count > bufferCount {
+                                // Buffer: copies of last N items (for scrolling left past start)
+                                ForEach(leadingBufferItems, id: \.id) { item in
+                                    carouselThumbnail(item: item.item, id: item.id, isBuffer: true)
+                                }
                             }
+
+                            // Main content
+                            ForEach(appState.images) { item in
+                                carouselThumbnail(item: item, id: "main-\(item.id.uuidString)", isBuffer: false)
+                            }
+
+                            // In loop mode: copies of first N items (for scrolling right past end)
+                            if appState.loopNavigation && appState.images.count > bufferCount {
+                                ForEach(trailingBufferItems, id: \.id) { item in
+                                    carouselThumbnail(item: item.item, id: item.id, isBuffer: true)
+                                }
+                            }
+
+                            // Trailing spacer
+                            Color.clear.frame(width: halfWidth, height: 1)
                         }
-                        .padding(.horizontal, 16)
                         .padding(.vertical, 12)
+                        .scrollTargetLayout()
+                    }
+                    .scrollPosition($scrollPosition, anchor: .center)
+                    .onScrollTargetVisibilityChange(idType: String.self, threshold: 0.5) { visibleIDs in
+                        if let firstVisible = visibleIDs.first {
+                            handleScrollPositionChange(newID: firstVisible)
+                        }
                     }
                     .onChange(of: appState.activeImageID) { _, newID in
-                        scrollToActive(proxy: proxy, activeID: newID)
+                        scrollToActiveImage(newID)
+                    }
+                    .onChange(of: appState.loopNavigation) { _, _ in
+                        // Re-scroll when loop mode toggled
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                            scrollToActiveImage(appState.activeImageID)
+                        }
+                    }
+                    .onAppear {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                            scrollToActiveImage(appState.activeImageID)
+                        }
                     }
                 }
                 .frame(height: 110)
                 .background(Color(nsColor: .windowBackgroundColor))
 
-                // Position counter and loop toggle
                 if !appState.images.isEmpty {
                     endControls
                 }
@@ -36,12 +79,81 @@ struct ThumbnailStripView: View {
         }
     }
 
+    // MARK: - Buffer Items (safe access)
+
+    private struct BufferItem: Identifiable {
+        let id: String
+        let item: ImageItem
+    }
+
+    private var leadingBufferItems: [BufferItem] {
+        guard appState.images.count > bufferCount else { return [] }
+        return (0..<bufferCount).compactMap { i in
+            let sourceIndex = appState.images.count - bufferCount + i
+            guard sourceIndex >= 0, sourceIndex < appState.images.count else { return nil }
+            return BufferItem(id: "buffer-start-\(i)", item: appState.images[sourceIndex])
+        }
+    }
+
+    private var trailingBufferItems: [BufferItem] {
+        guard appState.images.count > bufferCount else { return [] }
+        return (0..<bufferCount).compactMap { i in
+            guard i < appState.images.count else { return nil }
+            return BufferItem(id: "buffer-end-\(i)", item: appState.images[i])
+        }
+    }
+
+    @ViewBuilder
+    private func carouselThumbnail(item: ImageItem, id: String, isBuffer: Bool) -> some View {
+        ThumbnailItemView(item: item, draggedItem: $draggedItem)
+            .id(id)
+            .opacity(isBuffer ? 0.5 : 1.0)
+    }
+
+    private func scrollToActiveImage(_ activeID: UUID?) {
+        guard let activeID = activeID else { return }
+        let targetID = "main-\(activeID.uuidString)"
+        scrollPosition.scrollTo(id: targetID, anchor: .center)
+    }
+
+    private func handleScrollPositionChange(newID: String?) {
+        guard let newID = newID,
+              appState.loopNavigation,
+              appState.images.count > bufferCount else { return }
+
+        // Check if we scrolled into a buffer zone
+        if newID.hasPrefix("buffer-start-") {
+            // Scrolled into the start buffer (going left) - jump to equivalent main item
+            if let indexStr = newID.replacingOccurrences(of: "buffer-start-", with: "").first,
+               let bufferIndex = Int(String(indexStr)) {
+                let realIndex = appState.images.count - bufferCount + bufferIndex
+                if realIndex < appState.images.count {
+                    let realItem = appState.images[realIndex]
+                    let targetID = "main-\(realItem.id.uuidString)"
+                    DispatchQueue.main.async {
+                        scrollPosition.scrollTo(id: targetID, anchor: .center)
+                    }
+                }
+            }
+        } else if newID.hasPrefix("buffer-end-") {
+            // Scrolled into the end buffer (going right) - jump to equivalent main item
+            if let indexStr = newID.replacingOccurrences(of: "buffer-end-", with: "").first,
+               let bufferIndex = Int(String(indexStr)) {
+                if bufferIndex < appState.images.count {
+                    let realItem = appState.images[bufferIndex]
+                    let targetID = "main-\(realItem.id.uuidString)"
+                    DispatchQueue.main.async {
+                        scrollPosition.scrollTo(id: targetID, anchor: .center)
+                    }
+                }
+            }
+        }
+    }
 
     private var endControls: some View {
         let currentIndex = appState.images.firstIndex { $0.id == appState.activeImageID } ?? 0
 
         return VStack(spacing: 4) {
-            // Loop toggle styled like a thumbnail
             Button {
                 appState.loopNavigation.toggle()
             } label: {
@@ -61,7 +173,6 @@ struct ThumbnailStripView: View {
             .buttonStyle(.plain)
             .help(appState.loopNavigation ? "Loop navigation on" : "Loop navigation off")
 
-            // Position counter
             Text("\(currentIndex + 1)/\(appState.images.count)")
                 .font(.caption2)
                 .monospacedDigit()
@@ -70,20 +181,31 @@ struct ThumbnailStripView: View {
         .padding(.horizontal, 8)
         .padding(.vertical, 12)
     }
+}
 
-    private func scrollToActive(proxy: ScrollViewProxy, activeID: UUID?) {
-        guard let activeID = activeID,
-              let activeIndex = appState.images.firstIndex(where: { $0.id == activeID }) else {
-            return
+
+// MARK: - Ghost Thumbnail (for loop mode edges)
+
+struct GhostThumbnailView: View {
+    let item: ImageItem
+
+    var body: some View {
+        VStack(spacing: 4) {
+            Image(nsImage: item.originalImage)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(width: 100, height: 70)
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+
+            Text(item.filename)
+                .font(.caption2)
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .frame(width: 100)
+                .foregroundStyle(.secondary)
         }
-
-        // Target: scroll to show 3 items ahead (if possible)
-        let targetIndex = min(activeIndex + 3, appState.images.count - 1)
-        let targetID = appState.images[targetIndex].id
-
-        withAnimation(.easeInOut(duration: 0.2)) {
-            proxy.scrollTo(targetID, anchor: .trailing)
-        }
+        .padding(6)
+        .opacity(0.4)
     }
 }
 
