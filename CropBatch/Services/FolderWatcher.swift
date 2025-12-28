@@ -1,5 +1,6 @@
 import Foundation
 import AppKit
+import UserNotifications
 
 @MainActor
 @Observable
@@ -156,11 +157,17 @@ final class FolderWatcher {
     }
 
     private func showNotification(for filename: String) {
-        let notification = NSUserNotification()
-        notification.title = "Screenshot Cropped"
-        notification.informativeText = filename
-        notification.soundName = nil
-        NSUserNotificationCenter.default.deliver(notification)
+        let content = UNMutableNotificationContent()
+        content.title = "Screenshot Cropped"
+        content.body = filename
+
+        let request = UNNotificationRequest(
+            identifier: UUID().uuidString,
+            content: content,
+            trigger: nil
+        )
+
+        UNUserNotificationCenter.current().add(request)
     }
 }
 
