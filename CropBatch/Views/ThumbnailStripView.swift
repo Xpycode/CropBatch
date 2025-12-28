@@ -9,17 +9,80 @@ struct ThumbnailStripView: View {
         VStack(spacing: 0) {
             Divider()
 
-            ScrollView(.horizontal, showsIndicators: true) {
-                HStack(spacing: 12) {
-                    ForEach(appState.images) { item in
-                        ThumbnailItemView(item: item, draggedItem: $draggedItem)
+            HStack(spacing: 0) {
+                ScrollViewReader { proxy in
+                    ScrollView(.horizontal, showsIndicators: true) {
+                        HStack(spacing: 12) {
+                            ForEach(appState.images) { item in
+                                ThumbnailItemView(item: item, draggedItem: $draggedItem)
+                                    .id(item.id)
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                    }
+                    .onChange(of: appState.activeImageID) { _, newID in
+                        scrollToActive(proxy: proxy, activeID: newID)
                     }
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
+                .frame(height: 110)
+                .background(Color(nsColor: .windowBackgroundColor))
+
+                // Position counter and loop toggle
+                if !appState.images.isEmpty {
+                    endControls
+                }
             }
-            .frame(height: 110)
-            .background(Color(nsColor: .windowBackgroundColor))
+        }
+    }
+
+
+    private var endControls: some View {
+        let currentIndex = appState.images.firstIndex { $0.id == appState.activeImageID } ?? 0
+
+        return VStack(spacing: 4) {
+            // Loop toggle styled like a thumbnail
+            Button {
+                appState.loopNavigation.toggle()
+            } label: {
+                Image(systemName: appState.loopNavigation ? "repeat.circle.fill" : "repeat.circle")
+                    .font(.title2)
+                    .foregroundStyle(appState.loopNavigation ? Color.accentColor : Color.secondary)
+                    .frame(width: 50, height: 50)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(appState.loopNavigation ? Color.accentColor.opacity(0.1) : Color.gray.opacity(0.1))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6)
+                            .strokeBorder(appState.loopNavigation ? Color.accentColor : Color.clear, lineWidth: 2)
+                    )
+            }
+            .buttonStyle(.plain)
+            .help(appState.loopNavigation ? "Loop navigation on" : "Loop navigation off")
+
+            // Position counter
+            Text("\(currentIndex + 1)/\(appState.images.count)")
+                .font(.caption2)
+                .monospacedDigit()
+                .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 12)
+    }
+
+    private func scrollToActive(proxy: ScrollViewProxy, activeID: UUID?) {
+        guard let activeID = activeID,
+              let activeIndex = appState.images.firstIndex(where: { $0.id == activeID }) else {
+            return
+        }
+
+        // Target: scroll to show 3 items ahead (if possible)
+        let targetIndex = min(activeIndex + 3, appState.images.count - 1)
+        let targetID = appState.images[targetIndex].id
+
+        withAnimation(.easeInOut(duration: 0.2)) {
+            proxy.scrollTo(targetID, anchor: .trailing)
         }
     }
 }

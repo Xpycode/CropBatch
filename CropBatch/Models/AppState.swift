@@ -62,6 +62,7 @@ final class AppState {
     var activeImageID: UUID?
     var zoomMode: ZoomMode = .fit  // Default to fit view
     var showBeforeAfter = false  // Before/after preview toggle
+    var loopNavigation = false  // Wrap around when navigating images
     var recentPresetIDs: [UUID] = []  // Recently used crop presets (max 5)
 
     // Blur/redact tool
@@ -289,8 +290,11 @@ final class AppState {
         guard !images.isEmpty else { return }
         if let currentID = activeImageID,
            let currentIndex = images.firstIndex(where: { $0.id == currentID }) {
-            let nextIndex = (currentIndex + 1) % images.count
-            activeImageID = images[nextIndex].id
+            if currentIndex < images.count - 1 {
+                activeImageID = images[currentIndex + 1].id
+            } else if loopNavigation {
+                activeImageID = images.first?.id
+            }
         } else {
             activeImageID = images.first?.id
         }
@@ -300,8 +304,11 @@ final class AppState {
         guard !images.isEmpty else { return }
         if let currentID = activeImageID,
            let currentIndex = images.firstIndex(where: { $0.id == currentID }) {
-            let prevIndex = currentIndex > 0 ? currentIndex - 1 : images.count - 1
-            activeImageID = images[prevIndex].id
+            if currentIndex > 0 {
+                activeImageID = images[currentIndex - 1].id
+            } else if loopNavigation {
+                activeImageID = images.last?.id
+            }
         } else {
             activeImageID = images.last?.id
         }
