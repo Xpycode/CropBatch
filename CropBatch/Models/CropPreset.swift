@@ -34,7 +34,6 @@ enum PresetCategory: String, Codable, CaseIterable, Identifiable {
     case mac = "Mac"
     case windows = "Windows"
     case browser = "Browser"
-    case social = "Social Media"
     case custom = "Custom"
 
     var id: String { rawValue }
@@ -46,7 +45,6 @@ enum PresetCategory: String, Codable, CaseIterable, Identifiable {
         case .mac: return "desktopcomputer"
         case .windows: return "pc"
         case .browser: return "globe"
-        case .social: return "square.and.arrow.up"
         case .custom: return "star"
         }
     }
@@ -308,24 +306,6 @@ extension CropPreset {
             isBuiltIn: true,
             category: .browser,
             description: "Remove Brave tabs + address bar (92px)"
-        ),
-
-        // Social Media Templates
-        CropPreset(
-            name: "Instagram Square (1:1)",
-            icon: "square",
-            cropSettings: CropSettings(cropTop: 0, cropBottom: 0, cropLeft: 0, cropRight: 0),
-            isBuiltIn: true,
-            category: .social,
-            description: "Prepare for 1080×1080 (crop to square)"
-        ),
-        CropPreset(
-            name: "YouTube Thumbnail (16:9)",
-            icon: "play.rectangle",
-            cropSettings: CropSettings(cropTop: 0, cropBottom: 0, cropLeft: 0, cropRight: 0),
-            isBuiltIn: true,
-            category: .social,
-            description: "Prepare for 1280×720 (16:9 aspect)"
         ),
     ]
 
