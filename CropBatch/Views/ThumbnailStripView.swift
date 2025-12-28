@@ -5,6 +5,7 @@ struct ThumbnailStripView: View {
     @Environment(AppState.self) private var appState
     @State private var draggedItem: ImageItem?
     @State private var scrollPosition = ScrollPosition(idType: String.self)
+    @State private var isProgrammaticScroll = false
 
     // Number of items to duplicate at each end for seamless looping
     private let bufferCount = 6
@@ -113,37 +114,55 @@ struct ThumbnailStripView: View {
     private func scrollToActiveImage(_ activeID: UUID?) {
         guard let activeID = activeID else { return }
         let targetID = "main-\(activeID.uuidString)"
+
+        // Suppress buffer zone handling during programmatic scrolls
+        isProgrammaticScroll = true
         scrollPosition.scrollTo(id: targetID, anchor: .center)
+
+        // Re-enable after scroll animation completes
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            isProgrammaticScroll = false
+        }
     }
 
     private func handleScrollPositionChange(newID: String?) {
+        // Don't handle buffer jumps during programmatic scrolls (navigation, loop toggle)
         guard let newID = newID,
+              !isProgrammaticScroll,
               appState.loopNavigation,
               appState.images.count > bufferCount else { return }
 
-        // Check if we scrolled into a buffer zone
+        // Check if we scrolled into a buffer zone (user manually scrolled)
         if newID.hasPrefix("buffer-start-") {
             // Scrolled into the start buffer (going left) - jump to equivalent main item
-            if let indexStr = newID.replacingOccurrences(of: "buffer-start-", with: "").first,
-               let bufferIndex = Int(String(indexStr)) {
+            let indexStr = newID.replacingOccurrences(of: "buffer-start-", with: "")
+            if let bufferIndex = Int(indexStr) {
                 let realIndex = appState.images.count - bufferCount + bufferIndex
-                if realIndex < appState.images.count {
+                if realIndex >= 0, realIndex < appState.images.count {
                     let realItem = appState.images[realIndex]
                     let targetID = "main-\(realItem.id.uuidString)"
+                    isProgrammaticScroll = true
                     DispatchQueue.main.async {
                         scrollPosition.scrollTo(id: targetID, anchor: .center)
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            isProgrammaticScroll = false
+                        }
                     }
                 }
             }
         } else if newID.hasPrefix("buffer-end-") {
             // Scrolled into the end buffer (going right) - jump to equivalent main item
-            if let indexStr = newID.replacingOccurrences(of: "buffer-end-", with: "").first,
-               let bufferIndex = Int(String(indexStr)) {
-                if bufferIndex < appState.images.count {
+            let indexStr = newID.replacingOccurrences(of: "buffer-end-", with: "")
+            if let bufferIndex = Int(indexStr) {
+                if bufferIndex >= 0, bufferIndex < appState.images.count {
                     let realItem = appState.images[bufferIndex]
                     let targetID = "main-\(realItem.id.uuidString)"
+                    isProgrammaticScroll = true
                     DispatchQueue.main.async {
                         scrollPosition.scrollTo(id: targetID, anchor: .center)
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            isProgrammaticScroll = false
+                        }
                     }
                 }
             }

@@ -20,7 +20,12 @@ struct CropEditorView: View {
         }
         .focusable()
         .focused($isFocused)
-        .onAppear { isFocused = true }
+        .onTapGesture { isFocused = true }
+        .onAppear {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                isFocused = true
+            }
+        }
         .onKeyPress(keys: [.leftArrow, .rightArrow, .upArrow, .downArrow], phases: [.down, .repeat]) { keyPress in
             handleKeyPress(keyPress)
         }
