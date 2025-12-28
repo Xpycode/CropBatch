@@ -1,7 +1,6 @@
 import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
-import UserNotifications
 
 struct ActionButtonsView: View {
     @Environment(AppState.self) private var appState
@@ -22,13 +21,6 @@ struct ActionButtonsView: View {
 
     private var wouldOverwriteAny: Bool {
         imagesToProcess.contains { appState.exportSettings.wouldOverwriteOriginal(for: $0.url) }
-    }
-
-    private var canExport: Bool {
-        !appState.images.isEmpty &&
-        (appState.cropSettings.hasAnyCrop || appState.hasAnyBlurRegions || appState.hasAnyTransforms || appState.exportSettings.resizeSettings.isEnabled || appState.exportSettings.renameSettings.mode == .pattern) &&
-        !appState.isProcessing &&
-        !wouldOverwriteAny
     }
 
     var body: some View {
@@ -131,10 +123,10 @@ struct ActionButtonsView: View {
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
-            .disabled(!canExport)
+            .disabled(!appState.canExport || wouldOverwriteAny)
 
             // Warning messages
-            if !appState.cropSettings.hasAnyCrop && !appState.hasAnyBlurRegions && !appState.hasAnyTransforms && !appState.exportSettings.resizeSettings.isEnabled && appState.exportSettings.renameSettings.mode != .pattern && !appState.images.isEmpty {
+            if !appState.images.isEmpty && !appState.canExport && !appState.isProcessing {
                 Text("Apply crop, rotate, resize, or rename to export")
                     .font(.caption)
                     .foregroundStyle(.orange)
@@ -200,60 +192,20 @@ struct ActionButtonsView: View {
         }
     }
 
-    /// Send system notification for export completion
-    private func sendExportNotification(count: Int) {
-        let content = UNMutableNotificationContent()
-        content.title = "Export Complete"
-        content.body = "Successfully exported \(count) cropped images"
-        content.sound = .default
-
-        let request = UNNotificationRequest(
-            identifier: UUID().uuidString,
-            content: content,
-            trigger: nil
-        )
-
-        UNUserNotificationCenter.current().add(request)
-    }
-
     private func processImages(_ images: [ImageItem], to outputDirectory: URL) async {
-        await MainActor.run {
-            appState.isProcessing = true
-            appState.processingProgress = 0
-        }
-
-        // Create export settings with the selected output directory
-        var exportSettings = appState.exportSettings
-        exportSettings.outputDirectory = .custom(outputDirectory)
-
         do {
-            let results = try await ImageCropService.batchCrop(
-                items: images,
-                cropSettings: appState.cropSettings,
-                exportSettings: exportSettings,
-                transforms: appState.imageTransforms,
-                blurRegions: appState.blurRegions
-            ) { progress in
-                appState.processingProgress = progress
-            }
+            let results = try await appState.processAndExport(images: images, to: outputDirectory)
+            exportedCount = results.count
+            lastExportDirectory = outputDirectory
+            showSuccessAlert = true
 
-            await MainActor.run {
-                appState.isProcessing = false
-                exportedCount = results.count
-                lastExportDirectory = outputDirectory
-                showSuccessAlert = true
-
-                // Send system notification if app is not active
-                if !NSApp.isActive {
-                    sendExportNotification(count: results.count)
-                }
+            // Send system notification if app is not active
+            if !NSApp.isActive {
+                appState.sendExportNotification(count: results.count)
             }
         } catch {
-            await MainActor.run {
-                appState.isProcessing = false
-                exportError = error.localizedDescription
-                showErrorAlert = true
-            }
+            exportError = error.localizedDescription
+            showErrorAlert = true
         }
     }
 }

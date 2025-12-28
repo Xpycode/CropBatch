@@ -222,9 +222,7 @@ struct CropSectionView: View {
                             Menu {
                                 ForEach(categoryPresets) { preset in
                                     Button {
-                                        appState.cropSettings = preset.cropSettings
-                                        appState.trackRecentPreset(preset.id)
-                                        appState.recordCropChange()
+                                        appState.applyCropPreset(preset)
                                     } label: {
                                         Text("\(preset.name) \(presetValues(preset))")
                                     }
@@ -492,13 +490,6 @@ struct ExportSectionView: View {
         appState.selectedImageIDs.isEmpty ? appState.images : appState.selectedImages
     }
 
-    private var canExport: Bool {
-        !appState.images.isEmpty &&
-        (appState.cropSettings.hasAnyCrop || appState.hasAnyBlurRegions || appState.hasAnyTransforms ||
-         appState.exportSettings.resizeSettings.isEnabled || appState.exportSettings.renameSettings.mode == .pattern) &&
-        !appState.isProcessing
-    }
-
     var body: some View {
         @Bindable var state = appState
 
@@ -519,7 +510,7 @@ struct ExportSectionView: View {
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
-            .disabled(!canExport)
+            .disabled(!appState.canExport)
 
             // Progress indicator
             if appState.isProcessing {
@@ -586,7 +577,7 @@ struct ExportSectionView: View {
             }
 
             // Warning if nothing to export
-            if !canExport && !appState.images.isEmpty && !appState.isProcessing {
+            if !appState.canExport && !appState.images.isEmpty && !appState.isProcessing {
                 Text("Apply crop, transform, or resize to export")
                     .font(.caption)
                     .foregroundStyle(.orange)
@@ -650,36 +641,13 @@ struct ExportSectionView: View {
     }
 
     private func processImages(_ images: [ImageItem], to outputDirectory: URL) async {
-        await MainActor.run {
-            appState.isProcessing = true
-            appState.processingProgress = 0
-        }
-
-        var exportSettings = appState.exportSettings
-        exportSettings.outputDirectory = .custom(outputDirectory)
-
         do {
-            let results = try await ImageCropService.batchCrop(
-                items: images,
-                cropSettings: appState.cropSettings,
-                exportSettings: exportSettings,
-                transforms: appState.imageTransforms,
-                blurRegions: appState.blurRegions
-            ) { progress in
-                appState.processingProgress = progress
-            }
-
-            await MainActor.run {
-                appState.isProcessing = false
-                exportedCount = results.count
-                showSuccessAlert = true
-            }
+            let results = try await appState.processAndExport(images: images, to: outputDirectory)
+            exportedCount = results.count
+            showSuccessAlert = true
         } catch {
-            await MainActor.run {
-                appState.isProcessing = false
-                exportError = error.localizedDescription
-                showErrorAlert = true
-            }
+            exportError = error.localizedDescription
+            showErrorAlert = true
         }
     }
 }

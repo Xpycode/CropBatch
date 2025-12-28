@@ -177,9 +177,7 @@ struct PresetPickerView: View {
     }
 
     private func applyPreset(_ preset: CropPreset) {
-        appState.cropSettings = preset.cropSettings
-        appState.trackRecentPreset(preset.id)
-        appState.recordCropChange()
+        appState.applyCropPreset(preset)
     }
 }
 

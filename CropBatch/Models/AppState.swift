@@ -1,5 +1,6 @@
 import SwiftUI
 import UniformTypeIdentifiers
+import UserNotifications
 
 /// Zoom modes for the image preview
 enum ZoomMode: String, CaseIterable, Identifiable {
@@ -456,6 +457,74 @@ final class AppState {
     /// Get transform for a specific image
     func transformForImage(_ imageID: UUID) -> ImageTransform {
         imageTransforms[imageID] ?? .identity
+    }
+
+    // MARK: - Export
+
+    /// Whether export is possible (has images and something to do)
+    var canExport: Bool {
+        !images.isEmpty &&
+        !isProcessing &&
+        (cropSettings.hasAnyCrop ||
+         hasAnyBlurRegions ||
+         hasAnyTransforms ||
+         exportSettings.resizeSettings.isEnabled ||
+         exportSettings.renameSettings.mode == .pattern)
+    }
+
+    /// Process and export images to the specified directory
+    /// - Parameters:
+    ///   - imagesToExport: Images to process (uses selected or all if nil)
+    ///   - outputDirectory: Destination directory
+    /// - Returns: Array of exported file URLs
+    @MainActor
+    func processAndExport(images imagesToExport: [ImageItem]? = nil, to outputDirectory: URL) async throws -> [URL] {
+        let images = imagesToExport ?? (selectedImageIDs.isEmpty ? self.images : selectedImages)
+
+        isProcessing = true
+        processingProgress = 0
+
+        defer {
+            isProcessing = false
+        }
+
+        var settings = exportSettings
+        settings.outputDirectory = .custom(outputDirectory)
+
+        let results = try await ImageCropService.batchCrop(
+            items: images,
+            cropSettings: cropSettings,
+            exportSettings: settings,
+            transforms: imageTransforms,
+            blurRegions: blurRegions
+        ) { [weak self] progress in
+            self?.processingProgress = progress
+        }
+
+        return results
+    }
+
+    /// Send system notification for completed export
+    func sendExportNotification(count: Int) {
+        let content = UNMutableNotificationContent()
+        content.title = "Export Complete"
+        content.body = "\(count) image\(count == 1 ? "" : "s") exported successfully"
+        content.sound = .default
+
+        let request = UNNotificationRequest(
+            identifier: UUID().uuidString,
+            content: content,
+            trigger: nil
+        )
+
+        UNUserNotificationCenter.current().add(request)
+    }
+
+    /// Apply a crop preset with undo support
+    func applyCropPreset(_ preset: CropPreset) {
+        cropSettings = preset.cropSettings
+        trackRecentPreset(preset.id)
+        recordCropChange()
     }
 }
 
