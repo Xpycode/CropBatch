@@ -71,6 +71,9 @@ final class AppState {
     var blurRegions: [UUID: ImageBlurData] = [:]  // Keyed by image ID
     var selectedBlurRegionID: UUID?  // Currently selected region for editing
 
+    // Image transforms (rotation/flip) - keyed by image ID
+    var imageTransforms: [UUID: ImageTransform] = [:]
+
     private let recentPresetsKey = "CropBatch.RecentPresetIDs"
 
     /// Track a preset as recently used
@@ -223,9 +226,10 @@ final class AppState {
         images.removeAll { ids.contains($0.id) }
         selectedImageIDs.subtract(ids)
 
-        // Clean up blur regions for removed images
+        // Clean up blur regions and transforms for removed images
         for id in ids {
             blurRegions.removeValue(forKey: id)
+            imageTransforms.removeValue(forKey: id)
         }
 
         // Reset active image if it was removed
@@ -242,6 +246,7 @@ final class AppState {
         cropSettings = CropSettings()
         blurRegions.removeAll()
         selectedBlurRegionID = nil
+        imageTransforms.removeAll()
     }
 
     func setActiveImage(_ id: UUID) {
@@ -385,6 +390,54 @@ final class AppState {
     var blurRegionsPartiallyCroppedCount: Int {
         guard let image = activeImage else { return 0 }
         return activeImageBlurRegions.filter { $0.isPartiallyCropped(cropSettings, imageSize: image.originalSize) }.count
+    }
+
+    // MARK: - Image Transforms
+
+    /// Get transform for the active image
+    var activeImageTransform: ImageTransform {
+        guard let id = activeImageID else { return .identity }
+        return imageTransforms[id] ?? .identity
+    }
+
+    /// Check if any image has a transform applied
+    var hasAnyTransforms: Bool {
+        imageTransforms.values.contains { !$0.isIdentity }
+    }
+
+    /// Rotate the active image
+    func rotateActiveImage(clockwise: Bool) {
+        guard let id = activeImageID else { return }
+        var transform = imageTransforms[id] ?? .identity
+        if clockwise {
+            transform.rotation.rotateCW()
+        } else {
+            transform.rotation.rotateCCW()
+        }
+        imageTransforms[id] = transform
+    }
+
+    /// Flip the active image
+    func flipActiveImage(horizontal: Bool) {
+        guard let id = activeImageID else { return }
+        var transform = imageTransforms[id] ?? .identity
+        if horizontal {
+            transform.flipHorizontal.toggle()
+        } else {
+            transform.flipVertical.toggle()
+        }
+        imageTransforms[id] = transform
+    }
+
+    /// Reset transform for the active image
+    func resetActiveImageTransform() {
+        guard let id = activeImageID else { return }
+        imageTransforms.removeValue(forKey: id)
+    }
+
+    /// Get transform for a specific image
+    func transformForImage(_ imageID: UUID) -> ImageTransform {
+        imageTransforms[imageID] ?? .identity
     }
 }
 

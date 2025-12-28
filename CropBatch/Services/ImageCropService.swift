@@ -97,6 +97,97 @@ struct ImageCropService {
         return newImage
     }
 
+    // MARK: - Rotation and Flip
+
+    /// Rotates an image by the specified angle
+    /// - Parameters:
+    ///   - image: The source image
+    ///   - angle: Rotation angle (90, 180, or 270 degrees)
+    /// - Returns: Rotated image
+    static func rotate(_ image: NSImage, by angle: RotationAngle) -> NSImage {
+        guard angle != .none else { return image }
+        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+            return image
+        }
+
+        let radians = CGFloat(angle.rawValue) * .pi / 180
+        let rotatedSize = angle.swapsWidthAndHeight
+            ? CGSize(width: image.size.height, height: image.size.width)
+            : image.size
+
+        let newImage = NSImage(size: rotatedSize)
+        newImage.lockFocus()
+
+        guard let context = NSGraphicsContext.current?.cgContext else {
+            newImage.unlockFocus()
+            return image
+        }
+
+        // Move origin to center, rotate, then draw
+        context.translateBy(x: rotatedSize.width / 2, y: rotatedSize.height / 2)
+        context.rotate(by: radians)
+        context.translateBy(x: -image.size.width / 2, y: -image.size.height / 2)
+        context.draw(cgImage, in: CGRect(origin: .zero, size: image.size))
+
+        newImage.unlockFocus()
+        return newImage
+    }
+
+    /// Flips an image horizontally and/or vertically
+    /// - Parameters:
+    ///   - image: The source image
+    ///   - horizontal: Flip horizontally
+    ///   - vertical: Flip vertically
+    /// - Returns: Flipped image
+    static func flip(_ image: NSImage, horizontal: Bool, vertical: Bool) -> NSImage {
+        guard horizontal || vertical else { return image }
+
+        let newImage = NSImage(size: image.size)
+        newImage.lockFocus()
+
+        guard let context = NSGraphicsContext.current else {
+            newImage.unlockFocus()
+            return image
+        }
+
+        context.saveGraphicsState()
+
+        let transform = NSAffineTransform()
+        transform.translateX(by: horizontal ? image.size.width : 0,
+                             yBy: vertical ? image.size.height : 0)
+        transform.scaleX(by: horizontal ? -1 : 1, yBy: vertical ? -1 : 1)
+        transform.concat()
+
+        image.draw(at: .zero, from: .zero, operation: .copy, fraction: 1.0)
+
+        context.restoreGraphicsState()
+        newImage.unlockFocus()
+        return newImage
+    }
+
+    /// Applies a complete transform (rotation + flip) to an image
+    /// - Parameters:
+    ///   - image: The source image
+    ///   - transform: The transform to apply
+    /// - Returns: Transformed image
+    static func applyTransform(_ image: NSImage, transform: ImageTransform) -> NSImage {
+        guard !transform.isIdentity else { return image }
+
+        var result = image
+
+        // Apply rotation first
+        if transform.rotation != .none {
+            result = rotate(result, by: transform.rotation)
+        }
+
+        // Then apply flip
+        if transform.flipHorizontal || transform.flipVertical {
+            result = flip(result, horizontal: transform.flipHorizontal, vertical: transform.flipVertical)
+        }
+
+        return result
+    }
+
     /// Applies blur regions to an image
     /// - Parameters:
     ///   - image: The source image
@@ -335,6 +426,7 @@ struct ImageCropService {
     ///   - items: Array of ImageItem to process
     ///   - cropSettings: Crop settings to apply
     ///   - exportSettings: Export format and quality settings
+    ///   - transforms: Dictionary of image transforms keyed by image ID
     ///   - blurRegions: Dictionary of blur regions keyed by image ID
     ///   - progress: Closure called with progress updates (0.0 to 1.0)
     /// - Returns: Array of URLs for successfully cropped images
@@ -343,6 +435,7 @@ struct ImageCropService {
         items: [ImageItem],
         cropSettings: CropSettings,
         exportSettings: ExportSettings,
+        transforms: [UUID: ImageTransform] = [:],
         blurRegions: [UUID: ImageBlurData] = [:],
         progress: @escaping @MainActor (Double) -> Void
     ) async throws -> [URL] {
@@ -359,15 +452,22 @@ struct ImageCropService {
         for (index, item) in items.enumerated() {
             var processedImage = item.originalImage
 
-            // Apply blur regions first (before crop, in original image coordinates)
+            // Pipeline order: Transform -> Blur -> Crop -> Resize
+
+            // 1. Apply transform (rotation/flip) FIRST
+            if let transform = transforms[item.id], !transform.isIdentity {
+                processedImage = applyTransform(processedImage, transform: transform)
+            }
+
+            // 2. Apply blur regions (in transformed image coordinates)
             if let imageBlurData = blurRegions[item.id], imageBlurData.hasRegions {
                 processedImage = applyBlurRegions(processedImage, regions: imageBlurData.regions)
             }
 
-            // Apply crop
+            // 3. Apply crop
             processedImage = try crop(processedImage, with: cropSettings)
 
-            // Apply resize if enabled
+            // 4. Apply resize if enabled
             if let targetSize = calculateResizedSize(from: processedImage.size, with: exportSettings.resizeSettings) {
                 processedImage = resize(processedImage, to: targetSize)
             }

@@ -137,12 +137,20 @@ struct CropEditorView: View {
 
     private var zoomInfoBubble: some View {
         let zoomPercent = Int(currentScale * 100)
+        let size = displayedImageSize
         return HStack(spacing: 6) {
             Text("\(zoomPercent)%")
                 .fontWeight(.medium)
             Text("·")
                 .foregroundStyle(.secondary)
-            Text("\(Int(image.originalSize.width))×\(Int(image.originalSize.height))")
+            Text("\(Int(size.width))×\(Int(size.height))")
+            // Show rotation indicator if transformed
+            if !currentTransform.isIdentity {
+                Text("·")
+                    .foregroundStyle(.secondary)
+                Image(systemName: currentTransform.rotation != .none ? "rotate.right" : "arrow.left.and.right.righttriangle.left.righttriangle.right")
+                    .font(.system(size: 9))
+            }
         }
         .font(.system(size: 11, design: .monospaced))
         .foregroundStyle(.white)
@@ -167,8 +175,8 @@ struct CropEditorView: View {
     @ViewBuilder
     private var scaledImageView: some View {
         if currentScale >= 1.0 {
-            // At 100% or above, use original image
-            Image(nsImage: image.originalImage)
+            // At 100% or above, use displayed image (with transform applied)
+            Image(nsImage: displayedImage)
                 .interpolation(.high)
                 .resizable()
                 .aspectRatio(contentMode: .fill)
@@ -182,8 +190,9 @@ struct CropEditorView: View {
     /// Creates a high-quality downscaled version of the image using Core Graphics
     private var highQualityScaledImage: NSImage {
         let targetSize = scaledImageSize
+        let sourceImage = displayedImage
         guard targetSize.width > 0, targetSize.height > 0 else {
-            return image.originalImage
+            return sourceImage
         }
 
         let newImage = NSImage(size: targetSize)
@@ -192,9 +201,9 @@ struct CropEditorView: View {
         // Set high-quality interpolation
         NSGraphicsContext.current?.imageInterpolation = .high
 
-        image.originalImage.draw(
+        sourceImage.draw(
             in: NSRect(origin: .zero, size: targetSize),
-            from: NSRect(origin: .zero, size: image.originalSize),
+            from: NSRect(origin: .zero, size: displayedImageSize),
             operation: .copy,
             fraction: 1.0
         )
@@ -205,7 +214,7 @@ struct CropEditorView: View {
 
     private var cropOverlay: some View {
         CropOverlayView(
-            imageSize: image.originalSize,
+            imageSize: displayedImageSize,
             displayedSize: scaledImageSize,
             cropSettings: appState.cropSettings
         )
@@ -213,7 +222,7 @@ struct CropEditorView: View {
 
     private var dimensionsOverlay: some View {
         CropDimensionsOverlay(
-            imageSize: image.originalSize,
+            imageSize: displayedImageSize,
             displayedSize: scaledImageSize,
             cropSettings: appState.cropSettings
         )
@@ -221,7 +230,7 @@ struct CropEditorView: View {
 
     private var cropHandles: some View {
         CropHandlesView(
-            imageSize: image.originalSize,
+            imageSize: displayedImageSize,
             displayedSize: scaledImageSize,
             cropSettings: Binding(
                 get: { appState.cropSettings },
@@ -229,6 +238,26 @@ struct CropEditorView: View {
             ),
             onDragEnded: { appState.recordCropChange() }
         )
+    }
+
+    // MARK: - Transform Support
+
+    /// The current transform applied to this image
+    private var currentTransform: ImageTransform {
+        appState.activeImageTransform
+    }
+
+    /// The image with transform applied (for display)
+    private var displayedImage: NSImage {
+        if currentTransform.isIdentity {
+            return image.originalImage
+        }
+        return ImageCropService.applyTransform(image.originalImage, transform: currentTransform)
+    }
+
+    /// Size of the image after transform (accounts for rotation dimension swap)
+    private var displayedImageSize: CGSize {
+        currentTransform.transformedSize(image.originalSize)
     }
 
     // MARK: - Scale Calculations
@@ -239,18 +268,19 @@ struct CropEditorView: View {
 
         let availableWidth = viewSize.width - 80  // padding
         let availableHeight = viewSize.height - 80
+        let imageSize = displayedImageSize
 
         switch appState.zoomMode {
         case .fit:
-            let scaleX = availableWidth / image.originalSize.width
-            let scaleY = availableHeight / image.originalSize.height
+            let scaleX = availableWidth / imageSize.width
+            let scaleY = availableHeight / imageSize.height
             return min(scaleX, scaleY, 1.0)  // Don't upscale beyond 100%
 
         case .fitWidth:
-            return availableWidth / image.originalSize.width
+            return availableWidth / imageSize.width
 
         case .fitHeight:
-            return availableHeight / image.originalSize.height
+            return availableHeight / imageSize.height
 
         case .actualSize:
             return 1.0
@@ -260,8 +290,8 @@ struct CropEditorView: View {
     /// Size of image at current scale
     private var scaledImageSize: CGSize {
         CGSize(
-            width: image.originalSize.width * currentScale,
-            height: image.originalSize.height * currentScale
+            width: displayedImageSize.width * currentScale,
+            height: displayedImageSize.height * currentScale
         )
     }
 

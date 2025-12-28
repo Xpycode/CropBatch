@@ -26,14 +26,14 @@ struct ActionButtonsView: View {
 
     private var canExport: Bool {
         !appState.images.isEmpty &&
-        (appState.cropSettings.hasAnyCrop || appState.hasAnyBlurRegions || appState.exportSettings.resizeSettings.isEnabled) &&
+        (appState.cropSettings.hasAnyCrop || appState.hasAnyBlurRegions || appState.hasAnyTransforms || appState.exportSettings.resizeSettings.isEnabled) &&
         !appState.isProcessing &&
         !wouldOverwriteAny
     }
 
     var body: some View {
         VStack(spacing: 12) {
-            // Undo/Redo buttons
+            // Undo/Redo and Transform buttons
             HStack(spacing: 8) {
                 Button {
                     appState.undo()
@@ -56,6 +56,48 @@ struct ActionButtonsView: View {
                 .help("Redo (⇧⌘Z)")
 
                 Spacer()
+
+                // Rotation buttons
+                Button {
+                    appState.rotateActiveImage(clockwise: false)
+                } label: {
+                    Label("Rotate Left", systemImage: "rotate.left")
+                        .labelStyle(.iconOnly)
+                }
+                .buttonStyle(.bordered)
+                .disabled(appState.activeImage == nil)
+                .help("Rotate CCW (⌘[)")
+
+                Button {
+                    appState.rotateActiveImage(clockwise: true)
+                } label: {
+                    Label("Rotate Right", systemImage: "rotate.right")
+                        .labelStyle(.iconOnly)
+                }
+                .buttonStyle(.bordered)
+                .disabled(appState.activeImage == nil)
+                .help("Rotate CW (⌘])")
+
+                // Flip buttons
+                Button {
+                    appState.flipActiveImage(horizontal: true)
+                } label: {
+                    Label("Flip H", systemImage: "arrow.left.and.right.righttriangle.left.righttriangle.right")
+                        .labelStyle(.iconOnly)
+                }
+                .buttonStyle(.bordered)
+                .disabled(appState.activeImage == nil)
+                .help("Flip Horizontal")
+
+                Button {
+                    appState.flipActiveImage(horizontal: false)
+                } label: {
+                    Label("Flip V", systemImage: "arrow.up.and.down.righttriangle.up.righttriangle.down")
+                        .labelStyle(.iconOnly)
+                }
+                .buttonStyle(.bordered)
+                .disabled(appState.activeImage == nil)
+                .help("Flip Vertical")
             }
 
             Divider()
@@ -92,8 +134,8 @@ struct ActionButtonsView: View {
             .disabled(!canExport)
 
             // Warning messages
-            if !appState.cropSettings.hasAnyCrop && !appState.hasAnyBlurRegions && !appState.exportSettings.resizeSettings.isEnabled && !appState.images.isEmpty {
-                Text("Set crop, blur, or resize to enable export")
+            if !appState.cropSettings.hasAnyCrop && !appState.hasAnyBlurRegions && !appState.hasAnyTransforms && !appState.exportSettings.resizeSettings.isEnabled && !appState.images.isEmpty {
+                Text("Apply crop, rotate, or resize to export")
                     .font(.caption)
                     .foregroundStyle(.orange)
             } else if wouldOverwriteAny {
@@ -195,6 +237,7 @@ struct ActionButtonsView: View {
                 items: images,
                 cropSettings: appState.cropSettings,
                 exportSettings: exportSettings,
+                transforms: appState.imageTransforms,
                 blurRegions: appState.blurRegions
             ) { progress in
                 appState.processingProgress = progress
