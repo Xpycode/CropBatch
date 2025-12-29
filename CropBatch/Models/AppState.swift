@@ -72,8 +72,8 @@ final class AppState {
     var blurRegions: [UUID: ImageBlurData] = [:]  // Keyed by image ID
     var selectedBlurRegionID: UUID?  // Currently selected region for editing
 
-    // Image transforms (rotation/flip) - keyed by image ID
-    var imageTransforms: [UUID: ImageTransform] = [:]
+    // Global image transform (rotation/flip) - applies to all images
+    var imageTransform: ImageTransform = .identity
 
     private let recentPresetsKey = "CropBatch.RecentPresetIDs"
 
@@ -246,10 +246,9 @@ final class AppState {
         images.removeAll { ids.contains($0.id) }
         selectedImageIDs.subtract(ids)
 
-        // Clean up blur regions and transforms for removed images
+        // Clean up blur regions for removed images
         for id in ids {
             blurRegions.removeValue(forKey: id)
-            imageTransforms.removeValue(forKey: id)
         }
 
         // Reset active image if it was removed
@@ -266,7 +265,7 @@ final class AppState {
         cropSettings = CropSettings()
         blurRegions.removeAll()
         selectedBlurRegionID = nil
-        imageTransforms.removeAll()
+        imageTransform = .identity
     }
 
     func setActiveImage(_ id: UUID) {
@@ -439,58 +438,50 @@ final class AppState {
         return activeImageBlurRegions.filter { $0.isPartiallyCropped(cropSettings, imageSize: image.originalSize) }.count
     }
 
-    // MARK: - Image Transforms
+    // MARK: - Image Transforms (Global - applies to all images)
 
-    /// Get transform for the active image
+    /// Get the global transform (applies to all images)
     var activeImageTransform: ImageTransform {
-        guard let id = activeImageID else { return .identity }
-        return imageTransforms[id] ?? .identity
+        imageTransform
     }
 
-    /// Check if any image has a transform applied
+    /// Check if transform is applied
     var hasAnyTransforms: Bool {
-        imageTransforms.values.contains { !$0.isIdentity }
+        !imageTransform.isIdentity
     }
 
-    /// Rotate the active image
+    /// Rotate all images
     func rotateActiveImage(clockwise: Bool) {
-        guard let id = activeImageID else { return }
-        var transform = imageTransforms[id] ?? .identity
         if clockwise {
-            transform.rotation.rotateCW()
+            imageTransform.rotation.rotateCW()
         } else {
-            transform.rotation.rotateCCW()
+            imageTransform.rotation.rotateCCW()
         }
-        imageTransforms[id] = transform
 
         // Validate crop values - rotation may swap dimensions making some crop values invalid
         validateAndClampCrop()
     }
 
-    /// Flip the active image
+    /// Flip all images
     func flipActiveImage(horizontal: Bool) {
-        guard let id = activeImageID else { return }
-        var transform = imageTransforms[id] ?? .identity
         if horizontal {
-            transform.flipHorizontal.toggle()
+            imageTransform.flipHorizontal.toggle()
         } else {
-            transform.flipVertical.toggle()
+            imageTransform.flipVertical.toggle()
         }
-        imageTransforms[id] = transform
     }
 
-    /// Reset transform for the active image
+    /// Reset transform for all images
     func resetActiveImageTransform() {
-        guard let id = activeImageID else { return }
-        imageTransforms[id] = .identity
+        imageTransform = .identity
 
         // Validate crop values - resetting rotation may change effective dimensions
         validateAndClampCrop()
     }
 
-    /// Get transform for a specific image
+    /// Get transform for a specific image (returns global transform)
     func transformForImage(_ imageID: UUID) -> ImageTransform {
-        imageTransforms[imageID] ?? .identity
+        imageTransform
     }
 
     // MARK: - Export
@@ -530,7 +521,7 @@ final class AppState {
             items: images,
             cropSettings: cropSettings,
             exportSettings: settings,
-            transforms: imageTransforms,
+            transform: imageTransform,
             blurRegions: blurRegions
         ) { [weak self] progress in
             self?.processingProgress = progress
@@ -581,7 +572,7 @@ final class AppState {
                 items: nonConflictingItems,
                 cropSettings: cropSettings,
                 exportSettings: settings,
-                transforms: imageTransforms,
+                transform: imageTransform,
                 blurRegions: blurRegions
             ) { [weak self] progress in
                 let completed = Double(nonConflicting.count) * progress
@@ -600,8 +591,8 @@ final class AppState {
             var processedImage = item.originalImage
 
             // Apply transform if any
-            if let transform = imageTransforms[item.id], !transform.isIdentity {
-                processedImage = ImageCropService.applyTransform(processedImage, transform: transform)
+            if !imageTransform.isIdentity {
+                processedImage = ImageCropService.applyTransform(processedImage, transform: imageTransform)
             }
 
             // Apply blur regions if any

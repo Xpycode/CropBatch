@@ -181,9 +181,9 @@ struct BatchReviewView: View {
     private func generatePreview(for item: ImageItem) async throws -> NSImage {
         var result = item.originalImage
 
-        // 1. Apply transforms (rotation, flip)
-        if let transform = appState.imageTransforms[item.id] {
-            result = ImageCropService.applyTransform(result, transform: transform)
+        // 1. Apply transforms (rotation, flip) - global transform applies to all
+        if !appState.imageTransform.isIdentity {
+            result = ImageCropService.applyTransform(result, transform: appState.imageTransform)
         }
 
         // 2. Apply blur regions

@@ -547,7 +547,7 @@ struct ImageCropService {
     ///   - items: Array of ImageItem to process
     ///   - cropSettings: Crop settings to apply
     ///   - exportSettings: Export format and quality settings
-    ///   - transforms: Dictionary of image transforms keyed by image ID
+    ///   - transform: Global transform to apply to all images
     ///   - blurRegions: Dictionary of blur regions keyed by image ID
     ///   - progress: Closure called with progress updates (0.0 to 1.0)
     /// - Returns: Array of URLs for successfully cropped images
@@ -555,7 +555,7 @@ struct ImageCropService {
         items: [ImageItem],
         cropSettings: CropSettings,
         exportSettings: ExportSettings,
-        transforms: [UUID: ImageTransform] = [:],
+        transform: ImageTransform = .identity,
         blurRegions: [UUID: ImageBlurData] = [:],
         progress: @escaping @MainActor (Double) -> Void
     ) async throws -> [URL] {
@@ -582,7 +582,7 @@ struct ImageCropService {
                         index: index,
                         cropSettings: cropSettings,
                         exportSettings: exportSettings,
-                        transforms: transforms,
+                        transform: transform,
                         blurRegions: blurRegions
                     )
                     return (index, outputURL)
@@ -609,7 +609,7 @@ struct ImageCropService {
         index: Int,
         cropSettings: CropSettings,
         exportSettings: ExportSettings,
-        transforms: [UUID: ImageTransform],
+        transform: ImageTransform,
         blurRegions: [UUID: ImageBlurData]
     ) throws -> URL {
         var processedImage = item.originalImage
@@ -617,9 +617,8 @@ struct ImageCropService {
         // Pipeline order: Transform -> Blur -> Crop -> Resize
 
         // 1. Apply transform (rotation/flip) FIRST
-        let currentTransform = transforms[item.id] ?? .identity
-        if !currentTransform.isIdentity {
-            processedImage = applyTransform(processedImage, transform: currentTransform)
+        if !transform.isIdentity {
+            processedImage = applyTransform(processedImage, transform: transform)
         }
 
         // 2. Apply blur regions - MUST transform coordinates to match transformed image
@@ -628,7 +627,7 @@ struct ImageCropService {
             // The image has been transformed, so we need to transform the blur coords too
             let transformedRegions = imageBlurData.regions.map { region in
                 var transformed = region
-                transformed.normalizedRect = region.normalizedRect.applyingTransform(currentTransform)
+                transformed.normalizedRect = region.normalizedRect.applyingTransform(transform)
                 return transformed
             }
             processedImage = applyBlurRegions(processedImage, regions: transformedRegions)
