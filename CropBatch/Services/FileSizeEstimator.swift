@@ -70,10 +70,19 @@ struct FileSizeEstimator {
         // 1. Calculate pixel reduction ratio from cropping
         let originalPixels = image.originalSize.width * image.originalSize.height
         let croppedSize = cropSettings.croppedSize(from: image.originalSize)
-        let croppedPixels = croppedSize.width * croppedSize.height
-        let pixelRatio = originalPixels > 0 ? croppedPixels / originalPixels : 1.0
+        var outputPixels = croppedSize.width * croppedSize.height
 
-        // 2. Determine output format
+        // 2. Apply resize if enabled (resize happens AFTER crop)
+        if let resizedSize = ImageCropService.calculateResizedSize(
+            from: croppedSize,
+            with: exportSettings.resizeSettings
+        ) {
+            outputPixels = resizedSize.width * resizedSize.height
+        }
+
+        let pixelRatio = originalPixels > 0 ? outputPixels / originalPixels : 1.0
+
+        // 3. Determine output format
         let outputFormat: ExportFormat
         if exportSettings.preserveOriginalFormat {
             outputFormat = ExportFormat.allCases.first {
@@ -84,14 +93,14 @@ struct FileSizeEstimator {
             outputFormat = exportSettings.format
         }
 
-        // 3. Calculate format conversion factor
+        // 4. Calculate format conversion factor
         let formatFactor = formatConversionFactor(
             from: image.fileExtension,
             to: outputFormat,
             quality: exportSettings.quality
         )
 
-        // 4. Estimate final size
+        // 5. Estimate final size
         let estimated = Double(originalFileSize) * pixelRatio * formatFactor
 
         return Int64(estimated)

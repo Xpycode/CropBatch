@@ -84,26 +84,46 @@ struct ImageCropService {
     /// Resizes an NSImage to the specified size using CGContext (thread-safe)
     /// - Parameters:
     ///   - image: The source image to resize
-    ///   - targetSize: The target size
+    ///   - targetSize: The target size in pixels
     /// - Returns: A new resized NSImage
     static func resize(_ image: NSImage, to targetSize: CGSize) -> NSImage {
-        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+        // Validate target size
+        let targetWidth = Int(targetSize.width)
+        let targetHeight = Int(targetSize.height)
+        guard targetWidth > 0 && targetHeight > 0 else {
             return image
         }
 
-        let colorSpace = cgImage.colorSpace ?? CGColorSpaceCreateDeviceRGB()
+        // Create a bitmap context at the target size
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
         guard let context = CGContext(
             data: nil,
-            width: Int(targetSize.width),
-            height: Int(targetSize.height),
+            width: targetWidth,
+            height: targetHeight,
             bitsPerComponent: 8,
             bytesPerRow: 0,
             space: colorSpace,
             bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
         ) else { return image }
 
+        // Set high quality interpolation for good downscaling
         context.interpolationQuality = .high
-        context.draw(cgImage, in: CGRect(origin: .zero, size: targetSize))
+
+        // Create NSGraphicsContext from CGContext to draw the NSImage
+        // This properly handles all NSImage representations and transforms
+        let graphicsContext = NSGraphicsContext(cgContext: context, flipped: false)
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = graphicsContext
+
+        // Draw the NSImage scaled to fit the context
+        // CGContext has origin at bottom-left, NSImage.draw also uses bottom-left
+        let targetRect = NSRect(x: 0, y: 0, width: targetWidth, height: targetHeight)
+        image.draw(in: targetRect,
+                   from: NSRect(origin: .zero, size: image.size),
+                   operation: .copy,
+                   fraction: 1.0)
+
+        NSGraphicsContext.restoreGraphicsState()
 
         guard let resizedCGImage = context.makeImage() else { return image }
         return NSImage(cgImage: resizedCGImage, size: targetSize)
