@@ -527,6 +527,7 @@ final class AppState {
     }
 
     /// Process and export images with automatic renaming to avoid overwriting existing files
+    /// Existing files are preserved; new exports get _1, _2, etc. suffixes
     /// - Parameters:
     ///   - imagesToExport: Images to process
     ///   - outputDirectory: Destination directory
@@ -543,43 +544,88 @@ final class AppState {
         var settings = exportSettings
         settings.outputDirectory = .custom(outputDirectory)
 
-        // Pre-compute renamed URLs for files that would conflict
-        var renamedURLs: [UUID: URL] = [:]
+        // Separate images into conflicting and non-conflicting
+        var nonConflicting: [(index: Int, item: ImageItem)] = []
+        var conflicting: [(index: Int, item: ImageItem, renamedURL: URL)] = []
+
         for (index, item) in imagesToExport.enumerated() {
             let plannedURL = settings.outputURL(for: item.url, index: index)
             if FileManager.default.fileExists(atPath: plannedURL.path) {
-                renamedURLs[item.id] = ExportSettings.appendNumericSuffix(to: plannedURL)
-            }
-        }
-
-        // Process normally first
-        let standardResults = try await ImageCropService.batchCrop(
-            items: imagesToExport,
-            cropSettings: cropSettings,
-            exportSettings: settings,
-            transforms: imageTransforms,
-            blurRegions: blurRegions
-        ) { [weak self] progress in
-            self?.processingProgress = progress
-        }
-
-        // Rename files that need it
-        var finalResults: [URL] = []
-        for (index, item) in imagesToExport.enumerated() {
-            guard index < standardResults.count else { continue }
-            let outputURL = standardResults[index]
-
-            if let renamedURL = renamedURLs[item.id] {
-                // Move to renamed location
-                try? FileManager.default.removeItem(at: renamedURL)
-                try FileManager.default.moveItem(at: outputURL, to: renamedURL)
-                finalResults.append(renamedURL)
+                let renamedURL = ExportSettings.appendNumericSuffix(to: plannedURL)
+                conflicting.append((index, item, renamedURL))
             } else {
-                finalResults.append(outputURL)
+                nonConflicting.append((index, item))
             }
         }
 
-        return finalResults
+        var results: [(index: Int, url: URL)] = []
+        let total = Double(imagesToExport.count)
+
+        // Process non-conflicting images in batch (fast path)
+        if !nonConflicting.isEmpty {
+            let nonConflictingItems = nonConflicting.map { $0.item }
+            let batchResults = try await ImageCropService.batchCrop(
+                items: nonConflictingItems,
+                cropSettings: cropSettings,
+                exportSettings: settings,
+                transforms: imageTransforms,
+                blurRegions: blurRegions
+            ) { [weak self] progress in
+                let completed = Double(nonConflicting.count) * progress
+                self?.processingProgress = completed / total
+            }
+
+            for (i, result) in batchResults.enumerated() {
+                results.append((nonConflicting[i].index, result))
+            }
+        }
+
+        // Process conflicting images one by one to custom locations
+        // This preserves existing files
+        for (i, (originalIndex, item, renamedURL)) in conflicting.enumerated() {
+            // Process single image
+            var processedImage = item.originalImage
+
+            // Apply transform if any
+            if let transform = imageTransforms[item.id], !transform.isIdentity {
+                processedImage = ImageCropService.applyTransform(processedImage, transform: transform)
+            }
+
+            // Apply blur regions if any
+            if let imageBlurData = blurRegions[item.id], imageBlurData.hasRegions {
+                processedImage = ImageCropService.applyBlurRegions(processedImage, regions: imageBlurData.regions)
+            }
+
+            // Apply crop
+            processedImage = try ImageCropService.crop(processedImage, with: cropSettings)
+
+            // Apply resize if enabled
+            if let targetSize = ImageCropService.calculateResizedSize(from: processedImage.size, with: settings.resizeSettings) {
+                processedImage = ImageCropService.resize(processedImage, to: targetSize)
+            }
+
+            // Determine format
+            let format: UTType
+            if settings.preserveOriginalFormat {
+                let ext = item.url.pathExtension.lowercased()
+                format = ExportFormat.allCases.first {
+                    $0.fileExtension == ext || (ext == "jpeg" && $0 == .jpeg)
+                }?.utType ?? settings.format.utType
+            } else {
+                format = settings.format.utType
+            }
+
+            // Save directly to renamed location (preserving existing file)
+            try ImageCropService.save(processedImage, to: renamedURL, format: format, quality: settings.quality)
+            results.append((originalIndex, renamedURL))
+
+            // Update progress
+            let completed = Double(nonConflicting.count + i + 1)
+            processingProgress = completed / total
+        }
+
+        // Sort by original index and return URLs
+        return results.sorted { $0.index < $1.index }.map { $0.url }
     }
 
     /// Send system notification for completed export

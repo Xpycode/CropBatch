@@ -176,24 +176,33 @@ struct ActionButtonsView: View {
             isPresented: $showOverwriteDialog,
             titleVisibility: .visible
         ) {
+            // Capture values BEFORE the Task to avoid race conditions
+            // (dialog dismissal may clear state before Task starts)
+            let images = pendingExportImages
+            let directory = pendingExportDirectory
+
             Button("Overwrite", role: .destructive) {
+                guard let dir = directory else { return }
                 Task {
-                    guard let dir = pendingExportDirectory else { return }
-                    await executeExport(pendingExportImages, to: dir, rename: false)
+                    await executeExport(images, to: dir, rename: false)
                 }
             }
             Button("Rename (add _1, _2...)") {
+                guard let dir = directory else { return }
                 Task {
-                    guard let dir = pendingExportDirectory else { return }
-                    await executeExport(pendingExportImages, to: dir, rename: true)
+                    await executeExport(images, to: dir, rename: true)
                 }
             }
-            Button("Cancel", role: .cancel) {
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("\(existingFilesCount) file\(existingFilesCount == 1 ? "" : "s") already exist\(existingFilesCount == 1 ? "s" : "") in the destination folder.")
+        }
+        .onChange(of: showOverwriteDialog) { _, isShowing in
+            // Clear pending state when dialog closes
+            if !isShowing {
                 pendingExportImages = []
                 pendingExportDirectory = nil
             }
-        } message: {
-            Text("\(existingFilesCount) file\(existingFilesCount == 1 ? "" : "s") already exist\(existingFilesCount == 1 ? "s" : "") in the destination folder.")
         }
     }
 
@@ -263,10 +272,7 @@ struct ActionButtonsView: View {
             exportError = error.localizedDescription
             showErrorAlert = true
         }
-
-        // Clear pending state
-        pendingExportImages = []
-        pendingExportDirectory = nil
+        // Note: pending state is cleared by .onChange(of: showOverwriteDialog)
     }
 }
 
