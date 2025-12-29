@@ -568,8 +568,28 @@ struct ImageItem: Identifiable {
         url.lastPathComponent
     }
 
+    // ┌─────────────────────────────────────────────────────────────────────┐
+    // │  CRITICAL FIX - DO NOT CHANGE WITHOUT UNDERSTANDING THE BUG        │
+    // │                                                                     │
+    // │  NSImage.size returns POINTS (display units)                        │
+    // │  CGImage.width/height returns PIXELS (actual image data)            │
+    // │                                                                     │
+    // │  On Retina displays, a screenshot might be:                         │
+    // │    NSImage.size = 589×1278 (points)                                 │
+    // │    CGImage size = 1178×2556 (pixels, 2x scale)                      │
+    // │                                                                     │
+    // │  If you use NSImage.size here, the crop preview will show one       │
+    // │  thing but the export will crop at the WRONG POSITION because       │
+    // │  ImageCropService.crop() works with CGImage pixel coordinates.      │
+    // │                                                                     │
+    // │  Fixed: 2025-12-29 - The app must work in PIXELS consistently.      │
+    // └─────────────────────────────────────────────────────────────────────┘
+    /// Returns the actual pixel dimensions (not points) for accurate cropping
     var originalSize: CGSize {
-        originalImage.size
+        guard let cgImage = originalImage.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+            return originalImage.size
+        }
+        return CGSize(width: cgImage.width, height: cgImage.height)
     }
 
     /// Original file extension (lowercase)
