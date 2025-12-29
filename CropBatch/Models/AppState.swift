@@ -403,13 +403,13 @@ final class AppState {
     }
 
     /// Update a blur region's properties
-    func updateBlurRegion(_ regionID: UUID, rect: CGRect? = nil, style: BlurRegion.BlurStyle? = nil, intensity: Double? = nil) {
+    func updateBlurRegion(_ regionID: UUID, normalizedRect: NormalizedRect? = nil, style: BlurRegion.BlurStyle? = nil, intensity: Double? = nil) {
         guard let imageID = activeImageID,
               var data = blurRegions[imageID],
               let index = data.regions.firstIndex(where: { $0.id == regionID }) else { return }
 
-        if let rect = rect {
-            data.regions[index].rect = rect
+        if let normalizedRect = normalizedRect {
+            data.regions[index].normalizedRect = normalizedRect.clamped()
         }
         if let style = style {
             data.regions[index].style = style

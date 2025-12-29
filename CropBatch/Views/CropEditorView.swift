@@ -37,23 +37,23 @@ struct CropEditorView: View {
         .onKeyPress(keys: [.leftArrow, .rightArrow, .upArrow, .downArrow], phases: [.down, .repeat]) { keyPress in
             handleKeyPress(keyPress)
         }
-        // Blur tool shortcuts disabled for now
-        // .onKeyPress(.init("b")) {
-        //     appState.currentTool = appState.currentTool == .blur ? .crop : .blur
-        //     return .handled
-        // }
-        // .onKeyPress(.init("c")) {
-        //     appState.currentTool = .crop
-        //     return .handled
-        // }
-        // .onKeyPress(.escape) {
-        //     if appState.selectedBlurRegionID != nil {
-        //         appState.selectBlurRegion(nil)
-        //     } else if appState.currentTool == .blur {
-        //         appState.currentTool = .crop
-        //     }
-        //     return .handled
-        // }
+        // Blur tool shortcuts
+        .onKeyPress(.init("b")) {
+            appState.currentTool = appState.currentTool == .blur ? .crop : .blur
+            return .handled
+        }
+        .onKeyPress(.init("c")) {
+            appState.currentTool = .crop
+            return .handled
+        }
+        .onKeyPress(.escape) {
+            if appState.selectedBlurRegionID != nil {
+                appState.selectBlurRegion(nil)
+            } else if appState.currentTool == .blur {
+                appState.currentTool = .crop
+            }
+            return .handled
+        }
     }
 
     // MARK: - Editors
@@ -101,20 +101,24 @@ struct CropEditorView: View {
                     cropHandles
                 }
 
-                // Blur tool disabled for now - needs more work
-                // if appState.currentTool == .blur {
-                //     BlurToolOverlay(
-                //         imageSize: image.originalSize,
-                //         displayedSize: scaledImageSize,
-                //         displayedImage: image.originalImage
-                //     )
-                // }
-                // if appState.currentTool == .crop && !appState.activeImageBlurRegions.isEmpty {
-                //     BlurRegionsCropPreview(
-                //         imageSize: image.originalSize,
-                //         displayedSize: scaledImageSize
-                //     )
-                // }
+                // Blur tool overlay
+                if appState.currentTool == .blur {
+                    BlurEditorView(
+                        originalImageSize: image.originalSize,
+                        displayedSize: scaledImageSize,
+                        transform: currentTransform,
+                        displayedImage: image.originalImage
+                    )
+                }
+
+                // Show blur regions preview when in crop mode (read-only)
+                if appState.currentTool == .crop && !appState.activeImageBlurRegions.isEmpty {
+                    BlurRegionsCropPreview(
+                        originalImageSize: image.originalSize,
+                        displayedSize: scaledImageSize,
+                        transform: currentTransform
+                    )
+                }
             }
 
             // Top-left info bubble

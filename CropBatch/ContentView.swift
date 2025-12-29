@@ -184,15 +184,34 @@ struct CropSectionView: View {
         @Bindable var state = appState
 
         VStack(alignment: .leading, spacing: 12) {
-            // Section header with output size
-            HStack {
-                Label("Crop", systemImage: "crop")
-                    .font(.headline)
-
+            // Tool selector
+            // NOTE: Blur tool hidden - coordinate transform issues with rotations
+            // See docs/blur-feature-status.md for details. Code preserved for future.
+            HStack(spacing: 0) {
+                ForEach(EditorTool.allCases.filter { $0 != .blur }) { tool in
+                    Button {
+                        appState.currentTool = tool
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: tool.icon)
+                            Text(tool.rawValue)
+                        }
+                        .font(.system(size: 12, weight: appState.currentTool == tool ? .semibold : .regular))
+                        .foregroundStyle(appState.currentTool == tool ? .primary : .secondary)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(
+                            appState.currentTool == tool
+                                ? RoundedRectangle(cornerRadius: 6).fill(Color.accentColor.opacity(0.15))
+                                : nil
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
                 Spacer()
 
-                // Output size badge
-                if let majority = appState.majorityResolution {
+                // Output size badge (for crop tool)
+                if appState.currentTool == .crop, let majority = appState.majorityResolution {
                     let newSize = appState.cropSettings.croppedSize(from: majority)
                     Text("\(Int(newSize.width))×\(Int(newSize.height))")
                         .font(.system(size: 11, design: .monospaced))
@@ -203,115 +222,124 @@ struct CropSectionView: View {
                 }
             }
 
-            // Preset picker - comprehensive dropdown with categories
-            HStack {
-                Menu {
+            // Tool-specific controls
+            if appState.currentTool == .crop {
+                // MARK: Crop Tool Controls
+
+                // Preset picker - comprehensive dropdown with categories
+                HStack {
+                    Menu {
+                        Button {
+                            appState.cropSettings = CropSettings()
+                            appState.recordCropChange()
+                        } label: {
+                            Label("None (Reset)", systemImage: "xmark")
+                        }
+
+                        Divider()
+
+                        // Group by category
+                        ForEach(PresetCategory.allCases) { category in
+                            let categoryPresets = presetManager.allPresets.filter { $0.category == category }
+                            if !categoryPresets.isEmpty {
+                                Menu {
+                                    ForEach(categoryPresets) { preset in
+                                        Button {
+                                            appState.applyCropPreset(preset)
+                                        } label: {
+                                            Text("\(preset.name) \(presetValues(preset))")
+                                        }
+                                    }
+                                } label: {
+                                    Label(category.rawValue, systemImage: category.icon)
+                                }
+                            }
+                        }
+                    } label: {
+                        HStack {
+                            Image(systemName: "square.stack")
+                                .foregroundStyle(.secondary)
+                            Text("Preset")
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            Image(systemName: "chevron.up.chevron.down")
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(RoundedRectangle(cornerRadius: 6).fill(Color(nsColor: .controlBackgroundColor)))
+                    }
+                    .buttonStyle(.plain)
+
+                    // Link mode button
+                    Menu {
+                        ForEach(EdgeLinkMode.allCases) { mode in
+                            Button {
+                                appState.edgeLinkMode = mode
+                            } label: {
+                                Label(mode.rawValue, systemImage: mode.icon)
+                            }
+                        }
+                    } label: {
+                        Image(systemName: appState.edgeLinkMode.icon)
+                            .frame(width: 28, height: 28)
+                            .background(RoundedRectangle(cornerRadius: 6).fill(Color(nsColor: .controlBackgroundColor)))
+                    }
+                    .buttonStyle(.plain)
+                    .help("Link edges: \(appState.edgeLinkMode.rawValue)")
+                }
+
+                // Crop edge inputs - compact row
+                HStack(spacing: 8) {
+                    CompactCropField(label: "T", value: $state.cropSettings.cropTop) {
+                        appState.recordCropChange()
+                    }
+                    CompactCropField(label: "B", value: $state.cropSettings.cropBottom) {
+                        appState.recordCropChange()
+                    }
+                    CompactCropField(label: "L", value: $state.cropSettings.cropLeft) {
+                        appState.recordCropChange()
+                    }
+                    CompactCropField(label: "R", value: $state.cropSettings.cropRight) {
+                        appState.recordCropChange()
+                    }
+
+                    // Reset button
                     Button {
                         appState.cropSettings = CropSettings()
                         appState.recordCropChange()
                     } label: {
-                        Label("None (Reset)", systemImage: "xmark")
+                        Image(systemName: "arrow.counterclockwise")
+                            .font(.caption)
                     }
+                    .buttonStyle(.bordered)
+                    .disabled(!appState.cropSettings.hasAnyCrop)
+                    .help("Reset crop")
+                }
 
+                // Expandable advanced section
+                if advancedExpanded {
                     Divider()
-
-                    // Group by category
-                    ForEach(PresetCategory.allCases) { category in
-                        let categoryPresets = presetManager.allPresets.filter { $0.category == category }
-                        if !categoryPresets.isEmpty {
-                            Menu {
-                                ForEach(categoryPresets) { preset in
-                                    Button {
-                                        appState.applyCropPreset(preset)
-                                    } label: {
-                                        Text("\(preset.name) \(presetValues(preset))")
-                                    }
-                                }
-                            } label: {
-                                Label(category.rawValue, systemImage: category.icon)
-                            }
-                        }
-                    }
-                } label: {
-                    HStack {
-                        Image(systemName: "square.stack")
-                            .foregroundStyle(.secondary)
-                        Text("Preset")
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                        Image(systemName: "chevron.up.chevron.down")
-                            .font(.caption2)
-                            .foregroundStyle(.tertiary)
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(RoundedRectangle(cornerRadius: 6).fill(Color(nsColor: .controlBackgroundColor)))
-                }
-                .buttonStyle(.plain)
-
-                // Link mode button
-                Menu {
-                    ForEach(EdgeLinkMode.allCases) { mode in
-                        Button {
-                            appState.edgeLinkMode = mode
-                        } label: {
-                            Label(mode.rawValue, systemImage: mode.icon)
-                        }
-                    }
-                } label: {
-                    Image(systemName: appState.edgeLinkMode.icon)
-                        .frame(width: 28, height: 28)
-                        .background(RoundedRectangle(cornerRadius: 6).fill(Color(nsColor: .controlBackgroundColor)))
-                }
-                .buttonStyle(.plain)
-                .help("Link edges: \(appState.edgeLinkMode.rawValue)")
-            }
-
-            // Crop edge inputs - compact row
-            HStack(spacing: 8) {
-                CompactCropField(label: "T", value: $state.cropSettings.cropTop) {
-                    appState.recordCropChange()
-                }
-                CompactCropField(label: "B", value: $state.cropSettings.cropBottom) {
-                    appState.recordCropChange()
-                }
-                CompactCropField(label: "L", value: $state.cropSettings.cropLeft) {
-                    appState.recordCropChange()
-                }
-                CompactCropField(label: "R", value: $state.cropSettings.cropRight) {
-                    appState.recordCropChange()
+                    AdvancedCropOptionsView()
                 }
 
-                // Reset button
+                // Toggle for advanced options only
                 Button {
-                    appState.cropSettings = CropSettings()
-                    appState.recordCropChange()
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        advancedExpanded.toggle()
+                    }
                 } label: {
-                    Image(systemName: "arrow.counterclockwise")
+                    Label("Advanced", systemImage: advancedExpanded ? "chevron.down" : "chevron.right")
                         .font(.caption)
                 }
-                .buttonStyle(.bordered)
-                .disabled(!appState.cropSettings.hasAnyCrop)
-                .help("Reset crop")
-            }
+                .buttonStyle(.plain)
+                .foregroundStyle(advancedExpanded ? .primary : .secondary)
 
-            // Expandable advanced section
-            if advancedExpanded {
-                Divider()
-                AdvancedCropOptionsView()
+            } else if appState.currentTool == .blur {
+                // MARK: Blur Tool Controls
+                BlurToolSettingsPanel()
             }
-
-            // Toggle for advanced options only
-            Button {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    advancedExpanded.toggle()
-                }
-            } label: {
-                Label("Advanced", systemImage: advancedExpanded ? "chevron.down" : "chevron.right")
-                    .font(.caption)
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(advancedExpanded ? .primary : .secondary)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)

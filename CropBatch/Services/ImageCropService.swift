@@ -229,10 +229,20 @@ struct ImageCropService {
         return result
     }
 
-    /// Applies blur regions to an image using CGContext (thread-safe)
+    // MARK: - Blur Region Pipeline
+    //
+    // Uses normalized coordinates (0.0-1.0) throughout, converting to CGImage
+    // coordinates (bottom-left origin) only at the final render step.
+    //
+    // Key fixes from previous implementation:
+    // 1. Uses clampedToExtent() before blur to prevent edge artifacts
+    // 2. Single coordinate conversion path via NormalizedRect
+    // 3. GPU-accelerated via CIContext
+
+    /// Applies blur regions to an image using Core Image (thread-safe, GPU-accelerated)
     /// - Parameters:
-    ///   - image: The source image
-    ///   - regions: Array of blur regions to apply
+    ///   - image: The source image (EXIF orientation should already be baked in)
+    ///   - regions: Array of blur regions with normalized coordinates
     /// - Returns: A new image with blur regions applied
     static func applyBlurRegions(_ image: NSImage, regions: [BlurRegion]) -> NSImage {
         guard !regions.isEmpty else { return image }
@@ -241,15 +251,16 @@ struct ImageCropService {
             return image
         }
 
+        let imageSize = image.size
         let ciImage = CIImage(cgImage: cgImage)
         let ciContext = CIContext(options: [.useSoftwareRenderer: false])
 
-        // Create CGContext for drawing
+        // Create CGContext for compositing
         let colorSpace = cgImage.colorSpace ?? CGColorSpaceCreateDeviceRGB()
         guard let context = CGContext(
             data: nil,
-            width: Int(image.size.width),
-            height: Int(image.size.height),
+            width: Int(imageSize.width),
+            height: Int(imageSize.height),
             bitsPerComponent: 8,
             bytesPerRow: 0,
             space: colorSpace,
@@ -257,48 +268,66 @@ struct ImageCropService {
         ) else { return image }
 
         // Draw original image first
-        context.draw(cgImage, in: CGRect(origin: .zero, size: image.size))
+        context.draw(cgImage, in: CGRect(origin: .zero, size: imageSize))
 
         // Apply each blur region
         for region in regions {
-            // Convert rect to CG coordinates (origin at bottom-left)
-            let flippedRect = CGRect(
-                x: region.rect.origin.x,
-                y: image.size.height - region.rect.origin.y - region.rect.height,
-                width: region.rect.width,
-                height: region.rect.height
-            )
+            // Convert normalized rect to CGImage coordinates (bottom-left origin)
+            let cgImageRect = region.cgImageRect(for: imageSize)
 
             switch region.style {
             case .blur:
                 let radius = region.effectiveBlurRadius
-                if let blurredRegion = createBlurredRegion(from: ciImage, in: flippedRect, radius: radius, ciContext: ciContext) {
-                    context.draw(blurredRegion, in: flippedRect)
+                if let blurredRegion = createBlurredRegion(
+                    from: ciImage,
+                    in: cgImageRect,
+                    radius: radius,
+                    ciContext: ciContext
+                ) {
+                    context.draw(blurredRegion, in: cgImageRect)
                 }
 
             case .pixelate:
-                let scale = region.effectivePixelateScale(for: flippedRect)
-                if let pixelatedRegion = createPixelatedRegion(from: ciImage, in: flippedRect, scale: scale, ciContext: ciContext) {
-                    context.draw(pixelatedRegion, in: flippedRect)
+                let scale = region.effectivePixelateScale(for: imageSize)
+                if let pixelatedRegion = createPixelatedRegion(
+                    from: ciImage,
+                    in: cgImageRect,
+                    scale: scale,
+                    ciContext: ciContext
+                ) {
+                    context.draw(pixelatedRegion, in: cgImageRect)
                 }
 
             case .solidBlack:
                 context.setFillColor(CGColor(gray: 0, alpha: 1))
-                context.fill(flippedRect)
+                context.fill(cgImageRect)
 
             case .solidWhite:
                 context.setFillColor(CGColor(gray: 1, alpha: 1))
-                context.fill(flippedRect)
+                context.fill(cgImageRect)
             }
         }
 
         guard let resultImage = context.makeImage() else { return image }
-        return NSImage(cgImage: resultImage, size: image.size)
+        return NSImage(cgImage: resultImage, size: imageSize)
     }
 
-    /// Creates a blurred CGImage for a region
-    private static func createBlurredRegion(from ciImage: CIImage, in rect: CGRect, radius: Double, ciContext: CIContext) -> CGImage? {
-        let cropped = ciImage.cropped(to: rect)
+    /// Creates a blurred CGImage for a region with proper edge handling
+    /// Uses clampedToExtent() to prevent gray/black edge artifacts
+    private static func createBlurredRegion(
+        from ciImage: CIImage,
+        in rect: CGRect,
+        radius: Double,
+        ciContext: CIContext
+    ) -> CGImage? {
+        // CRITICAL: Clamp edges BEFORE cropping to prevent gray fringe artifacts
+        // The blur filter samples beyond the crop bounds; clampedToExtent() extends
+        // edge pixels infinitely to provide clean samples at the borders.
+        let clamped = ciImage.clampedToExtent()
+
+        // Expand the crop region by the blur radius to capture edge samples
+        let expandedRect = rect.insetBy(dx: -radius * 3, dy: -radius * 3)
+        let cropped = clamped.cropped(to: expandedRect)
 
         guard let blurFilter = CIFilter(name: "CIGaussianBlur") else { return nil }
         blurFilter.setValue(cropped, forKey: kCIInputImageKey)
@@ -306,15 +335,20 @@ struct ImageCropService {
 
         guard let blurred = blurFilter.outputImage else { return nil }
 
-        // Crop back to original rect (blur extends beyond bounds)
-        let clipped = blurred.cropped(to: rect)
-
-        return ciContext.createCGImage(clipped, from: rect)
+        // Crop back to the original requested rect
+        return ciContext.createCGImage(blurred, from: rect)
     }
 
     /// Creates a pixelated CGImage for a region
-    private static func createPixelatedRegion(from ciImage: CIImage, in rect: CGRect, scale: Double, ciContext: CIContext) -> CGImage? {
-        let cropped = ciImage.cropped(to: rect)
+    private static func createPixelatedRegion(
+        from ciImage: CIImage,
+        in rect: CGRect,
+        scale: Double,
+        ciContext: CIContext
+    ) -> CGImage? {
+        // Clamp to prevent edge artifacts (pixelate also samples beyond bounds)
+        let clamped = ciImage.clampedToExtent()
+        let cropped = clamped.cropped(to: rect.insetBy(dx: -scale * 2, dy: -scale * 2))
 
         guard let pixelateFilter = CIFilter(name: "CIPixellate") else { return nil }
         pixelateFilter.setValue(cropped, forKey: kCIInputImageKey)
@@ -325,9 +359,7 @@ struct ImageCropService {
 
         guard let pixelated = pixelateFilter.outputImage else { return nil }
 
-        let clipped = pixelated.cropped(to: rect)
-
-        return ciContext.createCGImage(clipped, from: rect)
+        return ciContext.createCGImage(pixelated, from: rect)
     }
 
     // ┌─────────────────────────────────────────────────────────────────────┐
@@ -571,13 +603,21 @@ struct ImageCropService {
         // Pipeline order: Transform -> Blur -> Crop -> Resize
 
         // 1. Apply transform (rotation/flip) FIRST
-        if let transform = transforms[item.id], !transform.isIdentity {
-            processedImage = applyTransform(processedImage, transform: transform)
+        let currentTransform = transforms[item.id] ?? .identity
+        if !currentTransform.isIdentity {
+            processedImage = applyTransform(processedImage, transform: currentTransform)
         }
 
-        // 2. Apply blur regions (in transformed image coordinates)
+        // 2. Apply blur regions - MUST transform coordinates to match transformed image
         if let imageBlurData = blurRegions[item.id], imageBlurData.hasRegions {
-            processedImage = applyBlurRegions(processedImage, regions: imageBlurData.regions)
+            // Blur regions are stored in ORIGINAL image coordinates
+            // The image has been transformed, so we need to transform the blur coords too
+            let transformedRegions = imageBlurData.regions.map { region in
+                var transformed = region
+                transformed.normalizedRect = region.normalizedRect.applyingTransform(currentTransform)
+                return transformed
+            }
+            processedImage = applyBlurRegions(processedImage, regions: transformedRegions)
         }
 
         // 3. Apply crop
