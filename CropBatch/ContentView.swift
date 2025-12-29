@@ -491,6 +491,7 @@ struct ExportSectionView: View {
     @State private var existingFilesCount = 0
     @State private var pendingExportImages: [ImageItem] = []
     @State private var pendingExportDirectory: URL?
+    @State private var dialogPresentationID = UUID()  // Forces dialog rebuild on each presentation
 
     private var imagesToProcess: [ImageItem] {
         appState.selectedImageIDs.isEmpty ? appState.images : appState.selectedImages
@@ -654,6 +655,7 @@ struct ExportSectionView: View {
         } message: {
             Text("\(existingFilesCount) file\(existingFilesCount == 1 ? "" : "s") already exist\(existingFilesCount == 1 ? "s" : "") in the destination folder.")
         }
+        .id(dialogPresentationID)  // Force SwiftUI to rebuild dialog content on each presentation
         .onChange(of: showOverwriteDialog) { _, isShowing in
             // Clear pending state when dialog closes
             if !isShowing {
@@ -690,6 +692,7 @@ struct ExportSectionView: View {
             existingFilesCount = existingFiles.count
             pendingExportImages = images
             pendingExportDirectory = outputDirectory
+            dialogPresentationID = UUID()  // Force dialog content rebuild
             showOverwriteDialog = true
         } else {
             // No conflicts, proceed directly
