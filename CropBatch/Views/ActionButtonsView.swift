@@ -13,6 +13,12 @@ struct ActionButtonsView: View {
     @State private var reviewBeforeExport = true
     @State private var lastExportDirectory: URL?
 
+    // Overwrite handling
+    @State private var showOverwriteDialog = false
+    @State private var existingFilesCount = 0
+    @State private var pendingExportImages: [ImageItem] = []
+    @State private var pendingExportDirectory: URL?
+
     private var imagesToProcess: [ImageItem] {
         appState.selectedImageIDs.isEmpty
             ? appState.images
@@ -165,6 +171,30 @@ struct ActionButtonsView: View {
         } message: {
             Text("Successfully exported \(exportedCount) cropped images")
         }
+        .confirmationDialog(
+            "Overwrite Existing Files?",
+            isPresented: $showOverwriteDialog,
+            titleVisibility: .visible
+        ) {
+            Button("Overwrite", role: .destructive) {
+                Task {
+                    guard let dir = pendingExportDirectory else { return }
+                    await executeExport(pendingExportImages, to: dir, rename: false)
+                }
+            }
+            Button("Rename (add _1, _2...)") {
+                Task {
+                    guard let dir = pendingExportDirectory else { return }
+                    await executeExport(pendingExportImages, to: dir, rename: true)
+                }
+            }
+            Button("Cancel", role: .cancel) {
+                pendingExportImages = []
+                pendingExportDirectory = nil
+            }
+        } message: {
+            Text("\(existingFilesCount) file\(existingFilesCount == 1 ? "" : "s") already exist\(existingFilesCount == 1 ? "s" : "") in the destination folder.")
+        }
     }
 
     /// Opens NSOpenPanel to select output folder
@@ -193,8 +223,34 @@ struct ActionButtonsView: View {
     }
 
     private func processImages(_ images: [ImageItem], to outputDirectory: URL) async {
+        // Check for existing files before exporting
+        var settings = appState.exportSettings
+        settings.outputDirectory = .custom(outputDirectory)
+        let existingFiles = settings.findExistingFiles(items: images)
+
+        if !existingFiles.isEmpty {
+            // Show confirmation dialog
+            existingFilesCount = existingFiles.count
+            pendingExportImages = images
+            pendingExportDirectory = outputDirectory
+            showOverwriteDialog = true
+        } else {
+            // No conflicts, proceed directly
+            await executeExport(images, to: outputDirectory, rename: false)
+        }
+    }
+
+    private func executeExport(_ images: [ImageItem], to outputDirectory: URL, rename: Bool) async {
         do {
-            let results = try await appState.processAndExport(images: images, to: outputDirectory)
+            let results: [URL]
+
+            if rename {
+                // Export with renamed files to avoid overwriting
+                results = try await appState.processAndExportWithRename(images: images, to: outputDirectory)
+            } else {
+                results = try await appState.processAndExport(images: images, to: outputDirectory)
+            }
+
             exportedCount = results.count
             lastExportDirectory = outputDirectory
             showSuccessAlert = true
@@ -207,6 +263,10 @@ struct ActionButtonsView: View {
             exportError = error.localizedDescription
             showErrorAlert = true
         }
+
+        // Clear pending state
+        pendingExportImages = []
+        pendingExportDirectory = nil
     }
 }
 

@@ -301,16 +301,67 @@ struct CropBatchApp: App {
 
         panel.begin { response in
             guard response == .OK, let outputDirectory = panel.url else { return }
-            Task {
-                do {
-                    let results = try await appState.processAndExport(to: outputDirectory)
-                    if !NSApp.isActive {
-                        appState.sendExportNotification(count: results.count)
-                    }
-                } catch {
-                    print("Export failed: \(error)")
+
+            // Check for existing files
+            var settings = appState.exportSettings
+            settings.outputDirectory = .custom(outputDirectory)
+            let images = appState.selectedImageIDs.isEmpty ? appState.images : appState.selectedImages
+            let existingFiles = settings.findExistingFiles(items: images)
+
+            if !existingFiles.isEmpty {
+                // Show overwrite confirmation
+                showOverwriteAlert(
+                    existingCount: existingFiles.count,
+                    images: images,
+                    outputDirectory: outputDirectory
+                )
+            } else {
+                // No conflicts, proceed directly
+                Task {
+                    await performExport(images: images, to: outputDirectory, rename: false)
                 }
             }
+        }
+    }
+
+    private func showOverwriteAlert(existingCount: Int, images: [ImageItem], outputDirectory: URL) {
+        let alert = NSAlert()
+        alert.messageText = "Overwrite Existing Files?"
+        alert.informativeText = "\(existingCount) file\(existingCount == 1 ? "" : "s") already exist\(existingCount == 1 ? "s" : "") in the destination folder."
+        alert.alertStyle = .warning
+
+        alert.addButton(withTitle: "Overwrite")
+        alert.addButton(withTitle: "Rename (add _1, _2...)")
+        alert.addButton(withTitle: "Cancel")
+
+        let response = alert.runModal()
+        switch response {
+        case .alertFirstButtonReturn:  // Overwrite
+            Task {
+                await performExport(images: images, to: outputDirectory, rename: false)
+            }
+        case .alertSecondButtonReturn:  // Rename
+            Task {
+                await performExport(images: images, to: outputDirectory, rename: true)
+            }
+        default:  // Cancel
+            break
+        }
+    }
+
+    private func performExport(images: [ImageItem], to outputDirectory: URL, rename: Bool) async {
+        do {
+            let results: [URL]
+            if rename {
+                results = try await appState.processAndExportWithRename(images: images, to: outputDirectory)
+            } else {
+                results = try await appState.processAndExport(images: images, to: outputDirectory)
+            }
+            if !NSApp.isActive {
+                appState.sendExportNotification(count: results.count)
+            }
+        } catch {
+            print("Export failed: \(error)")
         }
     }
 }

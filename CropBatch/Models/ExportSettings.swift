@@ -206,6 +206,52 @@ struct ExportSettings: Equatable {
 
         return nil
     }
+
+    /// Finds files that would be overwritten during export
+    /// - Parameter items: The items to be exported
+    /// - Returns: Array of (index, URL) for files that already exist
+    func findExistingFiles(items: [ImageItem]) -> [(index: Int, url: URL)] {
+        let fileManager = FileManager.default
+        var existing: [(Int, URL)] = []
+
+        for (index, item) in items.enumerated() {
+            let destURL = outputURL(for: item.url, index: index)
+            if fileManager.fileExists(atPath: destURL.path) {
+                existing.append((index, destURL))
+            }
+        }
+
+        return existing
+    }
+
+    /// Creates a new filename with a numeric suffix to avoid collision
+    /// e.g., "photo_cropped.jpg" -> "photo_cropped_1.jpg"
+    static func appendNumericSuffix(to url: URL, startingAt: Int = 1) -> URL {
+        let fileManager = FileManager.default
+        let directory = url.deletingLastPathComponent()
+        let filename = url.deletingPathExtension().lastPathComponent
+        let ext = url.pathExtension
+
+        var counter = startingAt
+        var newURL: URL
+
+        repeat {
+            let newFilename = "\(filename)_\(counter).\(ext)"
+            newURL = directory.appendingPathComponent(newFilename)
+            counter += 1
+        } while fileManager.fileExists(atPath: newURL.path)
+
+        return newURL
+    }
+}
+
+// MARK: - Overwrite Handling
+
+/// User's choice when existing files are detected
+enum OverwriteChoice {
+    case overwrite      // Replace existing files
+    case rename         // Append _1, _2, etc. to avoid collision
+    case cancel         // Abort the export
 }
 
 // MARK: - Presets

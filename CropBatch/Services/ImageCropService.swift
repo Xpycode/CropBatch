@@ -310,24 +310,43 @@ struct ImageCropService {
         return ciContext.createCGImage(clipped, from: rect)
     }
 
+    // ┌─────────────────────────────────────────────────────────────────────┐
+    // │  CRITICAL: Image Orientation Handling                              │
+    // │                                                                     │
+    // │  NSImage.cgImage(forProposedRect:) returns RAW pixel data that     │
+    // │  may NOT match the displayed orientation. iPhone screenshots       │
+    // │  often have EXIF orientation metadata - the raw CGImage might      │
+    // │  be stored rotated/flipped with metadata saying "display it        │
+    // │  this way". NSImage handles this for display, but the raw          │
+    // │  CGImage doesn't.                                                  │
+    // │                                                                     │
+    // │  SOLUTION: Draw the NSImage into a new CGContext first. This       │
+    // │  "bakes in" any orientation transforms, giving us pixel data       │
+    // │  that matches what the user sees. Then crop in standard coords.    │
+    // │                                                                     │
+    // │  Fixed: 2025-12-29                                                 │
+    // └─────────────────────────────────────────────────────────────────────┘
     /// Crops an NSImage according to the provided settings
     /// - Parameters:
     ///   - image: The source image to crop
     ///   - settings: Crop settings specifying pixels to remove from each edge
     /// - Returns: A new cropped NSImage
     static func crop(_ image: NSImage, with settings: CropSettings) throws -> NSImage {
-        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+        // First, get a normalized CGImage by drawing the NSImage into a context.
+        // This ensures any EXIF orientation is applied and we get pixel data
+        // matching the displayed image.
+        guard let normalizedCGImage = createNormalizedCGImage(from: image) else {
             throw ImageCropError.failedToGetCGImage
         }
 
-        let originalWidth = cgImage.width
-        let originalHeight = cgImage.height
+        let originalWidth = normalizedCGImage.width
+        let originalHeight = normalizedCGImage.height
 
-        // Calculate crop rectangle in CGImage coordinates (origin at bottom-left)
-        // cropBottom is the distance from the bottom edge, which is where y starts in CG coords
+        // Calculate crop rectangle in top-left origin coordinates (matching user's view)
+        // Then convert to CGImage bottom-left origin for the actual crop
         let cropRect = CGRect(
             x: settings.cropLeft,
-            y: settings.cropBottom,  // Distance from bottom edge in CG coordinates
+            y: settings.cropTop,  // In normalized image, y=0 is TOP (standard image coords)
             width: originalWidth - settings.cropLeft - settings.cropRight,
             height: originalHeight - settings.cropTop - settings.cropBottom
         )
@@ -337,11 +356,51 @@ struct ImageCropService {
             throw ImageCropError.invalidCropRegion
         }
 
-        guard let croppedCGImage = cgImage.cropping(to: cropRect) else {
+        guard let croppedCGImage = normalizedCGImage.cropping(to: cropRect) else {
             throw ImageCropError.invalidCropRegion
         }
 
         return NSImage(cgImage: croppedCGImage, size: NSSize(width: cropRect.width, height: cropRect.height))
+    }
+
+    /// Creates a normalized CGImage from an NSImage by drawing it into a bitmap context.
+    /// This applies any EXIF orientation transforms so the pixel data matches display.
+    private static func createNormalizedCGImage(from image: NSImage) -> CGImage? {
+        // Get the actual pixel dimensions
+        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+            return nil
+        }
+
+        let width = cgImage.width
+        let height = cgImage.height
+
+        // Create a bitmap context with standard top-left origin
+        let colorSpace = cgImage.colorSpace ?? CGColorSpaceCreateDeviceRGB()
+        guard let context = CGContext(
+            data: nil,
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: colorSpace,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return nil }
+
+        // Draw the NSImage into the context - this applies orientation transforms
+        // Note: We use NSGraphicsContext to ensure NSImage draws correctly
+        let nsContext = NSGraphicsContext(cgContext: context, flipped: false)
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = nsContext
+
+        // Draw in the full rect - NSImage will handle any internal orientation
+        image.draw(in: NSRect(x: 0, y: 0, width: width, height: height),
+                   from: .zero,
+                   operation: .copy,
+                   fraction: 1.0)
+
+        NSGraphicsContext.restoreGraphicsState()
+
+        return context.makeImage()
     }
 
     /// Saves an NSImage to a file URL

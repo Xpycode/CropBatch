@@ -526,6 +526,62 @@ final class AppState {
         return results
     }
 
+    /// Process and export images with automatic renaming to avoid overwriting existing files
+    /// - Parameters:
+    ///   - imagesToExport: Images to process
+    ///   - outputDirectory: Destination directory
+    /// - Returns: Array of exported file URLs
+    @MainActor
+    func processAndExportWithRename(images imagesToExport: [ImageItem], to outputDirectory: URL) async throws -> [URL] {
+        isProcessing = true
+        processingProgress = 0
+
+        defer {
+            isProcessing = false
+        }
+
+        var settings = exportSettings
+        settings.outputDirectory = .custom(outputDirectory)
+
+        // Pre-compute renamed URLs for files that would conflict
+        var renamedURLs: [UUID: URL] = [:]
+        for (index, item) in imagesToExport.enumerated() {
+            let plannedURL = settings.outputURL(for: item.url, index: index)
+            if FileManager.default.fileExists(atPath: plannedURL.path) {
+                renamedURLs[item.id] = ExportSettings.appendNumericSuffix(to: plannedURL)
+            }
+        }
+
+        // Process normally first
+        let standardResults = try await ImageCropService.batchCrop(
+            items: imagesToExport,
+            cropSettings: cropSettings,
+            exportSettings: settings,
+            transforms: imageTransforms,
+            blurRegions: blurRegions
+        ) { [weak self] progress in
+            self?.processingProgress = progress
+        }
+
+        // Rename files that need it
+        var finalResults: [URL] = []
+        for (index, item) in imagesToExport.enumerated() {
+            guard index < standardResults.count else { continue }
+            let outputURL = standardResults[index]
+
+            if let renamedURL = renamedURLs[item.id] {
+                // Move to renamed location
+                try? FileManager.default.removeItem(at: renamedURL)
+                try FileManager.default.moveItem(at: outputURL, to: renamedURL)
+                finalResults.append(renamedURL)
+            } else {
+                finalResults.append(outputURL)
+            }
+        }
+
+        return finalResults
+    }
+
     /// Send system notification for completed export
     func sendExportNotification(count: Int) {
         let content = UNMutableNotificationContent()
