@@ -530,13 +530,26 @@ struct CropHandlesView: View {
             let offsetX = (geometry.size.width - displayedSize.width) / 2
             let offsetY = (geometry.size.height - displayedSize.height) / 2
 
+            // Calculate crop rectangle bounds for dynamic handle positioning
+            let cropLeft = CGFloat(cropSettings.cropLeft) * scale
+            let cropRight = CGFloat(cropSettings.cropRight) * scale
+            let cropTop = CGFloat(cropSettings.cropTop) * scale
+            let cropBottom = CGFloat(cropSettings.cropBottom) * scale
+            let cropWidth = displayedSize.width - cropLeft - cropRight
+            let cropHeight = displayedSize.height - cropTop - cropBottom
+
+            // Center X for top/bottom handles (middle of visible crop line)
+            let horizontalHandleCenterX = offsetX + cropLeft + cropWidth / 2
+            // Center Y for left/right handles (middle of visible crop line)
+            let verticalHandleCenterY = offsetY + cropTop + cropHeight / 2
+
             // Top handle with label
             handleWithLabel(
                 edge: .top,
                 value: cropSettings.cropTop,
                 position: CGPoint(
-                    x: offsetX + displayedSize.width / 2,
-                    y: offsetY + CGFloat(cropSettings.cropTop) * scale
+                    x: horizontalHandleCenterX,
+                    y: offsetY + cropTop
                 ),
                 labelOffset: CGPoint(x: 0, y: -25),
                 onDrag: { location, snapping in
@@ -553,8 +566,8 @@ struct CropHandlesView: View {
                 edge: .bottom,
                 value: cropSettings.cropBottom,
                 position: CGPoint(
-                    x: offsetX + displayedSize.width / 2,
-                    y: offsetY + displayedSize.height - CGFloat(cropSettings.cropBottom) * scale
+                    x: horizontalHandleCenterX,
+                    y: offsetY + displayedSize.height - cropBottom
                 ),
                 labelOffset: CGPoint(x: 0, y: 25),
                 onDrag: { location, snapping in
@@ -572,8 +585,8 @@ struct CropHandlesView: View {
                 edge: .left,
                 value: cropSettings.cropLeft,
                 position: CGPoint(
-                    x: offsetX + CGFloat(cropSettings.cropLeft) * scale,
-                    y: offsetY + displayedSize.height / 2
+                    x: offsetX + cropLeft,
+                    y: verticalHandleCenterY
                 ),
                 labelOffset: CGPoint(x: -30, y: 0),
                 onDrag: { location, snapping in
@@ -590,8 +603,8 @@ struct CropHandlesView: View {
                 edge: .right,
                 value: cropSettings.cropRight,
                 position: CGPoint(
-                    x: offsetX + displayedSize.width - CGFloat(cropSettings.cropRight) * scale,
-                    y: offsetY + displayedSize.height / 2
+                    x: offsetX + displayedSize.width - cropRight,
+                    y: verticalHandleCenterY
                 ),
                 labelOffset: CGPoint(x: 30, y: 0),
                 onDrag: { location, snapping in
