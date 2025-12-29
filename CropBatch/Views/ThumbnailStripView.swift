@@ -293,6 +293,15 @@ struct ThumbnailItemView: View {
         return Color.clear
     }
 
+    /// The thumbnail image with any transforms applied
+    private var displayedThumbnail: NSImage {
+        let transform = appState.transformForImage(item.id)
+        if transform.isIdentity {
+            return item.originalImage
+        }
+        return ImageCropService.applyTransform(item.originalImage, transform: transform)
+    }
+
     var body: some View {
         thumbnailContent
             .padding(6)
@@ -323,7 +332,7 @@ struct ThumbnailItemView: View {
 
     private var thumbnailImage: some View {
         ZStack(alignment: .topTrailing) {
-            Image(nsImage: item.originalImage)
+            Image(nsImage: displayedThumbnail)
                 .resizable()
                 .aspectRatio(contentMode: .fit)
                 .frame(width: 100, height: 70)

@@ -314,10 +314,16 @@ final class AppState {
         }
     }
 
+    /// Returns the effective image size after applying current transform (rotation may swap dimensions)
+    var activeImageEffectiveSize: CGSize? {
+        guard let image = activeImage else { return nil }
+        return activeImageTransform.transformedSize(image.originalSize)
+    }
+
     func adjustCrop(edge: CropEdge, delta: Int) {
-        guard let activeImage = activeImage else { return }
-        let maxWidth = Int(activeImage.originalSize.width)
-        let maxHeight = Int(activeImage.originalSize.height)
+        guard let effectiveSize = activeImageEffectiveSize else { return }
+        let maxWidth = Int(effectiveSize.width)
+        let maxHeight = Int(effectiveSize.height)
 
         switch edge {
         case .top:
@@ -337,10 +343,11 @@ final class AppState {
 
     /// Validates and clamps crop values to ensure they don't exceed image dimensions
     /// Call this after any direct crop value changes to prevent invalid states
+    /// Accounts for current transform (rotation) when calculating max dimensions
     func validateAndClampCrop() {
-        guard let image = activeImage else { return }
-        let maxWidth = Int(image.originalSize.width)
-        let maxHeight = Int(image.originalSize.height)
+        guard let effectiveSize = activeImageEffectiveSize else { return }
+        let maxWidth = Int(effectiveSize.width)
+        let maxHeight = Int(effectiveSize.height)
 
         // Clamp each edge, ensuring at least 1 pixel remains after cropping
         cropSettings.cropLeft = min(max(0, cropSettings.cropLeft), maxWidth - cropSettings.cropRight - 1)
@@ -455,6 +462,9 @@ final class AppState {
             transform.rotation.rotateCCW()
         }
         imageTransforms[id] = transform
+
+        // Validate crop values - rotation may swap dimensions making some crop values invalid
+        validateAndClampCrop()
     }
 
     /// Flip the active image
@@ -472,7 +482,10 @@ final class AppState {
     /// Reset transform for the active image
     func resetActiveImageTransform() {
         guard let id = activeImageID else { return }
-        imageTransforms.removeValue(forKey: id)
+        imageTransforms[id] = .identity
+
+        // Validate crop values - resetting rotation may change effective dimensions
+        validateAndClampCrop()
     }
 
     /// Get transform for a specific image

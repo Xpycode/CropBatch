@@ -12,6 +12,7 @@ struct CropEditorView: View {
     @State private var cachedScaledImage: NSImage?
     @State private var cachedImageID: UUID?
     @State private var cachedTargetSize: CGSize?
+    @State private var cachedTransform: ImageTransform?
 
     var body: some View {
         GeometryReader { geometry in
@@ -210,10 +211,11 @@ struct CropEditorView: View {
         let targetSize = scaledImageSize
         let currentID = image.id
 
-        // Return cached image if valid
+        // Return cached image if valid (must check transform too for 180° rotations where size doesn't change)
         if let cached = cachedScaledImage,
            cachedImageID == currentID,
-           cachedTargetSize == targetSize {
+           cachedTargetSize == targetSize,
+           cachedTransform == currentTransform {
             return cached
         }
 
@@ -249,6 +251,7 @@ struct CropEditorView: View {
             cachedScaledImage = newImage
             cachedImageID = currentID
             cachedTargetSize = targetSize
+            cachedTransform = currentTransform
         }
 
         return newImage

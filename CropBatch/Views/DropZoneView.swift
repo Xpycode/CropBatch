@@ -44,10 +44,28 @@ struct DropZoneView: View {
                 .foregroundStyle(isTargeted ? Color.blue : Color.gray.opacity(0.3))
                 .padding(20)
         }
-        .onDrop(of: [.fileURL], isTargeted: $isTargeted) { _ in
-            // Handled by parent
-            false
+        .onDrop(of: [.fileURL], isTargeted: $isTargeted) { providers in
+            handleDrop(providers: providers)
         }
+    }
+
+    private func handleDrop(providers: [NSItemProvider]) -> Bool {
+        var handled = false
+
+        for provider in providers {
+            if provider.canLoadObject(ofClass: URL.self) {
+                _ = provider.loadObject(ofClass: URL.self) { url, _ in
+                    if let url = url {
+                        Task { @MainActor in
+                            appState.addImages(from: [url])
+                        }
+                    }
+                }
+                handled = true
+            }
+        }
+
+        return handled
     }
 }
 

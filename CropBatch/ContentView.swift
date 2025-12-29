@@ -486,18 +486,17 @@ struct TransformRowView: View {
             .disabled(appState.activeImage == nil)
             .help("Flip Vertical")
 
-            // Transform indicator
-            if !appState.activeImageTransform.isIdentity {
-                Button {
-                    appState.resetActiveImageTransform()
-                } label: {
-                    Image(systemName: "arrow.counterclockwise")
-                        .foregroundStyle(.orange)
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .help("Reset Transform")
+            // Transform reset button - always visible, disabled when no transform
+            Button {
+                appState.resetActiveImageTransform()
+            } label: {
+                Image(systemName: "arrow.counterclockwise")
+                    .foregroundColor(appState.activeImageTransform.isIdentity ? Color.secondary : Color.orange)
             }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .disabled(appState.activeImage == nil || appState.activeImageTransform.isIdentity)
+            .help("Reset Transform")
         }
     }
 }

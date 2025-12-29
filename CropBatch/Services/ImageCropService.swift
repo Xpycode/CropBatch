@@ -142,10 +142,17 @@ struct ImageCropService {
             return image
         }
 
-        let radians = CGFloat(angle.rawValue) * .pi / 180
+        // CRITICAL: Use CGImage pixel dimensions, NOT NSImage.size (which is in points)
+        // On Retina displays, points ≠ pixels. Using points causes resolution loss.
+        let pixelWidth = CGFloat(cgImage.width)
+        let pixelHeight = CGFloat(cgImage.height)
+
+        // CRITICAL: CGContext.rotate() uses mathematical convention (positive = CCW)
+        // We want positive angles to mean clockwise (user expectation), so negate.
+        let radians = -CGFloat(angle.rawValue) * .pi / 180
         let rotatedSize = angle.swapsWidthAndHeight
-            ? CGSize(width: image.size.height, height: image.size.width)
-            : image.size
+            ? CGSize(width: pixelHeight, height: pixelWidth)
+            : CGSize(width: pixelWidth, height: pixelHeight)
 
         let colorSpace = cgImage.colorSpace ?? CGColorSpaceCreateDeviceRGB()
         guard let context = CGContext(
@@ -158,11 +165,11 @@ struct ImageCropService {
             bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
         ) else { return image }
 
-        // Move origin to center, rotate, then draw
+        // Move origin to center, rotate, then draw using pixel dimensions
         context.translateBy(x: rotatedSize.width / 2, y: rotatedSize.height / 2)
         context.rotate(by: radians)
-        context.translateBy(x: -image.size.width / 2, y: -image.size.height / 2)
-        context.draw(cgImage, in: CGRect(origin: .zero, size: image.size))
+        context.translateBy(x: -pixelWidth / 2, y: -pixelHeight / 2)
+        context.draw(cgImage, in: CGRect(x: 0, y: 0, width: pixelWidth, height: pixelHeight))
 
         guard let rotatedCGImage = context.makeImage() else { return image }
         return NSImage(cgImage: rotatedCGImage, size: rotatedSize)
@@ -180,30 +187,37 @@ struct ImageCropService {
             return image
         }
 
+        // CRITICAL: Use CGImage pixel dimensions, NOT NSImage.size (which is in points)
+        // On Retina displays, points ≠ pixels. Using points causes resolution loss
+        // and was the cause of "flip only works after rotation" bug.
+        let pixelWidth = CGFloat(cgImage.width)
+        let pixelHeight = CGFloat(cgImage.height)
+        let pixelSize = CGSize(width: pixelWidth, height: pixelHeight)
+
         let colorSpace = cgImage.colorSpace ?? CGColorSpaceCreateDeviceRGB()
         guard let context = CGContext(
             data: nil,
-            width: Int(image.size.width),
-            height: Int(image.size.height),
+            width: Int(pixelWidth),
+            height: Int(pixelHeight),
             bitsPerComponent: 8,
             bytesPerRow: 0,
             space: colorSpace,
             bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
         ) else { return image }
 
-        // Apply flip transforms
+        // Apply flip transforms using pixel dimensions
         context.translateBy(
-            x: horizontal ? image.size.width : 0,
-            y: vertical ? image.size.height : 0
+            x: horizontal ? pixelWidth : 0,
+            y: vertical ? pixelHeight : 0
         )
         context.scaleBy(
             x: horizontal ? -1 : 1,
             y: vertical ? -1 : 1
         )
-        context.draw(cgImage, in: CGRect(origin: .zero, size: image.size))
+        context.draw(cgImage, in: CGRect(origin: .zero, size: pixelSize))
 
         guard let flippedCGImage = context.makeImage() else { return image }
-        return NSImage(cgImage: flippedCGImage, size: image.size)
+        return NSImage(cgImage: flippedCGImage, size: pixelSize)
     }
 
     /// Applies a complete transform (rotation + flip) to an image
