@@ -81,7 +81,7 @@
 - [x] None mode - edges independent
 - [x] Top/Bottom link mode works
 - [x] Left/Right link mode works
-- [ ] All Edges link mode works
+- [x] All Edges link mode works
 ### Aspect Ratio Guide
 - [x] 16:9 guide overlay appears
 - [x] 4:3 guide overlay appears
