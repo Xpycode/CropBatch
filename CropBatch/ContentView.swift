@@ -142,13 +142,15 @@ struct SidebarView: View {
                 Divider()
 
                 // ═══════════════════════════════════════
-                // TRANSFORM - Compact button row
+                // TRANSFORM - Shelved (breaks crop state)
                 // ═══════════════════════════════════════
+                #if false
                 TransformRowView()
                     .padding(.horizontal, 16)
                     .padding(.vertical, 12)
 
                 Divider()
+                #endif
 
                 // ═══════════════════════════════════════
                 // EXPORT - Prominent action area
@@ -160,9 +162,11 @@ struct SidebarView: View {
                 // ═══════════════════════════════════════
                 // ADVANCED - Collapsed by default
                 // ═══════════════════════════════════════
+                #if false // Folder Watch - shelved for simplicity
                 CollapsibleSection(title: "Folder Watch", icon: "folder.badge.gearshape", isExpanded: $autoProcessExpanded) {
                     FolderWatchView()
                 }
+                #endif
 
                 CollapsibleSection(title: "Keyboard Shortcuts", icon: "keyboard", isExpanded: $shortcutsExpanded) {
                     KeyboardShortcutsContentView()
@@ -226,7 +230,8 @@ struct CropSectionView: View {
             if appState.currentTool == .crop {
                 // MARK: Crop Tool Controls
 
-                // Preset picker - comprehensive dropdown with categories
+                // Preset picker - shelved for simplicity
+                #if false
                 HStack {
                     Menu {
                         Button {
@@ -274,6 +279,7 @@ struct CropSectionView: View {
 
                     // Link mode button - shelved (not working reliably)
                 }
+                #endif
 
                 // Crop edge inputs - compact row
                 HStack(spacing: 8) {

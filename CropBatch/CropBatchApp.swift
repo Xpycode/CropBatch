@@ -151,6 +151,8 @@ struct CropBatchApp: App {
                 .keyboardShortcut(.downArrow, modifiers: .command)
                 .disabled(appState.images.count < 2)
 
+                // Transform items - shelved (breaks crop state)
+                #if false
                 Divider()
 
                 Button("Rotate Left") {
@@ -185,6 +187,7 @@ struct CropBatchApp: App {
                     appState.resetActiveImageTransform()
                 }
                 .disabled(appState.activeImageTransform.isIdentity)
+                #endif
 
                 Divider()
 
@@ -206,7 +209,8 @@ struct CropBatchApp: App {
                 .disabled(!appState.cropSettings.hasAnyCrop)
 
                 // Link Mode menu - shelved (not working reliably)
-
+                // Presets menu - shelved for simplicity
+                #if false
                 Divider()
 
                 Menu("Presets") {
@@ -229,6 +233,7 @@ struct CropBatchApp: App {
                         }
                     }
                 }
+                #endif
 
                 Divider()
 

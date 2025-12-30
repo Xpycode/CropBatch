@@ -5,11 +5,19 @@
 ## Completed Features
 - [x] Undo/redo for crop adjustments (Cmd+Z / Cmd+Shift+Z)
 - [x] Batch rename on export (pattern tokens: {name}, {index}, {counter}, {date}, {time})
-- [x] Image rotation (90 CW/CCW, flip H/V) - Transform menu and toolbar
 - [x] Resize on export (percentage, exact size, max width/height)
 - [x] Draggable crop center bubble to reposition crop window
 - [x] Dynamic crop handle positioning (centers on visible crop line)
 - [x] Export overwrite warning with Rename option
+
+## Shelved Features (2025-12-31)
+The following features are disabled (`#if false`) to simplify the app:
+- **Rotation/Flip transforms** - Works but breaks crop state; code in TransformRowView and Image menu
+- **Presets** - Shelved in CropSectionView and Crop menu
+- **Folder Watch** - Shelved CollapsibleSection in SidebarView
+- **Blur/Redact** - Already hidden; coordinate issues documented in blur-feature-status.md
+
+Core focus: Load images → Configure crop → Export batch
 
 ## On Hold (For Later Session)
 - [ ] Blur/Redact tool - See `docs/blur-feature-status.md` for details
