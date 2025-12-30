@@ -118,8 +118,6 @@ struct SidebarView: View {
     @Environment(AppState.self) private var appState
 
     // Collapsed state persistence
-    @AppStorage("sidebar.advancedCropExpanded") private var advancedCropExpanded = false
-    @AppStorage("sidebar.exportOptionsExpanded") private var exportOptionsExpanded = false
     @AppStorage("sidebar.autoProcessExpanded") private var autoProcessExpanded = false
     @AppStorage("sidebar.shortcutsExpanded") private var shortcutsExpanded = false
 
@@ -137,7 +135,7 @@ struct SidebarView: View {
                 // ═══════════════════════════════════════
                 // CROP - Primary section, always visible
                 // ═══════════════════════════════════════
-                CropSectionView(advancedExpanded: $advancedCropExpanded)
+                CropSectionView()
 
                 Divider()
 
@@ -155,7 +153,7 @@ struct SidebarView: View {
                 // ═══════════════════════════════════════
                 // EXPORT - Prominent action area
                 // ═══════════════════════════════════════
-                ExportSectionView(optionsExpanded: $exportOptionsExpanded)
+                ExportSectionView()
 
                 Divider()
 
@@ -181,7 +179,6 @@ struct SidebarView: View {
 
 struct CropSectionView: View {
     @Environment(AppState.self) private var appState
-    @Binding var advancedExpanded: Bool
     @State private var presetManager = PresetManager.shared
 
     var body: some View {
@@ -309,23 +306,9 @@ struct CropSectionView: View {
                     .help("Reset crop")
                 }
 
-                // Expandable advanced section
-                if advancedExpanded {
-                    Divider()
-                    AdvancedCropOptionsView()
-                }
-
-                // Toggle for advanced options only
-                Button {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        advancedExpanded.toggle()
-                    }
-                } label: {
-                    Label("Advanced", systemImage: advancedExpanded ? "chevron.down" : "chevron.right")
-                        .font(.caption)
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(advancedExpanded ? .primary : .secondary)
+                // Aspect guide options (always visible)
+                Divider()
+                AdvancedCropOptionsView()
 
             } else if appState.currentTool == .blur {
                 // MARK: Blur Tool Controls
@@ -491,7 +474,6 @@ struct TransformRowView: View {
 
 struct ExportSectionView: View {
     @Environment(AppState.self) private var appState
-    @Binding var optionsExpanded: Bool
     @State private var showReviewSheet = false
     @State private var pendingOutputDirectory: URL?
     @State private var showErrorAlert = false
@@ -603,22 +585,9 @@ struct ExportSectionView: View {
                     .foregroundStyle(.orange)
             }
 
-            // Expandable options
-            Button {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    optionsExpanded.toggle()
-                }
-            } label: {
-                Label("More Options", systemImage: optionsExpanded ? "chevron.down" : "chevron.right")
-                    .font(.caption)
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(optionsExpanded ? .primary : .secondary)
-
-            if optionsExpanded {
-                Divider()
-                ExportOptionsExpandedView()
-            }
+            // Export options (always visible)
+            Divider()
+            ExportOptionsExpandedView()
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
@@ -988,6 +957,8 @@ struct KeyboardShortcutsContentView: View {
 
                 ZoomShortcutRow(keys: "⌘1", description: "100%")
                 ZoomShortcutRow(keys: "⌘2", description: "Fit")
+                ZoomShortcutRow(keys: "⌘3", description: "Width")
+                ZoomShortcutRow(keys: "⌘4", description: "Height")
             }
 
             Spacer()
