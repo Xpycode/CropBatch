@@ -205,21 +205,7 @@ struct CropBatchApp: App {
                 .keyboardShortcut("r", modifiers: .command)
                 .disabled(!appState.cropSettings.hasAnyCrop)
 
-                Divider()
-
-                Menu("Link Mode") {
-                    ForEach(EdgeLinkMode.allCases) { mode in
-                        Button {
-                            appState.edgeLinkMode = mode
-                        } label: {
-                            if appState.edgeLinkMode == mode {
-                                Text("✓ \(mode.rawValue)")
-                            } else {
-                                Text("    \(mode.rawValue)")
-                            }
-                        }
-                    }
-                }
+                // Link Mode menu - shelved (not working reliably)
 
                 Divider()
 

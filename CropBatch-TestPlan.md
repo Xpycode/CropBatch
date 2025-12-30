@@ -1,11 +1,11 @@
 # CropBatch Test Plan
 ## Phase 1 - Image Import & Management
 ### Drag & Drop
-- [ ] Drop single PNG onto main window
-- [ ] Drop single JPEG onto main window
-- [ ] Drop multiple images at once (mixed formats)
-- [ ] Drop images when images already loaded
-- [ ] Unsupported formats ignored gracefully
+- [x] Drop single PNG onto main window
+- [x] Drop single JPEG onto main window
+- [x] Drop multiple images at once (mixed formats)
+- [x] Drop images when images already loaded
+- [x] Unsupported formats ignored gracefully
 ### File Import
 - [x] Toolbar "+" button opens import panel
 - [x] Import multiple images via Open Panel
@@ -59,9 +59,9 @@
 - [x] Rotation indicator in zoom bubble
 - [x] 4 rotations return to original
 ### Flip
-- [ ] Flip Horizontal button works
-- [ ] Flip Vertical button works
-- [ ] Transform indicator shows when modified
+- [x] Flip Horizontal button works
+- [x] Flip Vertical button works
+- [x] Transform indicator shows when modified
 ### Reset
 - [x] Reset button clears all transforms
 ### Transform + Crop Interaction

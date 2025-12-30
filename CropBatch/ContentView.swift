@@ -272,22 +272,7 @@ struct CropSectionView: View {
                     }
                     .buttonStyle(.plain)
 
-                    // Link mode button
-                    Menu {
-                        ForEach(EdgeLinkMode.allCases) { mode in
-                            Button {
-                                appState.edgeLinkMode = mode
-                            } label: {
-                                Label(mode.rawValue, systemImage: mode.icon)
-                            }
-                        }
-                    } label: {
-                        Image(systemName: appState.edgeLinkMode.icon)
-                            .frame(width: 28, height: 28)
-                            .background(RoundedRectangle(cornerRadius: 6).fill(Color(nsColor: .controlBackgroundColor)))
-                    }
-                    .buttonStyle(.plain)
-                    .help("Link edges: \(appState.edgeLinkMode.rawValue)")
+                    // Link mode button - shelved (not working reliably)
                 }
 
                 // Crop edge inputs - compact row
@@ -384,8 +369,6 @@ struct CompactCropField: View {
 
 struct AdvancedCropOptionsView: View {
     @Environment(AppState.self) private var appState
-    @State private var detectionResult: UIDetectionResult?
-    @State private var isDetecting = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -420,10 +403,7 @@ struct AdvancedCropOptionsView: View {
                 }
             }
 
-            // Auto-detect
-            if !appState.images.isEmpty {
-                AutoDetectView(detectionResult: $detectionResult, isDetecting: $isDetecting)
-            }
+            // Auto-detect - shelved (not working reliably)
         }
     }
 }
