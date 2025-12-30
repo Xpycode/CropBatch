@@ -319,28 +319,40 @@ struct OutputPreview: View {
 struct ResizeSettingsSection: View {
     @Environment(AppState.self) private var appState
 
+    // Short labels for resize mode buttons
+    private func shortLabel(for mode: ResizeMode) -> String {
+        switch mode {
+        case .none: return "None"
+        case .exactSize: return "Exact"
+        case .maxWidth: return "MaxW"
+        case .maxHeight: return "MaxH"
+        case .percentage: return "%"
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack {
+            // Resize mode buttons
+            VStack(spacing: 4) {
                 Text("Resize")
-                    .font(.callout)
-
-                Spacer()
-
-                Picker("", selection: Binding(
-                    get: { appState.exportSettings.resizeSettings.mode },
-                    set: {
-                        appState.exportSettings.resizeSettings.mode = $0
-                        appState.markCustomSettings()
-                    }
-                )) {
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                HStack(spacing: 4) {
                     ForEach(ResizeMode.allCases) { mode in
-                        Text(mode.rawValue).tag(mode)
+                        Button {
+                            appState.exportSettings.resizeSettings.mode = mode
+                            appState.markCustomSettings()
+                        } label: {
+                            Text(shortLabel(for: mode))
+                                .font(.system(size: 10, weight: .medium))
+                                .frame(minWidth: 32, minHeight: 22)
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(appState.exportSettings.resizeSettings.mode == mode ? .accentColor : .secondary)
                     }
                 }
-                .pickerStyle(.menu)
-                .frame(width: 120)
             }
+            .frame(maxWidth: .infinity)
 
             if appState.exportSettings.resizeSettings.mode != .none {
                 resizeControls
@@ -645,67 +657,45 @@ struct FileSizeEstimateView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Estimated size")
-                .font(.caption)
+        HStack(spacing: 8) {
+            // Percentage badge
+            Text("\(Int(estimate.percentage))%")
+                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                .foregroundStyle(percentageColor)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(Capsule().fill(percentageColor.opacity(0.15)))
+
+            // Size: estimated from original
+            Text("\(estimate.estimatedTotal.formattedFileSize) from \(estimate.originalTotal.formattedFileSize)")
+                .font(.system(size: 11, design: .rounded))
                 .foregroundStyle(.secondary)
 
-            HStack(spacing: 4) {
-                // Percentage badge
-                Text("\(Int(estimate.percentage))%")
-                    .font(.system(size: 12, weight: .semibold, design: .rounded))
-                    .foregroundStyle(percentageColor)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(
-                        Capsule().fill(percentageColor.opacity(0.15))
-                    )
-
-                Text("of original")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            // Size breakdown
-            HStack(spacing: 0) {
-                Text(estimate.estimatedTotal.formattedFileSize)
-                    .font(.system(size: 13, weight: .medium, design: .rounded))
-                    .foregroundStyle(.primary)
-
-                Text(" from ")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                Text(estimate.originalTotal.formattedFileSize)
-                    .font(.system(size: 13, design: .rounded))
-                    .foregroundStyle(.secondary)
-            }
+            Spacer()
 
             // Savings indicator
             if estimate.savings > 0 {
-                HStack(spacing: 4) {
+                HStack(spacing: 2) {
                     Image(systemName: "arrow.down.circle.fill")
-                        .font(.caption)
+                        .font(.caption2)
                         .foregroundStyle(.green)
-
-                    Text("Save ~\(estimate.savings.formattedFileSize)")
-                        .font(.caption)
+                    Text("−\(estimate.savings.formattedFileSize)")
+                        .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(.green)
                 }
             } else if estimate.savings < 0 {
-                HStack(spacing: 4) {
+                HStack(spacing: 2) {
                     Image(systemName: "arrow.up.circle.fill")
-                        .font(.caption)
+                        .font(.caption2)
                         .foregroundStyle(.orange)
-
-                    Text("Increase ~\((-estimate.savings).formattedFileSize)")
-                        .font(.caption)
+                    Text("+\((-estimate.savings).formattedFileSize)")
+                        .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(.orange)
                 }
             }
         }
-        .padding(8)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
         .background(RoundedRectangle(cornerRadius: 6).fill(Color(nsColor: .controlBackgroundColor)))
     }
 

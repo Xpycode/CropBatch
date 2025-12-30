@@ -185,7 +185,7 @@ struct CropSectionView: View {
         @Bindable var state = appState
 
         VStack(alignment: .leading, spacing: 12) {
-            // Tool selector
+            // Tool selector (centered)
             // NOTE: Blur tool hidden - coordinate transform issues with rotations
             // See docs/blur-feature-status.md for details. Code preserved for future.
             HStack(spacing: 0) {
@@ -209,18 +209,19 @@ struct CropSectionView: View {
                     }
                     .buttonStyle(.plain)
                 }
-                Spacer()
+            }
+            .frame(maxWidth: .infinity)
 
-                // Output size badge (for crop tool)
-                if appState.currentTool == .crop, let majority = appState.majorityResolution {
-                    let newSize = appState.cropSettings.croppedSize(from: majority)
-                    Text("\(Int(newSize.width))×\(Int(newSize.height))")
-                        .font(.system(size: 11, design: .monospaced))
-                        .foregroundStyle(appState.cropSettings.hasAnyCrop ? .green : .secondary)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(Capsule().fill(Color(nsColor: .controlBackgroundColor)))
-                }
+            // Output size badge (for crop tool)
+            if appState.currentTool == .crop, let majority = appState.majorityResolution {
+                let newSize = appState.cropSettings.croppedSize(from: majority)
+                Text("\(Int(newSize.width))×\(Int(newSize.height))")
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(appState.cropSettings.hasAnyCrop ? .green : .secondary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(Capsule().fill(Color(nsColor: .controlBackgroundColor)))
+                    .frame(maxWidth: .infinity)
             }
 
             // Tool-specific controls
@@ -278,7 +279,7 @@ struct CropSectionView: View {
                 }
                 #endif
 
-                // Crop edge inputs - compact row
+                // Crop edge inputs - centered
                 HStack(spacing: 8) {
                     CompactCropField(label: "T", value: $state.cropSettings.cropTop) {
                         appState.recordCropChange()
@@ -292,19 +293,24 @@ struct CropSectionView: View {
                     CompactCropField(label: "R", value: $state.cropSettings.cropRight) {
                         appState.recordCropChange()
                     }
-
-                    // Reset button
-                    Button {
-                        appState.cropSettings = CropSettings()
-                        appState.recordCropChange()
-                    } label: {
-                        Image(systemName: "arrow.counterclockwise")
-                            .font(.caption)
-                    }
-                    .buttonStyle(.bordered)
-                    .disabled(!appState.cropSettings.hasAnyCrop)
-                    .help("Reset crop")
                 }
+                .frame(maxWidth: .infinity)
+
+                // Reset button - centered below
+                Button {
+                    appState.cropSettings = CropSettings()
+                    appState.recordCropChange()
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.counterclockwise")
+                        Text("Reset Crop")
+                    }
+                    .font(.caption)
+                }
+                .buttonStyle(.bordered)
+                .disabled(!appState.cropSettings.hasAnyCrop)
+                .help("Reset crop")
+                .frame(maxWidth: .infinity)
 
                 // Aspect guide options (always visible)
                 Divider()
@@ -496,7 +502,81 @@ struct ExportSectionView: View {
         @Bindable var state = appState
 
         VStack(alignment: .leading, spacing: 12) {
-            // Export button - PROMINENT
+            // Format buttons
+            VStack(spacing: 4) {
+                Text("Format")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                HStack(spacing: 4) {
+                    ForEach(ExportFormat.allCases) { fmt in
+                        Button {
+                            appState.exportSettings.format = fmt
+                            appState.markCustomSettings()
+                        } label: {
+                            Text(fmt.rawValue)
+                                .font(.system(size: 10, weight: .medium))
+                                .frame(minWidth: 36, minHeight: 22)
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(appState.exportSettings.format == fmt ? .accentColor : .secondary)
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity)
+
+            Divider()
+
+            // Naming buttons
+            VStack(spacing: 4) {
+                Text("Naming")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                HStack(spacing: 4) {
+                    ForEach(RenameMode.allCases) { mode in
+                        Button {
+                            appState.exportSettings.renameSettings.mode = mode
+                            appState.markCustomSettings()
+                        } label: {
+                            Text(mode.rawValue)
+                                .font(.system(size: 10, weight: .medium))
+                                .frame(minHeight: 22)
+                                .padding(.horizontal, 8)
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(appState.exportSettings.renameSettings.mode == mode ? .accentColor : .secondary)
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity)
+
+            // Output preview
+            if let firstImage = appState.images.first {
+                HStack(spacing: 4) {
+                    Image(systemName: "arrow.right")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                    Text(appState.exportSettings.outputFilename(for: firstImage.url))
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+            }
+
+            // Warning if nothing to export
+            if !appState.canExport && !appState.images.isEmpty && !appState.isProcessing {
+                Text("Apply crop, transform, or resize to export")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+            }
+
+            // Export options (always visible)
+            Divider()
+            ExportOptionsExpandedView()
+
+            // Export button - at bottom with padding
+            Spacer().frame(height: 8)
+            
             Button {
                 selectOutputFolder()
             } label: {
@@ -524,70 +604,6 @@ struct ExportSectionView: View {
                         .foregroundStyle(.secondary)
                 }
             }
-
-            // Inline export options
-            HStack(spacing: 12) {
-                // Format picker
-                HStack(spacing: 4) {
-                    Text("Format")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Picker("", selection: Binding(
-                        get: { appState.exportSettings.format },
-                        set: { appState.exportSettings.format = $0; appState.markCustomSettings() }
-                    )) {
-                        ForEach(ExportFormat.allCases) { fmt in
-                            Text(fmt.rawValue).tag(fmt)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                    .frame(width: 80)
-                }
-
-                Spacer()
-
-                // Naming mode
-                HStack(spacing: 4) {
-                    Text("Naming")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Picker("", selection: Binding(
-                        get: { appState.exportSettings.renameSettings.mode },
-                        set: { appState.exportSettings.renameSettings.mode = $0; appState.markCustomSettings() }
-                    )) {
-                        ForEach(RenameMode.allCases) { mode in
-                            Text(mode.rawValue).tag(mode)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                    .frame(width: 110)
-                }
-            }
-
-            // Output preview
-            if let firstImage = appState.images.first {
-                HStack(spacing: 4) {
-                    Image(systemName: "arrow.right")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                    Text(appState.exportSettings.outputFilename(for: firstImage.url))
-                        .font(.system(size: 10, design: .monospaced))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                }
-            }
-
-            // Warning if nothing to export
-            if !appState.canExport && !appState.images.isEmpty && !appState.isProcessing {
-                Text("Apply crop, transform, or resize to export")
-                    .font(.caption)
-                    .foregroundStyle(.orange)
-            }
-
-            // Export options (always visible)
-            Divider()
-            ExportOptionsExpandedView()
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
@@ -777,21 +793,19 @@ struct ExportOptionsExpandedView: View {
                 }
             }
 
-            // Keep original format toggle
-            Toggle("Keep original format", isOn: Binding(
-                get: { appState.exportSettings.preserveOriginalFormat },
-                set: { appState.exportSettings.preserveOriginalFormat = $0; appState.markCustomSettings() }
-            ))
-            .font(.caption)
-
             Divider()
 
             // Resize settings
             ResizeSettingsSection()
 
-            // File size estimate
-            if !appState.images.isEmpty && appState.cropSettings.hasAnyCrop {
+            Divider()
+
+            // File size estimate (always visible when images loaded)
+            if !appState.images.isEmpty {
                 FileSizeEstimateView()
+                    .frame(maxWidth: .infinity)
+                
+                Divider()
             }
         }
     }
