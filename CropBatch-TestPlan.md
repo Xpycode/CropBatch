@@ -40,7 +40,7 @@
 - [x] Shift+Control+Arrow gives 10x adjustment
 - [x] Control+Drag snaps to 10px grid (orange handles)
 ### Crop Validation
-- [ ] Cannot crop beyond minimum 10px remaining
+- [x] Cannot crop beyond minimum 10px remaining
 - [x] Values clamp when switching image sizes
 ## Phase 3 - Zoom & Display
 ### Zoom Modes
@@ -79,8 +79,8 @@
 ## Phase 6 - Advanced Crop Options
 ### Edge Link Mode
 - [x] None mode - edges independent
-- [ ] Top/Bottom link mode works
-- [ ] Left/Right link mode works
+- [x] Top/Bottom link mode works
+- [x] Left/Right link mode works
 - [ ] All Edges link mode works
 ### Aspect Ratio Guide
 - [x] 16:9 guide overlay appears
