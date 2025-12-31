@@ -211,6 +211,8 @@ final class AppState {
     }
 
     func addImages(from urls: [URL]) {
+        let wasEmpty = images.isEmpty
+
         let newImages = urls.compactMap { url -> ImageItem? in
             guard let image = NSImage(contentsOf: url) else { return nil }
             return ImageItem(url: url, originalImage: image)
@@ -220,6 +222,17 @@ final class AppState {
         // Set first image as active if none selected
         if activeImageID == nil {
             activeImageID = images.first?.id
+        }
+
+        // Auto-detect export format from first imported image
+        if wasEmpty, let firstImage = newImages.first {
+            let ext = firstImage.fileExtension
+            if let detectedFormat = ExportFormat.allCases.first(where: {
+                $0.fileExtension == ext || (ext == "jpeg" && $0 == .jpeg)
+            }) {
+                exportSettings.format = detectedFormat
+                selectedPresetID = nil  // Mark as custom since we changed the format
+            }
         }
     }
 

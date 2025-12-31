@@ -1106,7 +1106,7 @@ struct ZoomPicker: NSViewRepresentable {
             self.selection = selection
         }
 
-        @objc func segmentChanged(_ sender: NSSegmentedControl) {
+        @MainActor @objc func segmentChanged(_ sender: NSSegmentedControl) {
             let index = sender.selectedSegment
             if index >= 0 && index < ZoomMode.allCases.count {
                 selection.wrappedValue = ZoomMode.allCases[index]

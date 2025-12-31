@@ -20,8 +20,21 @@ struct CLIHandler {
     /// Check if the app was launched with CLI arguments
     static func hasArguments() -> Bool {
         let args = CommandLine.arguments
-        // Skip first arg (executable path) and any Xcode/system args
-        let relevantArgs = args.dropFirst().filter { !$0.hasPrefix("-NS") && !$0.hasPrefix("-Apple") }
+        // Skip first arg (executable path) and filter system/Xcode debug args
+        let systemPrefixes = ["-NS", "-Apple", "-com.apple.", "-CF"]
+        let systemValues = ["YES", "NO", "true", "false", "1", "0"]
+
+        let relevantArgs = args.dropFirst().filter { arg in
+            // Skip args that start with system prefixes
+            if systemPrefixes.contains(where: { arg.hasPrefix($0) }) {
+                return false
+            }
+            // Skip common boolean values (often follow system flags)
+            if systemValues.contains(arg) {
+                return false
+            }
+            return true
+        }
         return !relevantArgs.isEmpty
     }
 
@@ -89,8 +102,12 @@ struct CLIHandler {
                     options.suffix = args[i]
                 }
             default:
-                // Treat as input file path
-                if !arg.hasPrefix("-") {
+                // Treat as input file path, but skip system args
+                let systemPrefixes = ["-NS", "-Apple", "-com.apple.", "-CF"]
+                let systemValues = ["YES", "NO", "true", "false", "1", "0"]
+                if !arg.hasPrefix("-") &&
+                   !systemPrefixes.contains(where: { arg.hasPrefix($0) }) &&
+                   !systemValues.contains(arg) {
                     options.inputPaths.append(arg)
                 }
             }

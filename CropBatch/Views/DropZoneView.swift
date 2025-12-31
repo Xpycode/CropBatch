@@ -12,7 +12,7 @@ struct DropZoneView: View {
                 .symbolEffect(.pulse, options: .repeating, isActive: isTargeted)
 
             VStack(spacing: 8) {
-                Text("Drop Screenshots Here")
+                Text("Drop Images Here")
                     .font(.title2)
                     .fontWeight(.medium)
 
