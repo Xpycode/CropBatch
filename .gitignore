@@ -33,3 +33,6 @@ Thumbs.db
 
 # Tool configs
 .serena/
+
+# Lock files
+*~lock~
