@@ -11,9 +11,9 @@ A macOS app for batch cropping images with configurable edge trimming.
 
 ## Screenshots
 
-| Drop Zone | Editing | Export Settings |
-|:---------:|:-------:|:---------------:|
-| ![Drop Zone](Screenshots/mainwindow-1.png) | ![Editing](Screenshots/mainwindow-2.png) | ![Export](Screenshots/mainwindow-3.png) |
+![CropBatch](Screenshots/mainwindow-1.png)
+![CropBatch](Screenshots/mainwindow-2.png)
+![CropBatch](Screenshots/mainwindow-3.png)
 
 ## Features
 
