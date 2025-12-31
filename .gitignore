@@ -26,3 +26,10 @@ Carthage/Build/
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# Build artifacts
+*.app/
+*.dmg
+
+# Tool configs
+.serena/
