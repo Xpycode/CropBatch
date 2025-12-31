@@ -1,6 +1,6 @@
 # CropBatch
 
-A macOS app for batch cropping screenshots with configurable edge trimming.
+A macOS app for batch cropping images with configurable edge trimming.
 
 ![macOS](https://img.shields.io/badge/macOS-15.0+-blue.svg)
 ![Swift](https://img.shields.io/badge/Swift-6.0-orange.svg)
@@ -8,6 +8,12 @@ A macOS app for batch cropping screenshots with configurable edge trimming.
 ![Version](https://img.shields.io/badge/version-1.0-brightgreen.svg)
 [![Download](https://img.shields.io/badge/Download-v1.0-blue.svg)](https://github.com/Xpycode/CropBatch/releases/latest)
 ![Downloads](https://img.shields.io/github/downloads/Xpycode/CropBatch/total.svg)
+
+## Screenshots
+
+| Drop Zone | Editing | Export Settings |
+|:---------:|:-------:|:---------------:|
+| ![Drop Zone](Screenshots/mainwindow-1.png) | ![Editing](Screenshots/mainwindow-2.png) | ![Export](Screenshots/mainwindow-3.png) |
 
 ## Features
 
@@ -29,7 +35,7 @@ A macOS app for batch cropping screenshots with configurable edge trimming.
 
 ## Usage
 
-1. **Import** — Drop screenshots onto the window or click Import Images
+1. **Import** — Drop images onto the window or click Import Images
 2. **Crop** — Drag handles on the preview, or scrub the T/B/L/R controls
 3. **Configure** — Set format, naming, and resize options
 4. **Export** — Click Export All to save cropped images
