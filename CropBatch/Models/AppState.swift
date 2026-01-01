@@ -75,6 +75,11 @@ final class AppState {
     // Global image transform (rotation/flip) - applies to all images
     var imageTransform: ImageTransform = .identity
 
+    // Snap points for rectangle snapping (keyed by image ID)
+    var snapPointsCache: [UUID: SnapPoints] = [:]
+    var isDetectingSnapPoints = false
+    var snapEnabled = true  // Master toggle for snap functionality
+
     private let recentPresetsKey = "CropBatch.RecentPresetIDs"
 
     /// Track a preset as recently used
@@ -259,9 +264,10 @@ final class AppState {
         images.removeAll { ids.contains($0.id) }
         selectedImageIDs.subtract(ids)
 
-        // Clean up blur regions for removed images
+        // Clean up blur regions and snap points for removed images
         for id in ids {
             blurRegions.removeValue(forKey: id)
+            snapPointsCache.removeValue(forKey: id)
         }
 
         // Reset active image if it was removed
@@ -277,6 +283,7 @@ final class AppState {
         activeImageID = nil
         cropSettings = CropSettings()
         blurRegions.removeAll()
+        snapPointsCache.removeAll()
         selectedBlurRegionID = nil
         imageTransform = .identity
     }
@@ -495,6 +502,54 @@ final class AppState {
     /// Get transform for a specific image (returns global transform)
     func transformForImage(_ imageID: UUID) -> ImageTransform {
         imageTransform
+    }
+
+    // MARK: - Snap Points (Rectangle Detection)
+
+    /// Get snap points for the active image
+    var activeSnapPoints: SnapPoints {
+        guard let id = activeImageID else { return .empty }
+        return snapPointsCache[id] ?? .empty
+    }
+
+    /// Detect snap points for the active image
+    @MainActor
+    func detectSnapPointsForActiveImage() async {
+        guard let image = activeImage else { return }
+
+        // Skip if already cached
+        if snapPointsCache[image.id] != nil { return }
+
+        isDetectingSnapPoints = true
+
+        let snapPoints = await RectangleDetector.detect(in: image.originalImage)
+        snapPointsCache[image.id] = snapPoints
+
+        isDetectingSnapPoints = false
+    }
+
+    /// Clear snap points cache (call when images are removed)
+    func clearSnapPointsCache(for imageIDs: Set<UUID>? = nil) {
+        if let ids = imageIDs {
+            for id in ids {
+                snapPointsCache.removeValue(forKey: id)
+            }
+        } else {
+            snapPointsCache.removeAll()
+        }
+    }
+
+    /// Find the nearest snap point for a given edge value
+    func snapValue(_ value: Int, for edge: CropEdge, threshold: Int = 15) -> Int? {
+        guard snapEnabled else { return nil }
+        let snapPoints = activeSnapPoints
+
+        switch edge {
+        case .top, .bottom:
+            return snapPoints.nearestHorizontalEdge(to: value, threshold: threshold)
+        case .left, .right:
+            return snapPoints.nearestVerticalEdge(to: value, threshold: threshold)
+        }
     }
 
     // MARK: - Export

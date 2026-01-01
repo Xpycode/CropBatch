@@ -61,7 +61,21 @@ struct CropSettingsView: View {
                 }
             }
 
-            // Auto-detect UI - shelved (not working reliably)
+            // Snap to edges toggle
+            HStack(spacing: 8) {
+                Toggle(isOn: $state.snapEnabled) {
+                    Label("Snap to Edges", systemImage: "rectangle.on.rectangle.angled")
+                        .font(.caption)
+                }
+                .toggleStyle(.switch)
+                .controlSize(.mini)
+
+                if appState.isDetectingSnapPoints {
+                    ProgressView()
+                        .controlSize(.mini)
+                }
+            }
+            .help("Snap crop handles to detected UI element edges (S to toggle)")
 
             HStack {
                 Button("Reset All") {
@@ -74,6 +88,13 @@ struct CropSettingsView: View {
                 .disabled(!appState.cropSettings.hasAnyCrop)
 
                 Spacer()
+
+                // Snap point count indicator
+                if appState.snapEnabled && appState.activeSnapPoints.hasDetections {
+                    Text("\(appState.activeSnapPoints.horizontalEdges.count + appState.activeSnapPoints.verticalEdges.count) edges")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
     }

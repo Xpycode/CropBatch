@@ -306,6 +306,30 @@ struct CropSectionView: View {
                 .help("Reset crop")
                 .frame(maxWidth: .infinity)
 
+                // Snap to edges toggle
+                HStack(spacing: 6) {
+                    Toggle(isOn: $state.snapEnabled) {
+                        Label("Snap to Edges", systemImage: "magnet")
+                            .font(.caption)
+                    }
+                    .toggleStyle(.switch)
+                    .controlSize(.mini)
+
+                    if appState.isDetectingSnapPoints {
+                        ProgressView()
+                            .controlSize(.mini)
+                    } else if appState.snapEnabled && appState.activeSnapPoints.hasDetections {
+                        Text("\(appState.activeSnapPoints.horizontalEdges.count + appState.activeSnapPoints.verticalEdges.count)")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Capsule().fill(Color.green.opacity(0.2)))
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.top, 4)
+
                 // Aspect guide options (always visible)
                 Divider()
                 AdvancedCropOptionsView()
@@ -1005,6 +1029,7 @@ struct KeyboardShortcutsContentView: View {
                 ShortcutRow(keys: "⇧⌥ Arrow", description: "Uncrop")
                 ShortcutRow(keys: "⇧⌃ Arrow", description: "×10 adjust")
                 ShortcutRow(keys: "⌃ Drag", description: "Snap grid")
+                ShortcutRow(keys: "S", description: "Toggle snap")
                 ShortcutRow(keys: "Dbl-click", description: "Reset")
             }
             .frame(width: 190, alignment: .leading)
