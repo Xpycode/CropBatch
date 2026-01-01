@@ -908,6 +908,11 @@ struct ExportOptionsExpandedView: View {
 
             Divider()
 
+            // Watermark settings
+            WatermarkSettingsSection()
+
+            Divider()
+
             // File size estimate (always visible when images loaded)
             if !appState.images.isEmpty {
                 FileSizeEstimateView()

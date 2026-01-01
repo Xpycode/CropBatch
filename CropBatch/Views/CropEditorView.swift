@@ -136,6 +136,15 @@ struct CropEditorView: View {
                         transform: currentTransform
                     )
                 }
+
+                // Watermark preview (shows where watermark will appear on export)
+                if appState.exportSettings.watermarkSettings.isValid {
+                    WatermarkPreviewOverlay(
+                        imageSize: displayedImageSize,
+                        displayedSize: scaledImageSize,
+                        cropSettings: appState.cropSettings
+                    )
+                }
             }
 
             // Top-left info bubble
@@ -1172,6 +1181,133 @@ struct AspectRatioGuideView: View {
 }
 
 // MARK: - Snap Guides Overlay
+
+// MARK: - Watermark Preview Overlay
+
+struct WatermarkPreviewOverlay: View {
+    let imageSize: CGSize        // Original image size in pixels
+    let displayedSize: CGSize    // Displayed size on screen
+    let cropSettings: CropSettings
+    @Environment(AppState.self) private var appState
+
+    @State private var isDragging = false
+    @State private var dragStartOffset: CGPoint = .zero
+
+    private var scale: CGFloat {
+        displayedSize.width / imageSize.width
+    }
+
+    /// The crop region in displayed coordinates
+    private var cropRect: CGRect {
+        let left = CGFloat(cropSettings.cropLeft) * scale
+        let top = CGFloat(cropSettings.cropTop) * scale
+        let right = CGFloat(cropSettings.cropRight) * scale
+        let bottom = CGFloat(cropSettings.cropBottom) * scale
+
+        return CGRect(
+            x: left,
+            y: top,
+            width: displayedSize.width - left - right,
+            height: displayedSize.height - top - bottom
+        )
+    }
+
+    var body: some View {
+        let settings = appState.exportSettings.watermarkSettings
+
+        if settings.isValid, let watermarkImage = settings.cachedImage {
+            // Calculate watermark size and position within crop region
+            let wmSize = watermarkSize(for: cropRect.size, watermark: watermarkImage)
+            let wmPosition = watermarkPosition(for: cropRect.size, wmSize: wmSize)
+
+            Image(nsImage: watermarkImage)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(width: wmSize.width, height: wmSize.height)
+                .opacity(isDragging ? min(settings.opacity + 0.3, 1.0) : settings.opacity)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 4)
+                        .strokeBorder(isDragging ? Color.accentColor : Color.clear, lineWidth: 2)
+                )
+                .position(
+                    x: cropRect.minX + wmPosition.x + wmSize.width / 2,
+                    y: cropRect.minY + wmPosition.y + wmSize.height / 2
+                )
+                .gesture(
+                    DragGesture()
+                        .onChanged { value in
+                            if !isDragging {
+                                isDragging = true
+                                dragStartOffset = CGPoint(
+                                    x: appState.exportSettings.watermarkSettings.offsetX,
+                                    y: appState.exportSettings.watermarkSettings.offsetY
+                                )
+                            }
+                            // Convert drag translation to pixel coordinates
+                            let deltaX = value.translation.width / scale
+                            let deltaY = value.translation.height / scale
+                            appState.exportSettings.watermarkSettings.offsetX = dragStartOffset.x + deltaX
+                            appState.exportSettings.watermarkSettings.offsetY = dragStartOffset.y + deltaY
+                        }
+                        .onEnded { _ in
+                            isDragging = false
+                            appState.markCustomSettings()
+                        }
+                )
+                .onHover { hovering in
+                    if hovering {
+                        NSCursor.openHand.push()
+                    } else {
+                        NSCursor.pop()
+                    }
+                }
+        }
+    }
+
+    private func watermarkSize(for containerSize: CGSize, watermark: NSImage) -> CGSize {
+        let settings = appState.exportSettings.watermarkSettings
+        let originalSize = watermark.size
+        guard originalSize.width > 0 && originalSize.height > 0 else {
+            return .zero
+        }
+
+        let aspectRatio = originalSize.width / originalSize.height
+
+        switch settings.sizeMode {
+        case .original:
+            // Scale down if watermark is larger than container
+            let scaledWidth = min(originalSize.width * scale, containerSize.width * 0.5)
+            return CGSize(width: scaledWidth, height: scaledWidth / aspectRatio)
+
+        case .percentage:
+            let targetWidth = containerSize.width * (settings.sizeValue / 100.0)
+            return CGSize(width: targetWidth, height: targetWidth / aspectRatio)
+
+        case .fixedWidth:
+            let scaledWidth = settings.sizeValue * scale
+            return CGSize(width: scaledWidth, height: scaledWidth / aspectRatio)
+
+        case .fixedHeight:
+            let scaledHeight = settings.sizeValue * scale
+            return CGSize(width: scaledHeight * aspectRatio, height: scaledHeight)
+        }
+    }
+
+    private func watermarkPosition(for containerSize: CGSize, wmSize: CGSize) -> CGPoint {
+        let settings = appState.exportSettings.watermarkSettings
+        let margin = settings.margin * scale
+        let anchor = settings.position.normalizedAnchor
+
+        let availableWidth = containerSize.width - (2 * margin)
+        let availableHeight = containerSize.height - (2 * margin)
+
+        // Include user offsets (scaled to display size)
+        let x = margin + (availableWidth - wmSize.width) * anchor.x + (settings.offsetX * scale)
+        let y = margin + (availableHeight - wmSize.height) * anchor.y + (settings.offsetY * scale)
+
+        return CGPoint(x: x, y: y)
+    }
+}
 
 struct SnapGuidesView: View {
     let imageSize: CGSize

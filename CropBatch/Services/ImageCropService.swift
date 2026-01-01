@@ -376,6 +376,60 @@ struct ImageCropService {
         return ciContext.createCGImage(pixelated, from: rect)
     }
 
+
+    // MARK: - Watermark Overlay
+    //
+    // Applies a PNG watermark image overlay at a configurable position,
+    // size, and opacity. Uses CGContext for GPU-friendly compositing.
+
+    /// Applies a watermark image overlay to an NSImage
+    /// - Parameters:
+    ///   - image: The source image
+    ///   - settings: Watermark configuration (image, position, size, opacity)
+    /// - Returns: A new image with the watermark applied
+    static func applyWatermark(_ image: NSImage, settings: WatermarkSettings) -> NSImage {
+        // Skip if watermark is disabled or invalid
+        guard settings.isValid,
+              let watermarkImage = settings.loadedImage,
+              let watermarkCGImage = watermarkImage.cgImage(forProposedRect: nil, context: nil, hints: nil)
+        else {
+            return image
+        }
+
+        guard let sourceCGImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+            return image
+        }
+
+        let imageSize = CGSize(width: sourceCGImage.width, height: sourceCGImage.height)
+
+        // Calculate watermark placement
+        guard let watermarkRect = settings.watermarkRect(for: imageSize) else {
+            return image
+        }
+
+        // Create CGContext for compositing
+        let colorSpace = sourceCGImage.colorSpace ?? CGColorSpaceCreateDeviceRGB()
+        guard let context = CGContext(
+            data: nil,
+            width: Int(imageSize.width),
+            height: Int(imageSize.height),
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: colorSpace,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return image }
+
+        // Draw the source image first
+        context.draw(sourceCGImage, in: CGRect(origin: .zero, size: imageSize))
+
+        // Apply opacity and draw watermark
+        context.setAlpha(settings.opacity)
+        context.draw(watermarkCGImage, in: watermarkRect)
+
+        guard let resultImage = context.makeImage() else { return image }
+        return NSImage(cgImage: resultImage, size: imageSize)
+    }
+
     // ┌─────────────────────────────────────────────────────────────────────┐
     // │  CRITICAL: Image Orientation Handling                              │
     // │                                                                     │
@@ -614,7 +668,7 @@ struct ImageCropService {
     ) throws -> URL {
         var processedImage = item.originalImage
 
-        // Pipeline order: Transform -> Blur -> Crop -> Resize
+        // Pipeline order: Transform -> Blur -> Crop -> Resize -> Watermark
 
         // 1. Apply transform (rotation/flip) FIRST
         if !transform.isIdentity {
@@ -639,6 +693,11 @@ struct ImageCropService {
         // 4. Apply resize if enabled
         if let targetSize = calculateResizedSize(from: processedImage.size, with: exportSettings.resizeSettings) {
             processedImage = resize(processedImage, to: targetSize)
+        }
+
+        // 5. Apply watermark if enabled
+        if exportSettings.watermarkSettings.isValid {
+            processedImage = applyWatermark(processedImage, settings: exportSettings.watermarkSettings)
         }
 
         // Get output URL from export settings (with index for batch rename)

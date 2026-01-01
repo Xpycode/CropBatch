@@ -52,6 +52,11 @@ struct ExportSettingsView: View {
             // Resize settings
             ResizeSettingsSection()
 
+            Divider()
+
+            // Watermark settings
+            WatermarkSettingsSection()
+
             // Output preview
             if let firstImage = appState.images.first {
                 OutputPreview(inputURL: firstImage.url, exportSettings: appState.exportSettings)
@@ -640,6 +645,411 @@ struct RenameSettingsSection: View {
         }
         .padding(8)
         .background(RoundedRectangle(cornerRadius: 6).fill(Color(nsColor: .controlBackgroundColor)))
+    }
+}
+
+
+// MARK: - Watermark Settings Section
+
+struct WatermarkSettingsSection: View {
+    @Environment(AppState.self) private var appState
+    @State private var showingFilePicker = false
+    @State private var dragOver = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // Header with enable toggle
+            HStack {
+                Text("Watermark")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Toggle("", isOn: Binding(
+                    get: { appState.exportSettings.watermarkSettings.isEnabled },
+                    set: {
+                        appState.exportSettings.watermarkSettings.isEnabled = $0
+                        appState.markCustomSettings()
+                    }
+                ))
+                .toggleStyle(.switch)
+                .controlSize(.mini)
+            }
+
+            if appState.exportSettings.watermarkSettings.isEnabled {
+                watermarkControls
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var watermarkControls: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            // Image picker / preview
+            imagePickerSection
+
+            if appState.exportSettings.watermarkSettings.imageURL != nil {
+                // Position picker
+                positionPicker
+
+                // Size controls
+                sizeControls
+
+                // Opacity slider
+                opacitySlider
+
+                // Margin control
+                marginControl
+            }
+        }
+        .padding(8)
+        .background(RoundedRectangle(cornerRadius: 6).fill(Color(nsColor: .controlBackgroundColor)))
+    }
+
+    @ViewBuilder
+    private var imagePickerSection: some View {
+        VStack(spacing: 6) {
+            if let imageURL = appState.exportSettings.watermarkSettings.imageURL,
+               let image = appState.exportSettings.watermarkSettings.cachedImage {
+                // Show preview with remove button (use cached image, not URL - sandbox!)
+                HStack {
+                    Image(nsImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(height: 40)
+                        .background(
+                            // Checkerboard pattern for transparency
+                            Image(systemName: "checkerboard.rectangle")
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .foregroundStyle(.quaternary)
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: 4))
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(imageURL.lastPathComponent)
+                            .font(.caption)
+                            .lineLimit(1)
+                        Text("\(Int(image.size.width)) × \(Int(image.size.height))")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Spacer()
+
+                    Button {
+                        clearWatermark()
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            } else {
+                // Drop zone for image
+                VStack(spacing: 4) {
+                    Image(systemName: "photo.badge.plus")
+                        .font(.title2)
+                        .foregroundStyle(.secondary)
+                    Text("Drop PNG or click to choose")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity)
+                .frame(height: 60)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [5]))
+                        .foregroundStyle(dragOver ? .blue : .secondary.opacity(0.5))
+                )
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    showingFilePicker = true
+                }
+                .onDrop(of: [.fileURL], isTargeted: $dragOver) { providers in
+                    handleDrop(providers)
+                }
+                .fileImporter(
+                    isPresented: $showingFilePicker,
+                    allowedContentTypes: [.png, .jpeg, .heic, .webP, .tiff],
+                    allowsMultipleSelection: false
+                ) { result in
+                    handleFileSelection(result)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var positionPicker: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Position")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            // 3x3 position grid
+            Grid(horizontalSpacing: 4, verticalSpacing: 4) {
+                GridRow {
+                    positionButton(.topLeft)
+                    positionButton(.topCenter)
+                    positionButton(.topRight)
+                }
+                GridRow {
+                    positionButton(.centerLeft)
+                    positionButton(.center)
+                    positionButton(.centerRight)
+                }
+                GridRow {
+                    positionButton(.bottomLeft)
+                    positionButton(.bottomCenter)
+                    positionButton(.bottomRight)
+                }
+            }
+        }
+    }
+
+    private func positionButton(_ position: WatermarkPosition) -> some View {
+        let isSelected = appState.exportSettings.watermarkSettings.position == position
+        return Button {
+            appState.exportSettings.watermarkSettings.position = position
+            appState.markCustomSettings()
+        } label: {
+            Image(systemName: position.symbolName)
+                .font(.system(size: 10))
+                .frame(width: 24, height: 20)
+        }
+        .buttonStyle(.bordered)
+        .tint(isSelected ? .accentColor : .secondary)
+    }
+
+    @ViewBuilder
+    private var sizeControls: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Size")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            HStack(spacing: 4) {
+                ForEach(WatermarkSizeMode.allCases) { mode in
+                    Button {
+                        appState.exportSettings.watermarkSettings.sizeMode = mode
+                        appState.markCustomSettings()
+                    } label: {
+                        Text(shortLabel(for: mode))
+                            .font(.system(size: 9, weight: .medium))
+                            .frame(minWidth: 30, minHeight: 20)
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(appState.exportSettings.watermarkSettings.sizeMode == mode ? .accentColor : .secondary)
+                }
+            }
+
+            if appState.exportSettings.watermarkSettings.sizeMode != .original {
+                HStack {
+                    Slider(value: Binding(
+                        get: { appState.exportSettings.watermarkSettings.sizeValue },
+                        set: {
+                            appState.exportSettings.watermarkSettings.sizeValue = $0
+                            appState.markCustomSettings()
+                        }
+                    ), in: sizeRange, step: sizeStep)
+                    .controlSize(.small)
+
+                    Text(sizeLabel)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                        .frame(width: 50, alignment: .trailing)
+                }
+            }
+        }
+    }
+
+    private func shortLabel(for mode: WatermarkSizeMode) -> String {
+        switch mode {
+        case .original: return "Orig"
+        case .percentage: return "%"
+        case .fixedWidth: return "W"
+        case .fixedHeight: return "H"
+        }
+    }
+
+    private var sizeRange: ClosedRange<Double> {
+        switch appState.exportSettings.watermarkSettings.sizeMode {
+        case .original: return 0...100
+        case .percentage: return 5...50
+        case .fixedWidth, .fixedHeight: return 50...500
+        }
+    }
+
+    private var sizeStep: Double {
+        switch appState.exportSettings.watermarkSettings.sizeMode {
+        case .original: return 1
+        case .percentage: return 1
+        case .fixedWidth, .fixedHeight: return 10
+        }
+    }
+
+    private var sizeLabel: String {
+        let value = appState.exportSettings.watermarkSettings.sizeValue
+        switch appState.exportSettings.watermarkSettings.sizeMode {
+        case .original: return ""
+        case .percentage: return "\(Int(value))%"
+        case .fixedWidth, .fixedHeight: return "\(Int(value))px"
+        }
+    }
+
+    @ViewBuilder
+    private var opacitySlider: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text("Opacity")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text("\(Int(appState.exportSettings.watermarkSettings.opacity * 100))%")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            }
+
+            Slider(value: Binding(
+                get: { appState.exportSettings.watermarkSettings.opacity },
+                set: {
+                    appState.exportSettings.watermarkSettings.opacity = $0
+                    appState.markCustomSettings()
+                }
+            ), in: 0.1...1.0, step: 0.05)
+            .controlSize(.small)
+        }
+    }
+
+    @ViewBuilder
+    private var marginControl: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            // Margin
+            HStack {
+                Text("Margin")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                TextField("", value: Binding(
+                    get: { appState.exportSettings.watermarkSettings.margin },
+                    set: {
+                        appState.exportSettings.watermarkSettings.margin = max(0, $0)
+                        appState.markCustomSettings()
+                    }
+                ), format: .number)
+                .textFieldStyle(.roundedBorder)
+                .frame(width: 60)
+
+                Text("px")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            // X/Y Offset
+            HStack(spacing: 12) {
+                HStack(spacing: 4) {
+                    Text("X")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .frame(width: 12)
+                    TextField("", value: Binding(
+                        get: { appState.exportSettings.watermarkSettings.offsetX },
+                        set: {
+                            appState.exportSettings.watermarkSettings.offsetX = $0
+                            appState.markCustomSettings()
+                        }
+                    ), format: .number)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 50)
+                }
+
+                HStack(spacing: 4) {
+                    Text("Y")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .frame(width: 12)
+                    TextField("", value: Binding(
+                        get: { appState.exportSettings.watermarkSettings.offsetY },
+                        set: {
+                            appState.exportSettings.watermarkSettings.offsetY = $0
+                            appState.markCustomSettings()
+                        }
+                    ), format: .number)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 50)
+                }
+
+                // Reset button
+                if appState.exportSettings.watermarkSettings.offsetX != 0 ||
+                   appState.exportSettings.watermarkSettings.offsetY != 0 {
+                    Button {
+                        appState.exportSettings.watermarkSettings.offsetX = 0
+                        appState.exportSettings.watermarkSettings.offsetY = 0
+                        appState.markCustomSettings()
+                    } label: {
+                        Image(systemName: "arrow.counterclockwise")
+                            .font(.caption)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                    .help("Reset offset")
+                }
+            }
+        }
+    }
+
+    // MARK: - Actions
+
+    private func handleDrop(_ providers: [NSItemProvider]) -> Bool {
+        guard let provider = providers.first else { return false }
+
+        provider.loadItem(forTypeIdentifier: "public.file-url", options: nil) { data, _ in
+            guard let data = data as? Data,
+                  let url = URL(dataRepresentation: data, relativeTo: nil) else { return }
+
+            DispatchQueue.main.async {
+                loadWatermarkImage(from: url)
+            }
+        }
+        return true
+    }
+
+    private func handleFileSelection(_ result: Result<[URL], Error>) {
+        if case .success(let urls) = result, let url = urls.first {
+            loadWatermarkImage(from: url, isSecurityScoped: true)
+        }
+    }
+
+    private func loadWatermarkImage(from url: URL, isSecurityScoped: Bool = false) {
+        // For sandboxed apps, fileImporter URLs require security-scoped access
+        let didStartAccess = isSecurityScoped && url.startAccessingSecurityScopedResource()
+        defer {
+            if didStartAccess {
+                url.stopAccessingSecurityScopedResource()
+            }
+        }
+
+        // Load and store the image DATA (not just cache) - survives state changes
+        guard let imageData = try? Data(contentsOf: url),
+              let image = NSImage(data: imageData) else {
+            print("Failed to load watermark image from: \(url.path)")
+            return
+        }
+
+        appState.exportSettings.watermarkSettings.imageURL = url
+        appState.exportSettings.watermarkSettings.imageData = imageData  // Store the data!
+        appState.exportSettings.watermarkSettings.cachedImage = image
+        appState.exportSettings.watermarkSettings.isEnabled = true
+        appState.markCustomSettings()
+    }
+
+    private func clearWatermark() {
+        appState.exportSettings.watermarkSettings.imageURL = nil
+        appState.exportSettings.watermarkSettings.imageData = nil
+        appState.exportSettings.watermarkSettings.cachedImage = nil
+        appState.markCustomSettings()
     }
 }
 

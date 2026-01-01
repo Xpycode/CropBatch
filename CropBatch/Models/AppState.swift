@@ -691,6 +691,11 @@ final class AppState {
                 processedImage = ImageCropService.resize(processedImage, to: targetSize)
             }
 
+            // Apply watermark if enabled
+            if settings.watermarkSettings.isValid {
+                processedImage = ImageCropService.applyWatermark(processedImage, settings: settings.watermarkSettings)
+            }
+
             // Determine format
             let format: UTType
             if settings.preserveOriginalFormat {

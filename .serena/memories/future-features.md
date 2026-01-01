@@ -24,7 +24,7 @@ Core focus: Load images → Configure crop → Export batch
 
 ## On Hold (For Later Session)
 - [ ] Blur/Redact tool - See `docs/blur-feature-status.md` for details
-- [ ] Watermark overlay
+- [x] Watermark overlay (PNG image with position, size, opacity, margin controls)
 - [ ] Aspect ratio lock during crop
 - [ ] Before/after comparison improvements
 - [ ] Menu bar / status bar quick access

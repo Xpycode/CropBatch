@@ -123,6 +123,7 @@ struct ExportSettings: Equatable {
     var outputDirectory: OutputDirectory = .sameAsSource
     var resizeSettings: ResizeSettings = ResizeSettings()
     var renameSettings: RenameSettings = RenameSettings()
+    var watermarkSettings: WatermarkSettings = WatermarkSettings()
 
     enum OutputDirectory: Equatable {
         case sameAsSource
