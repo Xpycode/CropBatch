@@ -206,18 +206,6 @@ struct CropSectionView: View {
             }
             .frame(maxWidth: .infinity)
 
-            // Output size badge (for crop tool)
-            if appState.currentTool == .crop, let majority = appState.majorityResolution {
-                let newSize = appState.cropSettings.croppedSize(from: majority)
-                Text("\(Int(newSize.width))×\(Int(newSize.height))")
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundStyle(appState.cropSettings.hasAnyCrop ? .green : .secondary)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(Capsule().fill(Color(nsColor: .controlBackgroundColor)))
-                    .frame(maxWidth: .infinity)
-            }
-
             // Tool-specific controls
             if appState.currentTool == .crop {
                 // MARK: Crop Tool Controls
@@ -306,6 +294,8 @@ struct CropSectionView: View {
                 .help("Reset crop")
                 .frame(maxWidth: .infinity)
 
+                Divider()
+
                 // Snap to edges toggle
                 HStack(spacing: 6) {
                     Toggle(isOn: $state.snapEnabled) {
@@ -367,14 +357,12 @@ struct CropSectionView: View {
                             .controlSize(.mini)
                             .help("Show all detected edges")
                         }
+                        Text("Hold ⌥ to bypass snap")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
                     }
                     .padding(.top, 2)
                 }
-
-                Text("Hold ⌥ to bypass snap")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-                    .padding(.top, 2)
 
                 // Aspect guide options (always visible)
                 Divider()

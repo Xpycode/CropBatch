@@ -19,6 +19,9 @@ The following features are disabled (`#if false`) to simplify the app:
 
 Core focus: Load images → Configure crop → Export batch
 
+## Recently Implemented
+- [x] Rectangle snapping - Crop handles snap to detected rectangle edges in images (Vision framework VNDetectRectanglesRequest)
+
 ## On Hold (For Later Session)
 - [ ] Blur/Redact tool - See `docs/blur-feature-status.md` for details
 - [ ] Watermark overlay
