@@ -303,6 +303,7 @@ struct CropEditorView: View {
             ),
             snapPoints: appState.activeSnapPoints,
             snapEnabled: appState.snapEnabled,
+            snapThreshold: appState.snapThreshold,
             onDragEnded: { appState.recordCropChange() }
         )
     }
@@ -313,7 +314,9 @@ struct CropEditorView: View {
             displayedSize: scaledImageSize,
             snapPoints: appState.activeSnapPoints,
             cropSettings: appState.cropSettings,
-            snapEnabled: appState.snapEnabled
+            snapEnabled: appState.snapEnabled,
+            snapThreshold: appState.snapThreshold,
+            showDebug: appState.showSnapDebug
         )
     }
 
@@ -675,11 +678,14 @@ struct CropHandlesView: View {
     }
 
     /// Apply snapping to a value based on edge type
-    private func applySnap(_ value: Int, edge: CropEdge, gridSnap: Bool) -> (value: Int, didSnap: Bool) {
+    private func applySnap(_ value: Int, edge: CropEdge, gridSnap: Bool, optionBypass: Bool) -> (value: Int, didSnap: Bool) {
         // Grid snapping takes priority (Control key)
         if gridSnap {
             return ((value / 10) * 10, true)
         }
+
+        // Option key bypasses rectangle snapping
+        if optionBypass { return (value, false) }
 
         // Rectangle snapping (only if enabled)
         guard snapEnabled else { return (value, false) }
@@ -737,10 +743,10 @@ struct CropHandlesView: View {
                     y: offsetY + cropTop
                 ),
                 labelOffset: CGPoint(x: 0, y: -25),
-                onDrag: { location, gridSnapping in
+                onDrag: { location, gridSnapping, optionBypass in
                     let newY = location.y - offsetY
                     let rawValue = Int(newY / scale)
-                    let (snappedValue, _) = applySnap(rawValue, edge: .top, gridSnap: gridSnapping)
+                    let (snappedValue, _) = applySnap(rawValue, edge: .top, gridSnap: gridSnapping, optionBypass: optionBypass)
                     cropSettings.cropTop = max(0, min(snappedValue, Int(imageSize.height) - cropSettings.cropBottom - 10))
                 },
                 onReset: { cropSettings.cropTop = 0 }
@@ -755,11 +761,11 @@ struct CropHandlesView: View {
                     y: offsetY + displayedSize.height - cropBottom
                 ),
                 labelOffset: CGPoint(x: 0, y: 25),
-                onDrag: { location, gridSnapping in
+                onDrag: { location, gridSnapping, optionBypass in
                     let newY = location.y - offsetY
                     let fromBottom = displayedSize.height - newY
                     let rawValue = Int(fromBottom / scale)
-                    let (snappedValue, _) = applySnap(rawValue, edge: .bottom, gridSnap: gridSnapping)
+                    let (snappedValue, _) = applySnap(rawValue, edge: .bottom, gridSnap: gridSnapping, optionBypass: optionBypass)
                     cropSettings.cropBottom = max(0, min(snappedValue, Int(imageSize.height) - cropSettings.cropTop - 10))
                 },
                 onReset: { cropSettings.cropBottom = 0 }
@@ -774,10 +780,10 @@ struct CropHandlesView: View {
                     y: verticalHandleCenterY
                 ),
                 labelOffset: CGPoint(x: -30, y: 0),
-                onDrag: { location, gridSnapping in
+                onDrag: { location, gridSnapping, optionBypass in
                     let newX = location.x - offsetX
                     let rawValue = Int(newX / scale)
-                    let (snappedValue, _) = applySnap(rawValue, edge: .left, gridSnap: gridSnapping)
+                    let (snappedValue, _) = applySnap(rawValue, edge: .left, gridSnap: gridSnapping, optionBypass: optionBypass)
                     cropSettings.cropLeft = max(0, min(snappedValue, Int(imageSize.width) - cropSettings.cropRight - 10))
                 },
                 onReset: { cropSettings.cropLeft = 0 }
@@ -792,11 +798,11 @@ struct CropHandlesView: View {
                     y: verticalHandleCenterY
                 ),
                 labelOffset: CGPoint(x: 30, y: 0),
-                onDrag: { location, gridSnapping in
+                onDrag: { location, gridSnapping, optionBypass in
                     let newX = location.x - offsetX
                     let fromRight = displayedSize.width - newX
                     let rawValue = Int(fromRight / scale)
-                    let (snappedValue, _) = applySnap(rawValue, edge: .right, gridSnap: gridSnapping)
+                    let (snappedValue, _) = applySnap(rawValue, edge: .right, gridSnap: gridSnapping, optionBypass: optionBypass)
                     cropSettings.cropRight = max(0, min(snappedValue, Int(imageSize.width) - cropSettings.cropLeft - 10))
                 },
                 onReset: { cropSettings.cropRight = 0 }
@@ -814,12 +820,13 @@ struct CropHandlesView: View {
                     DragGesture()
                         .onChanged { gesture in
                             let gridSnapping = NSEvent.modifierFlags.contains(.control)
+                            let optionBypass = NSEvent.modifierFlags.contains(.option)
                             let newX = gesture.location.x - offsetX
                             let newY = gesture.location.y - offsetY
                             let rawTop = Int(newY / scale)
                             let rawLeft = Int(newX / scale)
-                            let (topValue, _) = applySnap(rawTop, edge: .top, gridSnap: gridSnapping)
-                            let (leftValue, _) = applySnap(rawLeft, edge: .left, gridSnap: gridSnapping)
+                            let (topValue, _) = applySnap(rawTop, edge: .top, gridSnap: gridSnapping, optionBypass: optionBypass)
+                            let (leftValue, _) = applySnap(rawLeft, edge: .left, gridSnap: gridSnapping, optionBypass: optionBypass)
                             cropSettings.cropTop = max(0, min(topValue, Int(imageSize.height) - cropSettings.cropBottom - 10))
                             cropSettings.cropLeft = max(0, min(leftValue, Int(imageSize.width) - cropSettings.cropRight - 10))
                         }
@@ -841,13 +848,14 @@ struct CropHandlesView: View {
                     DragGesture()
                         .onChanged { gesture in
                             let gridSnapping = NSEvent.modifierFlags.contains(.control)
+                            let optionBypass = NSEvent.modifierFlags.contains(.option)
                             let newX = gesture.location.x - offsetX
                             let newY = gesture.location.y - offsetY
                             let fromRight = displayedSize.width - newX
                             let rawTop = Int(newY / scale)
                             let rawRight = Int(fromRight / scale)
-                            let (topValue, _) = applySnap(rawTop, edge: .top, gridSnap: gridSnapping)
-                            let (rightValue, _) = applySnap(rawRight, edge: .right, gridSnap: gridSnapping)
+                            let (topValue, _) = applySnap(rawTop, edge: .top, gridSnap: gridSnapping, optionBypass: optionBypass)
+                            let (rightValue, _) = applySnap(rawRight, edge: .right, gridSnap: gridSnapping, optionBypass: optionBypass)
                             cropSettings.cropTop = max(0, min(topValue, Int(imageSize.height) - cropSettings.cropBottom - 10))
                             cropSettings.cropRight = max(0, min(rightValue, Int(imageSize.width) - cropSettings.cropLeft - 10))
                         }
@@ -869,13 +877,14 @@ struct CropHandlesView: View {
                     DragGesture()
                         .onChanged { gesture in
                             let gridSnapping = NSEvent.modifierFlags.contains(.control)
+                            let optionBypass = NSEvent.modifierFlags.contains(.option)
                             let newX = gesture.location.x - offsetX
                             let newY = gesture.location.y - offsetY
                             let fromBottom = displayedSize.height - newY
                             let rawBottom = Int(fromBottom / scale)
                             let rawLeft = Int(newX / scale)
-                            let (bottomValue, _) = applySnap(rawBottom, edge: .bottom, gridSnap: gridSnapping)
-                            let (leftValue, _) = applySnap(rawLeft, edge: .left, gridSnap: gridSnapping)
+                            let (bottomValue, _) = applySnap(rawBottom, edge: .bottom, gridSnap: gridSnapping, optionBypass: optionBypass)
+                            let (leftValue, _) = applySnap(rawLeft, edge: .left, gridSnap: gridSnapping, optionBypass: optionBypass)
                             cropSettings.cropBottom = max(0, min(bottomValue, Int(imageSize.height) - cropSettings.cropTop - 10))
                             cropSettings.cropLeft = max(0, min(leftValue, Int(imageSize.width) - cropSettings.cropRight - 10))
                         }
@@ -897,14 +906,15 @@ struct CropHandlesView: View {
                     DragGesture()
                         .onChanged { gesture in
                             let gridSnapping = NSEvent.modifierFlags.contains(.control)
+                            let optionBypass = NSEvent.modifierFlags.contains(.option)
                             let newX = gesture.location.x - offsetX
                             let newY = gesture.location.y - offsetY
                             let fromRight = displayedSize.width - newX
                             let fromBottom = displayedSize.height - newY
                             let rawBottom = Int(fromBottom / scale)
                             let rawRight = Int(fromRight / scale)
-                            let (bottomValue, _) = applySnap(rawBottom, edge: .bottom, gridSnap: gridSnapping)
-                            let (rightValue, _) = applySnap(rawRight, edge: .right, gridSnap: gridSnapping)
+                            let (bottomValue, _) = applySnap(rawBottom, edge: .bottom, gridSnap: gridSnapping, optionBypass: optionBypass)
+                            let (rightValue, _) = applySnap(rawRight, edge: .right, gridSnap: gridSnapping, optionBypass: optionBypass)
                             cropSettings.cropBottom = max(0, min(bottomValue, Int(imageSize.height) - cropSettings.cropTop - 10))
                             cropSettings.cropRight = max(0, min(rightValue, Int(imageSize.width) - cropSettings.cropLeft - 10))
                         }
@@ -924,11 +934,12 @@ struct CropHandlesView: View {
         value: Int,
         position: CGPoint,
         labelOffset: CGPoint,
-        onDrag: @escaping (CGPoint, Bool) -> Void,
+        onDrag: @escaping (CGPoint, Bool, Bool) -> Void,  // (location, gridSnap, optionBypass)
         onReset: @escaping () -> Void
     ) -> some View {
         let isGridSnapping = NSEvent.modifierFlags.contains(.control)
-        let isRectSnapped = isSnappedToRectangle(value, edge: edge)
+        let isOptionHeld = NSEvent.modifierFlags.contains(.option)
+        let isRectSnapped = !isOptionHeld && isSnappedToRectangle(value, edge: edge)
 
         ZStack {
             EdgeHandle(
@@ -941,7 +952,9 @@ struct CropHandlesView: View {
                 .gesture(
                     DragGesture()
                         .onChanged { gesture in
-                            onDrag(gesture.location, isGridSnapping)
+                            let gridSnap = NSEvent.modifierFlags.contains(.control)
+                            let optionBypass = NSEvent.modifierFlags.contains(.option)
+                            onDrag(gesture.location, gridSnap, optionBypass)
                         }
                         .onEnded { _ in
                             onDragEnded?()
@@ -1166,6 +1179,8 @@ struct SnapGuidesView: View {
     let snapPoints: SnapPoints
     let cropSettings: CropSettings
     var snapEnabled: Bool = true
+    var snapThreshold: Int = 15
+    var showDebug: Bool = false
 
     private var scale: CGFloat {
         displayedSize.width / imageSize.width
@@ -1173,43 +1188,64 @@ struct SnapGuidesView: View {
 
     var body: some View {
         GeometryReader { geometry in
-            if snapEnabled {
-            let offsetX = (geometry.size.width - displayedSize.width) / 2
-            let offsetY = (geometry.size.height - displayedSize.height) / 2
+            if snapEnabled || showDebug {
+                let offsetX = (geometry.size.width - displayedSize.width) / 2
+                let offsetY = (geometry.size.height - displayedSize.height) / 2
 
-            // Only show guides that are near current crop edges (within snap range)
-            let cropTop = cropSettings.cropTop
-            let cropBottom = Int(imageSize.height) - cropSettings.cropBottom
-            let cropLeft = cropSettings.cropLeft
-            let cropRight = Int(imageSize.width) - cropSettings.cropRight
+                // Only show guides that are near current crop edges (within snap range)
+                let cropTop = cropSettings.cropTop
+                let cropBottom = Int(imageSize.height) - cropSettings.cropBottom
+                let cropLeft = cropSettings.cropLeft
+                let cropRight = Int(imageSize.width) - cropSettings.cropRight
 
-            // Horizontal guide lines (for top/bottom edges)
-            ForEach(snapPoints.horizontalEdges.filter { edge in
-                // Show if near a crop edge
-                abs(edge - cropTop) <= 20 || abs(edge - cropBottom) <= 20
-            }, id: \.self) { edge in
-                let y = offsetY + CGFloat(edge) * scale
-                let isSnapped = abs(edge - cropTop) <= 2 || abs(edge - (Int(imageSize.height) - cropSettings.cropBottom)) <= 2
+                // Horizontal guide lines (for top/bottom edges)
+                ForEach(snapPoints.horizontalEdges.filter { edge in
+                    // In debug mode, show all; otherwise show if near a crop edge
+                    showDebug || abs(edge - cropTop) <= snapThreshold + 5 || abs(edge - cropBottom) <= snapThreshold + 5
+                }, id: \.self) { edge in
+                    let y = offsetY + CGFloat(edge) * scale
+                    let isSnapped = abs(edge - cropTop) <= 2 || abs(edge - (Int(imageSize.height) - cropSettings.cropBottom)) <= 2
 
-                Rectangle()
-                    .fill(isSnapped ? Color.green : Color.green.opacity(0.4))
-                    .frame(width: displayedSize.width, height: isSnapped ? 2 : 1)
-                    .position(x: offsetX + displayedSize.width / 2, y: y)
-            }
+                    Rectangle()
+                        .fill(showDebug && !isSnapped ? Color.orange.opacity(0.5) : (isSnapped ? Color.green : Color.green.opacity(0.4)))
+                        .frame(width: displayedSize.width, height: isSnapped ? 2 : 1)
+                        .position(x: offsetX + displayedSize.width / 2, y: y)
+                }
 
-            // Vertical guide lines (for left/right edges)
-            ForEach(snapPoints.verticalEdges.filter { edge in
-                // Show if near a crop edge
-                abs(edge - cropLeft) <= 20 || abs(edge - cropRight) <= 20
-            }, id: \.self) { edge in
-                let x = offsetX + CGFloat(edge) * scale
-                let isSnapped = abs(edge - cropLeft) <= 2 || abs(edge - (Int(imageSize.width) - cropSettings.cropRight)) <= 2
+                // Vertical guide lines (for left/right edges)
+                ForEach(snapPoints.verticalEdges.filter { edge in
+                    // In debug mode, show all; otherwise show if near a crop edge
+                    showDebug || abs(edge - cropLeft) <= snapThreshold + 5 || abs(edge - cropRight) <= snapThreshold + 5
+                }, id: \.self) { edge in
+                    let x = offsetX + CGFloat(edge) * scale
+                    let isSnapped = abs(edge - cropLeft) <= 2 || abs(edge - (Int(imageSize.width) - cropSettings.cropRight)) <= 2
 
-                Rectangle()
-                    .fill(isSnapped ? Color.green : Color.green.opacity(0.4))
-                    .frame(width: isSnapped ? 2 : 1, height: displayedSize.height)
-                    .position(x: x, y: offsetY + displayedSize.height / 2)
-            }
+                    Rectangle()
+                        .fill(showDebug && !isSnapped ? Color.orange.opacity(0.5) : (isSnapped ? Color.green : Color.green.opacity(0.4)))
+                        .frame(width: isSnapped ? 2 : 1, height: displayedSize.height)
+                        .position(x: x, y: offsetY + displayedSize.height / 2)
+                }
+
+                // Debug: show center cross if center snapping is implied
+                if showDebug {
+                    let centerX = Int(imageSize.width) / 2
+                    let centerY = Int(imageSize.height) / 2
+                    let isCenterHSnapped = snapPoints.horizontalEdges.contains(centerY)
+                    let isCenterVSnapped = snapPoints.verticalEdges.contains(centerX)
+
+                    if isCenterHSnapped {
+                        Rectangle()
+                            .fill(Color.blue.opacity(0.5))
+                            .frame(width: displayedSize.width, height: 1)
+                            .position(x: offsetX + displayedSize.width / 2, y: offsetY + CGFloat(centerY) * scale)
+                    }
+                    if isCenterVSnapped {
+                        Rectangle()
+                            .fill(Color.blue.opacity(0.5))
+                            .frame(width: 1, height: displayedSize.height)
+                            .position(x: offsetX + CGFloat(centerX) * scale, y: offsetY + displayedSize.height / 2)
+                    }
+                }
             }
         }
         .allowsHitTesting(false)

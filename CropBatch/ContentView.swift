@@ -330,6 +330,52 @@ struct CropSectionView: View {
                 .frame(maxWidth: .infinity, alignment: .center)
                 .padding(.top, 4)
 
+                // Snap options (only show when snap is enabled)
+                if appState.snapEnabled {
+                    VStack(spacing: 6) {
+                        // Threshold slider
+                        HStack(spacing: 4) {
+                            Text("Threshold")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                            Slider(value: Binding(
+                                get: { Double(appState.snapThreshold) },
+                                set: { appState.snapThreshold = Int($0) }
+                            ), in: 5...30, step: 1)
+                            .controlSize(.mini)
+                            Text("\(appState.snapThreshold)px")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .frame(width: 30)
+                        }
+
+                        // Option toggles in a compact grid
+                        HStack(spacing: 12) {
+                            Toggle(isOn: $state.snapToCenter) {
+                                Text("Center")
+                                    .font(.caption2)
+                            }
+                            .toggleStyle(.checkbox)
+                            .controlSize(.mini)
+                            .help("Also snap to image center lines")
+
+                            Toggle(isOn: $state.showSnapDebug) {
+                                Text("Debug")
+                                    .font(.caption2)
+                            }
+                            .toggleStyle(.checkbox)
+                            .controlSize(.mini)
+                            .help("Show all detected edges")
+                        }
+                    }
+                    .padding(.top, 2)
+                }
+
+                Text("Hold ⌥ to bypass snap")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .padding(.top, 2)
+
                 // Aspect guide options (always visible)
                 Divider()
                 AdvancedCropOptionsView()
@@ -1029,6 +1075,7 @@ struct KeyboardShortcutsContentView: View {
                 ShortcutRow(keys: "⇧⌥ Arrow", description: "Uncrop")
                 ShortcutRow(keys: "⇧⌃ Arrow", description: "×10 adjust")
                 ShortcutRow(keys: "⌃ Drag", description: "Snap grid")
+                ShortcutRow(keys: "⌥ Drag", description: "Bypass snap")
                 ShortcutRow(keys: "S", description: "Toggle snap")
                 ShortcutRow(keys: "Dbl-click", description: "Reset")
             }

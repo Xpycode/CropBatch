@@ -79,6 +79,9 @@ final class AppState {
     var snapPointsCache: [UUID: SnapPoints] = [:]
     var isDetectingSnapPoints = false
     var snapEnabled = true  // Master toggle for snap functionality
+    var snapThreshold: Int = 15  // Pixels threshold for snapping (5-30)
+    var snapToCenter = true  // Also snap to image center lines
+    var showSnapDebug = false  // Show all detected edges overlay
 
     private let recentPresetsKey = "CropBatch.RecentPresetIDs"
 
@@ -506,10 +509,22 @@ final class AppState {
 
     // MARK: - Snap Points (Rectangle Detection)
 
-    /// Get snap points for the active image
+    /// Get snap points for the active image (includes center lines if enabled)
     var activeSnapPoints: SnapPoints {
         guard let id = activeImageID else { return .empty }
-        return snapPointsCache[id] ?? .empty
+        var points = snapPointsCache[id] ?? .empty
+
+        // Add center lines if enabled
+        if snapToCenter, let image = activeImage {
+            let centerX = Int(image.originalImage.size.width) / 2
+            let centerY = Int(image.originalImage.size.height) / 2
+            points = points.merged(with: SnapPoints(
+                horizontalEdges: [centerY],
+                verticalEdges: [centerX]
+            ), tolerance: 5)
+        }
+
+        return points
     }
 
     /// Detect snap points for the active image

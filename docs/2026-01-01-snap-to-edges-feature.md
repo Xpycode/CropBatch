@@ -103,10 +103,9 @@ static let screenshot = Configuration(
 5. Green visual feedback indicates active snap
 6. Press **S** to quickly toggle snapping
 
-## Future Enhancements
+## Enhancements (Completed)
 
-- [ ] Option key bypass (temporarily disable snap while dragging)
-- [ ] Adjustable snap threshold
-- [ ] Show all detected edges (debug view)
-- [ ] Snap to image center lines
-- [ ] Audio feedback on snap
+- [x] **Option key bypass** - Hold ⌥ while dragging to temporarily disable snap
+- [x] **Adjustable threshold** - Slider in sidebar (5-30px range, default 15px)
+- [x] **Debug view** - Toggle shows all detected edges in orange, center lines in blue
+- [x] **Snap to center lines** - Automatic horizontal/vertical center line snapping
