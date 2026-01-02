@@ -379,35 +379,49 @@ struct ImageCropService {
 
     // MARK: - Watermark Overlay
     //
-    // Applies a PNG watermark image overlay at a configurable position,
+    // Applies image or text watermark overlay at a configurable position,
     // size, and opacity. Uses CGContext for GPU-friendly compositing.
 
-    /// Applies a watermark image overlay to an NSImage
+    /// Applies a watermark (image or text) to an NSImage
     /// - Parameters:
     ///   - image: The source image
-    ///   - settings: Watermark configuration (image, position, size, opacity)
+    ///   - settings: Watermark configuration
+    ///   - filename: Original filename (for {filename} variable in text mode)
+    ///   - index: Image index in batch (for {index} variable)
+    ///   - count: Total image count (for {count} variable)
     /// - Returns: A new image with the watermark applied
-    static func applyWatermark(_ image: NSImage, settings: WatermarkSettings) -> NSImage {
-        // Skip if watermark is disabled or invalid
-        guard settings.isValid,
-              let watermarkImage = settings.loadedImage,
-              let watermarkCGImage = watermarkImage.cgImage(forProposedRect: nil, context: nil, hints: nil)
-        else {
-            return image
-        }
+    static func applyWatermark(
+        _ image: NSImage,
+        settings: WatermarkSettings,
+        filename: String = "",
+        index: Int = 1,
+        count: Int = 1
+    ) -> NSImage {
+        guard settings.isValid else { return image }
 
-        guard let sourceCGImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+        switch settings.mode {
+        case .image:
+            return applyImageWatermark(image, settings: settings)
+        case .text:
+            return applyTextWatermark(image, settings: settings, filename: filename, index: index, count: count)
+        }
+    }
+
+    /// Applies an image watermark overlay
+    private static func applyImageWatermark(_ image: NSImage, settings: WatermarkSettings) -> NSImage {
+        guard let watermarkImage = settings.loadedImage,
+              let watermarkCGImage = watermarkImage.cgImage(forProposedRect: nil, context: nil, hints: nil),
+              let sourceCGImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil)
+        else {
             return image
         }
 
         let imageSize = CGSize(width: sourceCGImage.width, height: sourceCGImage.height)
 
-        // Calculate watermark placement
         guard let watermarkRect = settings.watermarkRect(for: imageSize) else {
             return image
         }
 
-        // Create CGContext for compositing
         let colorSpace = sourceCGImage.colorSpace ?? CGColorSpaceCreateDeviceRGB()
         guard let context = CGContext(
             data: nil,
@@ -419,15 +433,72 @@ struct ImageCropService {
             bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
         ) else { return image }
 
-        // Draw the source image first
         context.draw(sourceCGImage, in: CGRect(origin: .zero, size: imageSize))
-
-        // Apply opacity and draw watermark
         context.setAlpha(settings.opacity)
         context.draw(watermarkCGImage, in: watermarkRect)
 
         guard let resultImage = context.makeImage() else { return image }
         return NSImage(cgImage: resultImage, size: imageSize)
+    }
+
+    /// Applies a text watermark overlay
+    private static func applyTextWatermark(
+        _ image: NSImage,
+        settings: WatermarkSettings,
+        filename: String,
+        index: Int,
+        count: Int
+    ) -> NSImage {
+        guard let sourceCGImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+            return image
+        }
+
+        let imageSize = CGSize(width: sourceCGImage.width, height: sourceCGImage.height)
+
+        // Substitute dynamic variables
+        let resolvedText = TextWatermarkVariable.substitute(
+            in: settings.text,
+            filename: filename,
+            index: index,
+            count: count
+        )
+
+        // Calculate text rect
+        let textRect = settings.textWatermarkRect(for: imageSize, text: resolvedText)
+
+        // Create NSImage for drawing (NSGraphicsContext is easier for text)
+        let resultImage = NSImage(size: imageSize)
+        resultImage.lockFocus()
+
+        // Draw source image
+        let nsContext = NSGraphicsContext.current!
+        let cgContext = nsContext.cgContext
+
+        // Flip context for CGImage (CGImage has origin at bottom-left)
+        cgContext.translateBy(x: 0, y: imageSize.height)
+        cgContext.scaleBy(x: 1.0, y: -1.0)
+        cgContext.draw(sourceCGImage, in: CGRect(origin: .zero, size: imageSize))
+
+        // Reset transform for text drawing
+        cgContext.scaleBy(x: 1.0, y: -1.0)
+        cgContext.translateBy(x: 0, y: -imageSize.height)
+
+        // Draw text with attributes
+        let attributes = settings.textAttributes(scale: 1.0)
+        let attrString = NSAttributedString(string: resolvedText, attributes: attributes)
+
+        // Convert rect from CGImage coords (bottom-left origin) to NSView coords (top-left origin)
+        let drawRect = CGRect(
+            x: textRect.origin.x,
+            y: imageSize.height - textRect.origin.y - textRect.height,
+            width: textRect.width,
+            height: textRect.height
+        )
+
+        attrString.draw(in: drawRect)
+
+        resultImage.unlockFocus()
+        return resultImage
     }
 
     // ┌─────────────────────────────────────────────────────────────────────┐
@@ -628,12 +699,14 @@ struct ImageCropService {
         }
 
         // Process images in parallel using TaskGroup
+        let itemCount = items.count
         return try await withThrowingTaskGroup(of: (Int, URL).self) { group in
             for (index, item) in items.enumerated() {
                 group.addTask {
                     let outputURL = try processSingleImage(
                         item: item,
                         index: index,
+                        count: itemCount,
                         cropSettings: cropSettings,
                         exportSettings: exportSettings,
                         transform: transform,
@@ -661,6 +734,7 @@ struct ImageCropService {
     private static func processSingleImage(
         item: ImageItem,
         index: Int,
+        count: Int,
         cropSettings: CropSettings,
         exportSettings: ExportSettings,
         transform: ImageTransform,
@@ -697,7 +771,14 @@ struct ImageCropService {
 
         // 5. Apply watermark if enabled
         if exportSettings.watermarkSettings.isValid {
-            processedImage = applyWatermark(processedImage, settings: exportSettings.watermarkSettings)
+            let filename = item.url.deletingPathExtension().lastPathComponent
+            processedImage = applyWatermark(
+                processedImage,
+                settings: exportSettings.watermarkSettings,
+                filename: filename,
+                index: index + 1,  // 1-based for user display
+                count: count
+            )
         }
 
         // Get output URL from export settings (with index for batch rename)

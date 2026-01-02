@@ -1215,8 +1215,31 @@ struct WatermarkPreviewOverlay: View {
     var body: some View {
         let settings = appState.exportSettings.watermarkSettings
 
-        if settings.isValid, let watermarkImage = settings.cachedImage {
-            // Calculate watermark size and position within crop region
+        if settings.isValid {
+            // Container sized to crop area with clipping AFTER overlay
+            Color.clear
+                .frame(width: cropRect.width, height: cropRect.height)
+                .overlay(alignment: .topLeading) {
+                    switch settings.mode {
+                    case .image:
+                        imageWatermarkContent(settings: settings)
+                    case .text:
+                        textWatermarkContent(settings: settings)
+                    }
+                }
+                .clipShape(Rectangle())  // Clip AFTER overlay to constrain watermark
+                .position(
+                    x: cropRect.midX,
+                    y: cropRect.midY
+                )
+        }
+    }
+
+    // MARK: - Image Watermark Preview
+
+    @ViewBuilder
+    private func imageWatermarkContent(settings: WatermarkSettings) -> some View {
+        if let watermarkImage = settings.cachedImage {
             let wmSize = watermarkSize(for: cropRect.size, watermark: watermarkImage)
             let wmPosition = watermarkPosition(for: cropRect.size, wmSize: wmSize)
 
@@ -1229,31 +1252,8 @@ struct WatermarkPreviewOverlay: View {
                     RoundedRectangle(cornerRadius: 4)
                         .strokeBorder(isDragging ? Color.accentColor : Color.clear, lineWidth: 2)
                 )
-                .position(
-                    x: cropRect.minX + wmPosition.x + wmSize.width / 2,
-                    y: cropRect.minY + wmPosition.y + wmSize.height / 2
-                )
-                .gesture(
-                    DragGesture()
-                        .onChanged { value in
-                            if !isDragging {
-                                isDragging = true
-                                dragStartOffset = CGPoint(
-                                    x: appState.exportSettings.watermarkSettings.offsetX,
-                                    y: appState.exportSettings.watermarkSettings.offsetY
-                                )
-                            }
-                            // Convert drag translation to pixel coordinates
-                            let deltaX = value.translation.width / scale
-                            let deltaY = value.translation.height / scale
-                            appState.exportSettings.watermarkSettings.offsetX = dragStartOffset.x + deltaX
-                            appState.exportSettings.watermarkSettings.offsetY = dragStartOffset.y + deltaY
-                        }
-                        .onEnded { _ in
-                            isDragging = false
-                            appState.markCustomSettings()
-                        }
-                )
+                .offset(x: wmPosition.x, y: wmPosition.y)
+                .gesture(dragGesture)
                 .onHover { hovering in
                     if hovering {
                         NSCursor.openHand.push()
@@ -1262,6 +1262,100 @@ struct WatermarkPreviewOverlay: View {
                     }
                 }
         }
+    }
+
+    // MARK: - Text Watermark Preview
+
+    @ViewBuilder
+    private func textWatermarkContent(settings: WatermarkSettings) -> some View {
+        // Preview text with placeholder substitution
+        let previewText = TextWatermarkVariable.substitute(
+            in: settings.text,
+            filename: "preview",
+            index: 1,
+            count: appState.images.count
+        )
+
+        let textSize = textSize(for: previewText, settings: settings)
+        let wmPosition = watermarkPosition(for: cropRect.size, wmSize: textSize)
+
+        // Use scaled font to match size calculation
+        let scaledFont = NSFont(
+            descriptor: settings.textFont.fontDescriptor,
+            size: settings.fontSize * scale
+        ) ?? settings.textFont
+
+        Text(previewText)
+            .font(Font(scaledFont))
+            .foregroundColor(Color(nsColor: settings.textColor.nsColor))
+            .opacity(isDragging ? min(settings.opacity + 0.3, 1.0) : settings.opacity)
+            .shadow(
+                color: settings.shadow.isEnabled
+                    ? Color(nsColor: settings.shadow.color.nsColor)
+                    : .clear,
+                radius: settings.shadow.isEnabled ? settings.shadow.blur * scale : 0,
+                x: settings.shadow.isEnabled ? settings.shadow.offsetX * scale : 0,
+                y: settings.shadow.isEnabled ? settings.shadow.offsetY * scale : 0
+            )
+            .overlay(
+                // Show outline as stroke (SwiftUI doesn't have native stroke text)
+                settings.outline.isEnabled ?
+                Text(previewText)
+                    .font(Font(scaledFont))
+                    .foregroundColor(.clear)
+                    .overlay(
+                        Text(previewText)
+                            .font(Font(scaledFont))
+                            .foregroundColor(Color(nsColor: settings.outline.color.nsColor))
+                    )
+                    .opacity(0.5)
+                : nil
+            )
+            .padding(4)
+            .background(
+                RoundedRectangle(cornerRadius: 4)
+                    .strokeBorder(isDragging ? Color.accentColor : Color.clear, lineWidth: 2)
+            )
+            .offset(x: wmPosition.x, y: wmPosition.y)
+            .gesture(dragGesture)
+            .onHover { hovering in
+                if hovering {
+                    NSCursor.openHand.push()
+                } else {
+                    NSCursor.pop()
+                }
+            }
+    }
+
+    // MARK: - Shared
+
+    private var dragGesture: some Gesture {
+        DragGesture()
+            .onChanged { value in
+                if !isDragging {
+                    isDragging = true
+                    dragStartOffset = CGPoint(
+                        x: appState.exportSettings.watermarkSettings.offsetX,
+                        y: appState.exportSettings.watermarkSettings.offsetY
+                    )
+                }
+                // Convert drag translation to pixel coordinates
+                let deltaX = value.translation.width / scale
+                let deltaY = value.translation.height / scale
+                appState.exportSettings.watermarkSettings.offsetX = dragStartOffset.x + deltaX
+                appState.exportSettings.watermarkSettings.offsetY = dragStartOffset.y + deltaY
+            }
+            .onEnded { _ in
+                isDragging = false
+                appState.markCustomSettings()
+            }
+    }
+
+    private func textSize(for text: String, settings: WatermarkSettings) -> CGSize {
+        let attrs = settings.textAttributes(scale: scale)
+        let attrString = NSAttributedString(string: text, attributes: attrs)
+        let size = attrString.size()
+        return CGSize(width: size.width + 8, height: size.height + 8)  // Add padding
     }
 
     private func watermarkSize(for containerSize: CGSize, watermark: NSImage) -> CGSize {
@@ -1302,8 +1396,17 @@ struct WatermarkPreviewOverlay: View {
         let availableHeight = containerSize.height - (2 * margin)
 
         // Include user offsets (scaled to display size)
-        let x = margin + (availableWidth - wmSize.width) * anchor.x + (settings.offsetX * scale)
-        let y = margin + (availableHeight - wmSize.height) * anchor.y + (settings.offsetY * scale)
+        var x = margin + (availableWidth - wmSize.width) * anchor.x + (settings.offsetX * scale)
+        var y = margin + (availableHeight - wmSize.height) * anchor.y + (settings.offsetY * scale)
+
+        // Clamp position to keep watermark within bounds
+        let minX: CGFloat = 0
+        let maxX = containerSize.width - wmSize.width
+        let minY: CGFloat = 0
+        let maxY = containerSize.height - wmSize.height
+
+        x = max(minX, min(maxX, x))
+        y = max(minY, min(maxY, y))
 
         return CGPoint(x: x, y: y)
     }

@@ -684,25 +684,391 @@ struct WatermarkSettingsSection: View {
     @ViewBuilder
     private var watermarkControls: some View {
         VStack(alignment: .leading, spacing: 10) {
-            // Image picker / preview
-            imagePickerSection
+            // Mode picker (Image/Text)
+            modePicker
 
-            if appState.exportSettings.watermarkSettings.imageURL != nil {
-                // Position picker
-                positionPicker
+            // Mode-specific controls
+            if appState.exportSettings.watermarkSettings.mode == .image {
+                imagePickerSection
 
-                // Size controls
-                sizeControls
+                if appState.exportSettings.watermarkSettings.isImageValid {
+                    sharedControls
+                }
+            } else {
+                textWatermarkSection
 
-                // Opacity slider
-                opacitySlider
-
-                // Margin control
-                marginControl
+                if appState.exportSettings.watermarkSettings.isTextValid {
+                    sharedControls
+                }
             }
         }
         .padding(8)
         .background(RoundedRectangle(cornerRadius: 6).fill(Color(nsColor: .controlBackgroundColor)))
+    }
+
+    @ViewBuilder
+    private var modePicker: some View {
+        HStack(spacing: 4) {
+            ForEach(WatermarkMode.allCases) { mode in
+                Button {
+                    appState.exportSettings.watermarkSettings.mode = mode
+                    appState.markCustomSettings()
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: mode == .image ? "photo" : "textformat")
+                            .font(.caption)
+                        Text(mode.rawValue)
+                            .font(.system(size: 10, weight: .medium))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 24)
+                }
+                .buttonStyle(.bordered)
+                .tint(appState.exportSettings.watermarkSettings.mode == mode ? .accentColor : .secondary)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var sharedControls: some View {
+        // Position picker
+        positionPicker
+
+        // Size controls (only for image mode)
+        if appState.exportSettings.watermarkSettings.mode == .image {
+            sizeControls
+        }
+
+        // Opacity slider
+        opacitySlider
+
+        // Margin control
+        marginControl
+    }
+
+    // MARK: - Text Watermark Controls
+
+    @ViewBuilder
+    private var textWatermarkSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // Text input
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Text")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                TextField("© {year}", text: Binding(
+                    get: { appState.exportSettings.watermarkSettings.text },
+                    set: {
+                        appState.exportSettings.watermarkSettings.text = $0
+                        appState.markCustomSettings()
+                    }
+                ))
+                .textFieldStyle(.roundedBorder)
+                .font(.system(size: 12, design: .monospaced))
+            }
+
+            // Variable tokens
+            variableTokens
+
+            // Font controls
+            fontControls
+
+            // Style toggles
+            styleControls
+
+            // Color picker
+            colorPicker
+
+            // Effects (shadow, outline)
+            effectsControls
+        }
+    }
+
+    @ViewBuilder
+    private var variableTokens: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Variables")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            // Row 1: filename, index, count
+            HStack(spacing: 4) {
+                ForEach([TextWatermarkVariable.filename, .index, .count], id: \.rawValue) { variable in
+                    Button(variable.rawValue) {
+                        appState.exportSettings.watermarkSettings.text += variable.rawValue
+                        appState.markCustomSettings()
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.mini)
+                    .help(variable.description)
+                }
+            }
+
+            // Row 2: date, datetime, year, month, day
+            HStack(spacing: 4) {
+                ForEach([TextWatermarkVariable.date, .year, .month, .day], id: \.rawValue) { variable in
+                    Button(variable.rawValue) {
+                        appState.exportSettings.watermarkSettings.text += variable.rawValue
+                        appState.markCustomSettings()
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.mini)
+                    .help(variable.description)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var fontControls: some View {
+        HStack(spacing: 8) {
+            // Font family picker
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Font")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Menu {
+                    ForEach(availableFontFamilies, id: \.self) { family in
+                        Button(family) {
+                            appState.exportSettings.watermarkSettings.fontFamily = family
+                            appState.markCustomSettings()
+                        }
+                    }
+                } label: {
+                    Text(appState.exportSettings.watermarkSettings.fontFamily)
+                        .font(.caption)
+                        .lineLimit(1)
+                        .frame(width: 100, alignment: .leading)
+                }
+                .menuStyle(.borderlessButton)
+                .frame(width: 110)
+                .padding(4)
+                .background(RoundedRectangle(cornerRadius: 4).fill(Color(nsColor: .textBackgroundColor)))
+            }
+
+            // Font size
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Size")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                TextField("48", value: Binding(
+                    get: { appState.exportSettings.watermarkSettings.fontSize },
+                    set: {
+                        appState.exportSettings.watermarkSettings.fontSize = max(8, min(500, $0))
+                        appState.markCustomSettings()
+                    }
+                ), format: .number)
+                .textFieldStyle(.roundedBorder)
+                .frame(width: 60)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var styleControls: some View {
+        HStack(spacing: 8) {
+            // Bold toggle
+            Toggle(isOn: Binding(
+                get: { appState.exportSettings.watermarkSettings.isBold },
+                set: {
+                    appState.exportSettings.watermarkSettings.isBold = $0
+                    appState.markCustomSettings()
+                }
+            )) {
+                Image(systemName: "bold")
+            }
+            .toggleStyle(.button)
+            .help("Bold")
+
+            // Italic toggle
+            Toggle(isOn: Binding(
+                get: { appState.exportSettings.watermarkSettings.isItalic },
+                set: {
+                    appState.exportSettings.watermarkSettings.isItalic = $0
+                    appState.markCustomSettings()
+                }
+            )) {
+                Image(systemName: "italic")
+            }
+            .toggleStyle(.button)
+            .help("Italic")
+
+            Spacer()
+        }
+    }
+
+    @ViewBuilder
+    private var colorPicker: some View {
+        HStack {
+            Text("Color")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            Spacer()
+
+            ColorPicker("", selection: Binding(
+                get: { Color(nsColor: appState.exportSettings.watermarkSettings.textColor.nsColor) },
+                set: {
+                    appState.exportSettings.watermarkSettings.textColor = CodableColor(NSColor($0))
+                    appState.markCustomSettings()
+                }
+            ))
+            .labelsHidden()
+        }
+    }
+
+    @ViewBuilder
+    private var effectsControls: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            // Shadow
+            DisclosureGroup {
+                shadowControls
+            } label: {
+                Toggle(isOn: Binding(
+                    get: { appState.exportSettings.watermarkSettings.shadow.isEnabled },
+                    set: {
+                        appState.exportSettings.watermarkSettings.shadow.isEnabled = $0
+                        appState.markCustomSettings()
+                    }
+                )) {
+                    Text("Shadow")
+                        .font(.caption)
+                }
+                .toggleStyle(.checkbox)
+            }
+
+            // Outline
+            DisclosureGroup {
+                outlineControls
+            } label: {
+                Toggle(isOn: Binding(
+                    get: { appState.exportSettings.watermarkSettings.outline.isEnabled },
+                    set: {
+                        appState.exportSettings.watermarkSettings.outline.isEnabled = $0
+                        appState.markCustomSettings()
+                    }
+                )) {
+                    Text("Outline")
+                        .font(.caption)
+                }
+                .toggleStyle(.checkbox)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var shadowControls: some View {
+        VStack(spacing: 6) {
+            HStack {
+                Text("Color")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                ColorPicker("", selection: Binding(
+                    get: { Color(nsColor: appState.exportSettings.watermarkSettings.shadow.color.nsColor) },
+                    set: {
+                        appState.exportSettings.watermarkSettings.shadow.color = CodableColor(NSColor($0))
+                        appState.markCustomSettings()
+                    }
+                ))
+                .labelsHidden()
+            }
+
+            HStack {
+                Text("Blur")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                Slider(value: Binding(
+                    get: { appState.exportSettings.watermarkSettings.shadow.blur },
+                    set: {
+                        appState.exportSettings.watermarkSettings.shadow.blur = $0
+                        appState.markCustomSettings()
+                    }
+                ), in: 0...20, step: 1)
+                .controlSize(.mini)
+                Text("\(Int(appState.exportSettings.watermarkSettings.shadow.blur))")
+                    .font(.caption2)
+                    .frame(width: 20)
+            }
+
+            HStack(spacing: 8) {
+                HStack(spacing: 2) {
+                    Text("X")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    TextField("", value: Binding(
+                        get: { appState.exportSettings.watermarkSettings.shadow.offsetX },
+                        set: {
+                            appState.exportSettings.watermarkSettings.shadow.offsetX = $0
+                            appState.markCustomSettings()
+                        }
+                    ), format: .number)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 40)
+                }
+
+                HStack(spacing: 2) {
+                    Text("Y")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    TextField("", value: Binding(
+                        get: { appState.exportSettings.watermarkSettings.shadow.offsetY },
+                        set: {
+                            appState.exportSettings.watermarkSettings.shadow.offsetY = $0
+                            appState.markCustomSettings()
+                        }
+                    ), format: .number)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 40)
+                }
+            }
+        }
+        .padding(.leading, 16)
+    }
+
+    @ViewBuilder
+    private var outlineControls: some View {
+        VStack(spacing: 6) {
+            HStack {
+                Text("Color")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                ColorPicker("", selection: Binding(
+                    get: { Color(nsColor: appState.exportSettings.watermarkSettings.outline.color.nsColor) },
+                    set: {
+                        appState.exportSettings.watermarkSettings.outline.color = CodableColor(NSColor($0))
+                        appState.markCustomSettings()
+                    }
+                ))
+                .labelsHidden()
+            }
+
+            HStack {
+                Text("Width")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                Slider(value: Binding(
+                    get: { appState.exportSettings.watermarkSettings.outline.width },
+                    set: {
+                        appState.exportSettings.watermarkSettings.outline.width = $0
+                        appState.markCustomSettings()
+                    }
+                ), in: 0.5...10, step: 0.5)
+                .controlSize(.mini)
+                Text("\(appState.exportSettings.watermarkSettings.outline.width, specifier: "%.1f")")
+                    .font(.caption2)
+                    .frame(width: 25)
+            }
+        }
+        .padding(.leading, 16)
+    }
+
+    private var availableFontFamilies: [String] {
+        NSFontManager.shared.availableFontFamilies.sorted()
     }
 
     @ViewBuilder

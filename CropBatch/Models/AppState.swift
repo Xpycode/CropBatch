@@ -693,7 +693,14 @@ final class AppState {
 
             // Apply watermark if enabled
             if settings.watermarkSettings.isValid {
-                processedImage = ImageCropService.applyWatermark(processedImage, settings: settings.watermarkSettings)
+                let filename = item.url.deletingPathExtension().lastPathComponent
+                processedImage = ImageCropService.applyWatermark(
+                    processedImage,
+                    settings: settings.watermarkSettings,
+                    filename: filename,
+                    index: originalIndex + 1,  // 1-based for user display
+                    count: imagesToExport.count
+                )
             }
 
             // Determine format
