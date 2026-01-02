@@ -657,27 +657,13 @@ struct WatermarkSettingsSection: View {
     @State private var dragOver = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            // Header with enable toggle
-            HStack {
-                Text("Watermark")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Toggle("", isOn: Binding(
-                    get: { appState.exportSettings.watermarkSettings.isEnabled },
-                    set: {
-                        appState.exportSettings.watermarkSettings.isEnabled = $0
-                        appState.markCustomSettings()
-                    }
-                ))
-                .toggleStyle(.switch)
-                .controlSize(.mini)
-            }
-
-            if appState.exportSettings.watermarkSettings.isEnabled {
-                watermarkControls
-            }
+        // Controls shown when watermark is enabled (toggle is in section header)
+        if appState.exportSettings.watermarkSettings.isEnabled {
+            watermarkControls
+        } else {
+            Text("Enable watermark to configure")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
         }
     }
 
