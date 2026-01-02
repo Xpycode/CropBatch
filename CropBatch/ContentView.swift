@@ -112,60 +112,115 @@ struct SidebarView: View {
     @Environment(AppState.self) private var appState
 
     // Collapsed state persistence
-    @AppStorage("sidebar.autoProcessExpanded") private var autoProcessExpanded = false
+    @AppStorage("sidebar.snapExpanded") private var snapExpanded = false
+    @AppStorage("sidebar.qualityResizeExpanded") private var qualityResizeExpanded = false
+    @AppStorage("sidebar.watermarkExpanded") private var watermarkExpanded = false
     @AppStorage("sidebar.shortcutsExpanded") private var shortcutsExpanded = false
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 0) {
+        @Bindable var state = appState
+        
+        VStack(spacing: 0) {
+            // Scrollable content using Form for inspector-style layout
+            Form {
                 // Resolution warning (always visible if needed)
                 if appState.hasResolutionMismatch {
-                    ResolutionWarningView()
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 12)
-                    Divider()
+                    Section {
+                        ResolutionWarningView()
+                    }
                 }
 
                 // ═══════════════════════════════════════
-                // CROP - Primary section, always visible
+                // CROP - Primary controls, always visible
                 // ═══════════════════════════════════════
-                CropSectionView()
-
-                Divider()
-
-                // ═══════════════════════════════════════
-                // TRANSFORM - Shelved (breaks crop state)
-                // ═══════════════════════════════════════
-                #if false
-                TransformRowView()
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
-
-                Divider()
-                #endif
-
-                // ═══════════════════════════════════════
-                // EXPORT - Prominent action area
-                // ═══════════════════════════════════════
-                ExportSectionView()
-
-                Divider()
-
-                // ═══════════════════════════════════════
-                // ADVANCED - Collapsed by default
-                // ═══════════════════════════════════════
-                #if false // Folder Watch - shelved for simplicity
-                CollapsibleSection(title: "Folder Watch", icon: "folder.badge.gearshape", isExpanded: $autoProcessExpanded) {
-                    FolderWatchView()
+                Section {
+                    CropControlsView()
                 }
-                #endif
 
-                CollapsibleSection(title: "Keyboard Shortcuts", icon: "keyboard", isExpanded: $shortcutsExpanded) {
+                // ═══════════════════════════════════════
+                // ASPECT GUIDE - Always visible (quick access)
+                // ═══════════════════════════════════════
+                Section {
+                    AspectGuideView()
+                }
+
+                // ═══════════════════════════════════════
+                // SNAP - Toggle in header, options when expanded
+                // ═══════════════════════════════════════
+                Section(isExpanded: $snapExpanded) {
+                    SnapOptionsView()
+                } header: {
+                    HStack {
+                        Text("Snap to Edges")
+                        Spacer()
+                        Toggle("", isOn: $state.snapEnabled)
+                            .labelsHidden()
+                            .controlSize(.small)
+                            .onChange(of: appState.snapEnabled) { _, isEnabled in
+                                if isEnabled {
+                                    withAnimation { snapExpanded = true }
+                                }
+                            }
+                    }
+                }
+
+                // ═══════════════════════════════════════
+                // EXPORT FORMAT - Always visible
+                // ═══════════════════════════════════════
+                Section {
+                    ExportFormatView()
+                }
+
+                // ═══════════════════════════════════════
+                // QUALITY & RESIZE - Collapsed by default
+                // ═══════════════════════════════════════
+                Section("Quality & Resize", isExpanded: $qualityResizeExpanded) {
+                    QualityResizeView()
+                }
+
+                // ═══════════════════════════════════════
+                // WATERMARK - Toggle in header
+                // ═══════════════════════════════════════
+                Section(isExpanded: $watermarkExpanded) {
+                    WatermarkSettingsSection()
+                } header: {
+                    HStack {
+                        Text("Watermark")
+                        Spacer()
+                        Toggle("", isOn: $state.exportSettings.watermarkSettings.isEnabled)
+                            .labelsHidden()
+                            .controlSize(.small)
+                            .onChange(of: appState.exportSettings.watermarkSettings.isEnabled) { _, isEnabled in
+                                if isEnabled {
+                                    withAnimation { watermarkExpanded = true }
+                                }
+                            }
+                    }
+                }
+
+                // ═══════════════════════════════════════
+                // KEYBOARD SHORTCUTS - Collapsed
+                // ═══════════════════════════════════════
+                Section("Keyboard Shortcuts", isExpanded: $shortcutsExpanded) {
                     KeyboardShortcutsContentView()
                 }
             }
+            .formStyle(.grouped)
+            .scrollContentBackground(.hidden)
+            .scrollIndicators(.hidden)
+            .background(Color(nsColor: .windowBackgroundColor))
+            .overlay(alignment: .trailing) {
+                // Fill the scrollbar gutter gap
+                Color(nsColor: .controlBackgroundColor)
+                    .frame(width: 14)
+                    .ignoresSafeArea()
+            }
+
+            // ═══════════════════════════════════════
+            // STICKY FOOTER - File size + Export button
+            // ═══════════════════════════════════════
+            ExportFooterView()
         }
-        .background(Color(nsColor: .windowBackgroundColor))
     }
 }
 
@@ -507,6 +562,502 @@ struct AdvancedCropOptionsView: View {
             }
 
             // Auto-detect - shelved (not working reliably)
+        }
+    }
+}
+
+
+// MARK: - Crop Controls (Always Visible)
+
+struct CropControlsView: View {
+    @Environment(AppState.self) private var appState
+
+    var body: some View {
+        @Bindable var state = appState
+
+        // Crop edge inputs - horizontal row
+        LabeledContent("Crop") {
+            HStack(spacing: 6) {
+                CompactCropField(label: "T", value: $state.cropSettings.cropTop) {
+                    appState.recordCropChange()
+                }
+                CompactCropField(label: "B", value: $state.cropSettings.cropBottom) {
+                    appState.recordCropChange()
+                }
+                CompactCropField(label: "L", value: $state.cropSettings.cropLeft) {
+                    appState.recordCropChange()
+                }
+                CompactCropField(label: "R", value: $state.cropSettings.cropRight) {
+                    appState.recordCropChange()
+                }
+            }
+        }
+        .controlSize(.small)
+
+        // Reset button
+        Button {
+            appState.cropSettings = CropSettings()
+            appState.recordCropChange()
+        } label: {
+            Label("Reset Crop", systemImage: "arrow.counterclockwise")
+        }
+        .controlSize(.small)
+        .disabled(!appState.cropSettings.hasAnyCrop)
+        .help("Reset crop to zero")
+    }
+}
+
+// MARK: - Snap Options (Content only, toggle in header)
+
+struct SnapOptionsView: View {
+    @Environment(AppState.self) private var appState
+
+    var body: some View {
+        @Bindable var state = appState
+
+        LabeledContent("Threshold") {
+            HStack(spacing: 8) {
+                Slider(value: Binding(
+                    get: { Double(appState.snapThreshold) },
+                    set: { appState.snapThreshold = Int($0) }
+                ), in: 5...30, step: 1)
+                .frame(maxWidth: 100)
+                Text("\(appState.snapThreshold)px")
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+                    .frame(width: 36, alignment: .trailing)
+            }
+        }
+
+        Toggle("Snap to Center", isOn: $state.snapToCenter)
+            .help("Also snap to image center lines")
+
+        Toggle("Show Debug", isOn: $state.showSnapDebug)
+            .help("Show all detected edges")
+
+        Text("Hold ⌥ to bypass snap")
+            .font(.caption)
+            .foregroundStyle(.tertiary)
+    }
+}
+
+// MARK: - Aspect Guide (Always Visible)
+
+struct AspectGuideView: View {
+    @Environment(AppState.self) private var appState
+
+    var body: some View {
+        LabeledContent("Aspect") {
+            HStack(spacing: 3) {
+                Button {
+                    appState.showAspectRatioGuide = nil
+                } label: {
+                    Image(systemName: "xmark")
+                        .frame(width: 24)
+                }
+                .buttonStyle(.bordered)
+                .tint(appState.showAspectRatioGuide == nil ? .accentColor : .secondary)
+
+                ForEach(AspectRatioGuide.allCases) { guide in
+                    Button {
+                        appState.showAspectRatioGuide = guide
+                    } label: {
+                        Text(guide.rawValue)
+                            .frame(minWidth: 24)
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(appState.showAspectRatioGuide == guide ? .yellow : .secondary)
+                }
+            }
+            .controlSize(.small)
+        }
+    }
+}
+
+// MARK: - Export Format (Always Visible)
+
+struct ExportFormatView: View {
+    @Environment(AppState.self) private var appState
+
+    var body: some View {
+        @Bindable var state = appState
+
+        // Format selection
+        LabeledContent("Format") {
+            HStack(spacing: 4) {
+                ForEach(ExportFormat.allCases) { fmt in
+                    Button {
+                        appState.exportSettings.format = fmt
+                        appState.markCustomSettings()
+                    } label: {
+                        Text(fmt.rawValue)
+                            .frame(minWidth: 32)
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(appState.exportSettings.format == fmt ? .accentColor : .secondary)
+                }
+            }
+            .controlSize(.small)
+        }
+
+        // Naming selection
+        LabeledContent("Naming") {
+            Picker("", selection: Binding(
+                get: { appState.exportSettings.renameSettings.mode },
+                set: { appState.exportSettings.renameSettings.mode = $0; appState.markCustomSettings() }
+            )) {
+                ForEach(RenameMode.allCases) { mode in
+                    Text(mode.rawValue).tag(mode)
+                }
+            }
+            .pickerStyle(.segmented)
+            .frame(width: 160)
+        }
+
+        // Output preview
+        if let firstImage = appState.images.first {
+            LabeledContent("Output") {
+                Text(appState.exportSettings.outputFilename(for: firstImage.url))
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+        }
+    }
+}
+
+// MARK: - Quality & Resize (Collapsible)
+
+struct QualityResizeView: View {
+    @Environment(AppState.self) private var appState
+
+    var body: some View {
+        @Bindable var state = appState
+
+        // Quality slider (for JPEG/HEIC/WebP)
+        if appState.exportSettings.format.supportsCompression {
+            LabeledContent("Quality") {
+                HStack(spacing: 8) {
+                    Slider(value: Binding(
+                        get: { appState.exportSettings.quality },
+                        set: { appState.exportSettings.quality = $0; appState.markCustomSettings() }
+                    ), in: 0.1...1.0, step: 0.05)
+                    .frame(maxWidth: 120)
+                    Text("\(Int(appState.exportSettings.quality * 100))%")
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                        .frame(width: 40, alignment: .trailing)
+                }
+            }
+        }
+
+        // Suffix field (when using Keep Original naming)
+        if appState.exportSettings.renameSettings.mode == .keepOriginal {
+            LabeledContent("Suffix") {
+                TextField("", text: Binding(
+                    get: { appState.exportSettings.suffix },
+                    set: { appState.exportSettings.suffix = $0; appState.markCustomSettings() }
+                ), prompt: Text("_cropped"))
+                .textFieldStyle(.roundedBorder)
+                .frame(width: 100)
+            }
+        }
+
+        // Pattern field (when using Pattern naming)
+        if appState.exportSettings.renameSettings.mode == .pattern {
+            LabeledContent("Pattern") {
+                TextField("", text: Binding(
+                    get: { appState.exportSettings.renameSettings.pattern },
+                    set: { appState.exportSettings.renameSettings.pattern = $0; appState.markCustomSettings() }
+                ), prompt: Text("{name}_{n}"))
+                .textFieldStyle(.roundedBorder)
+                .frame(width: 120)
+                .font(.system(.body, design: .monospaced))
+            }
+
+            // Token buttons
+            LabeledContent("Tokens") {
+                HStack(spacing: 4) {
+                    ForEach(RenameSettings.availableTokens, id: \.token) { token in
+                        Button(token.token) {
+                            appState.exportSettings.renameSettings.pattern += token.token
+                            appState.markCustomSettings()
+                        }
+                        .help(token.description)
+                    }
+                }
+                .controlSize(.mini)
+                .buttonStyle(.bordered)
+            }
+        }
+
+        // Resize settings - use LabeledContent for consistency
+        LabeledContent("Resize") {
+            HStack(spacing: 4) {
+                ForEach(ResizeMode.allCases) { mode in
+                    Button {
+                        appState.exportSettings.resizeSettings.mode = mode
+                        appState.markCustomSettings()
+                    } label: {
+                        Text(shortLabel(for: mode))
+                            .frame(minWidth: 28)
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(appState.exportSettings.resizeSettings.mode == mode ? .accentColor : .secondary)
+                }
+            }
+            .controlSize(.small)
+        }
+
+        // Resize dimension controls when not "none"
+        if appState.exportSettings.resizeSettings.mode != .none {
+            resizeControls
+        }
+    }
+
+    private func shortLabel(for mode: ResizeMode) -> String {
+        switch mode {
+        case .none: return "None"
+        case .exactSize: return "Exact"
+        case .maxWidth: return "W"
+        case .maxHeight: return "H"
+        case .percentage: return "%"
+        }
+    }
+
+    @ViewBuilder
+    private var resizeControls: some View {
+        switch appState.exportSettings.resizeSettings.mode {
+        case .none:
+            EmptyView()
+        case .exactSize:
+            LabeledContent("Size") {
+                HStack(spacing: 4) {
+                    TextField("W", value: Binding(
+                        get: { appState.exportSettings.resizeSettings.width },
+                        set: { appState.exportSettings.resizeSettings.width = $0; appState.markCustomSettings() }
+                    ), format: .number)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 60)
+                    Text("×")
+                        .foregroundStyle(.secondary)
+                    TextField("H", value: Binding(
+                        get: { appState.exportSettings.resizeSettings.height },
+                        set: { appState.exportSettings.resizeSettings.height = $0; appState.markCustomSettings() }
+                    ), format: .number)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 60)
+                }
+            }
+        case .maxWidth:
+            LabeledContent("Max Width") {
+                TextField("px", value: Binding(
+                    get: { appState.exportSettings.resizeSettings.width },
+                    set: { appState.exportSettings.resizeSettings.width = $0; appState.markCustomSettings() }
+                ), format: .number)
+                .textFieldStyle(.roundedBorder)
+                .frame(width: 80)
+            }
+        case .maxHeight:
+            LabeledContent("Max Height") {
+                TextField("px", value: Binding(
+                    get: { appState.exportSettings.resizeSettings.height },
+                    set: { appState.exportSettings.resizeSettings.height = $0; appState.markCustomSettings() }
+                ), format: .number)
+                .textFieldStyle(.roundedBorder)
+                .frame(width: 80)
+            }
+        case .percentage:
+            LabeledContent("Scale") {
+                HStack(spacing: 4) {
+                    Slider(value: Binding(
+                        get: { appState.exportSettings.resizeSettings.percentage },
+                        set: { appState.exportSettings.resizeSettings.percentage = $0; appState.markCustomSettings() }
+                    ), in: 10...200, step: 5)
+                    .frame(width: 100)
+                    Text("\(Int(appState.exportSettings.resizeSettings.percentage))%")
+                        .monospacedDigit()
+                        .frame(width: 40)
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Export Footer (Sticky)
+
+struct ExportFooterView: View {
+    @Environment(AppState.self) private var appState
+
+    @State private var showReviewSheet = false
+    @State private var pendingOutputDirectory: URL?
+    @State private var showErrorAlert = false
+    @State private var exportError: String?
+    @State private var showSuccessAlert = false
+    @State private var exportedCount = 0
+    @State private var showOverwriteDialog = false
+    @State private var existingFilesCount = 0
+    @State private var pendingExportImages: [ImageItem] = []
+    @State private var pendingExportDirectory: URL?
+    @State private var dialogPresentationID = UUID()
+
+    private var imagesToProcess: [ImageItem] {
+        if appState.selectedImageIDs.isEmpty {
+            return appState.images
+        } else {
+            return appState.images.filter { appState.selectedImageIDs.contains($0.id) }
+        }
+    }
+
+    var body: some View {
+        VStack(spacing: 12) {
+            Divider()
+
+            // File size estimate
+            if !appState.images.isEmpty {
+                FileSizeEstimateView()
+            }
+
+            // Warning if nothing to export
+            if !appState.canExport && !appState.images.isEmpty && !appState.isProcessing {
+                Label("Apply crop, transform, or resize to export", systemImage: "exclamationmark.triangle")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+            }
+
+            // Export button - prominent action
+            Button {
+                selectOutputFolder()
+            } label: {
+                HStack {
+                    Image(systemName: "square.and.arrow.down.fill")
+                    Text(appState.selectedImageIDs.isEmpty
+                         ? "Export All (\(appState.images.count))"
+                         : "Export Selected (\(appState.selectedImageIDs.count))")
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+            .disabled(!appState.canExport)
+
+            // Progress indicator
+            if appState.isProcessing {
+                ProgressView(value: appState.processingProgress) {
+                    Text("Exporting \(Int(appState.processingProgress * 100))%")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .progressViewStyle(.linear)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(.regularMaterial)
+        .sheet(isPresented: $showReviewSheet) {
+            if let outputDir = pendingOutputDirectory {
+                BatchReviewView(images: imagesToProcess, outputDirectory: outputDir) { selectedImages in
+                    Task {
+                        await processImages(selectedImages, to: outputDir)
+                    }
+                }
+                .environment(appState)
+            }
+        }
+        .alert("Export Complete", isPresented: $showSuccessAlert) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Successfully exported \(exportedCount) images")
+        }
+        .alert("Export Failed", isPresented: $showErrorAlert) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(exportError ?? "Unknown error")
+        }
+        .confirmationDialog(
+            "Overwrite Existing Files?",
+            isPresented: $showOverwriteDialog,
+            titleVisibility: .visible
+        ) {
+            let images = pendingExportImages
+            let directory = pendingExportDirectory
+
+            Button("Overwrite", role: .destructive) {
+                guard let dir = directory else { return }
+                Task {
+                    await executeExport(images, to: dir, rename: false)
+                }
+            }
+            Button("Rename (add _1, _2...)") {
+                guard let dir = directory else { return }
+                Task {
+                    await executeExport(images, to: dir, rename: true)
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("\(existingFilesCount) file\(existingFilesCount == 1 ? "" : "s") already exist\(existingFilesCount == 1 ? "s" : "") in the destination folder.")
+        }
+        .id(dialogPresentationID)
+        .onChange(of: showOverwriteDialog) { _, isShowing in
+            if !isShowing {
+                pendingExportImages = []
+                pendingExportDirectory = nil
+            }
+        }
+    }
+
+    private func selectOutputFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Choose"
+        panel.message = "Select output folder for cropped images"
+
+        if panel.runModal() == .OK, let url = panel.url {
+            pendingOutputDirectory = url
+            showReviewSheet = true
+        }
+    }
+
+    private func processImages(_ images: [ImageItem], to outputDirectory: URL) async {
+        var existingCount = 0
+        for image in images {
+            let outputFilename = appState.exportSettings.outputFilename(for: image.url)
+            let outputURL = outputDirectory.appendingPathComponent(outputFilename)
+            if FileManager.default.fileExists(atPath: outputURL.path) {
+                existingCount += 1
+            }
+        }
+
+        if existingCount > 0 {
+            pendingExportImages = images
+            pendingExportDirectory = outputDirectory
+            existingFilesCount = existingCount
+            dialogPresentationID = UUID()
+            showOverwriteDialog = true
+        } else {
+            await executeExport(images, to: outputDirectory, rename: false)
+        }
+    }
+
+    private func executeExport(_ images: [ImageItem], to outputDirectory: URL, rename: Bool) async {
+        do {
+            let results: [URL]
+
+            if rename {
+                results = try await appState.processAndExportWithRename(images: images, to: outputDirectory)
+            } else {
+                results = try await appState.processAndExport(images: images, to: outputDirectory)
+            }
+
+            exportedCount = results.count
+            showSuccessAlert = true
+        } catch {
+            exportError = error.localizedDescription
+            showErrorAlert = true
         }
     }
 }
