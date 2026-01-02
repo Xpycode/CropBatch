@@ -10,6 +10,14 @@ final class PresetManager {
     /// User-created presets (persisted)
     private(set) var userPresets: [CropPreset] = []
 
+    /// Last error encountered during load/save operations
+    var lastError: Error?
+
+    /// Clears the current error state
+    func clearError() {
+        lastError = nil
+    }
+
     /// All presets (built-in + user)
     var allPresets: [CropPreset] {
         CropPreset.deviceTemplates + userPresets
@@ -80,8 +88,9 @@ final class PresetManager {
         guard let data = UserDefaults.standard.data(forKey: userDefaultsKey) else { return }
         do {
             userPresets = try JSONDecoder().decode([CropPreset].self, from: data)
+            lastError = nil
         } catch {
-            print("Failed to load user presets: \(error)")
+            lastError = error
         }
     }
 
@@ -89,8 +98,9 @@ final class PresetManager {
         do {
             let data = try JSONEncoder().encode(userPresets)
             UserDefaults.standard.set(data, forKey: userDefaultsKey)
+            lastError = nil
         } catch {
-            print("Failed to save user presets: \(error)")
+            lastError = error
         }
     }
 

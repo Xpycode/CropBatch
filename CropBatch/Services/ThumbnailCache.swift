@@ -1,15 +1,16 @@
 import AppKit
 
-/// Thread-safe cache for thumbnail images using NSCache
-/// NSCache is thread-safe internally, so we mark this as @unchecked Sendable
-final class ThumbnailCache: @unchecked Sendable {
+/// Thread-safe cache for thumbnail images using actor isolation
+/// Uses in-flight task tracking to prevent duplicate generation for the same URL
+actor ThumbnailCache {
     static let shared = ThumbnailCache()
 
-    private let cache = NSCache<NSURL, NSImage>()
+    private let cache = NSCache<NSString, NSImage>()
+    private var inFlight: [String: Task<NSImage?, Never>] = [:]
 
     init() {
-        cache.countLimit = 100
-        cache.totalCostLimit = 50 * 1024 * 1024 // 50MB
+        cache.countLimit = Config.Cache.thumbnailCountLimit
+        cache.totalCostLimit = Config.Cache.thumbnailSizeLimit
     }
 
     /// Retrieves or generates a thumbnail for the given URL
@@ -18,32 +19,56 @@ final class ThumbnailCache: @unchecked Sendable {
     ///   - size: Target thumbnail size
     /// - Returns: The thumbnail image, or nil if generation fails
     func thumbnail(for url: URL, size: CGSize) async -> NSImage? {
-        let key = url as NSURL
+        // Create a composite key that includes both URL and size
+        let key = "\(url.absoluteString)|\(Int(size.width))x\(Int(size.height))"
+        let cacheKey = key as NSString
 
         // Check cache first
-        if let cached = cache.object(forKey: key) {
+        if let cached = cache.object(forKey: cacheKey) {
             return cached
         }
 
-        // Generate thumbnail
-        guard let image = NSImage(contentsOf: url) else { return nil }
-        let thumbnail = await generateThumbnail(from: image, size: size)
+        // Check if already generating this thumbnail
+        if let existingTask = inFlight[key] {
+            return await existingTask.value
+        }
 
-        // Cache the result with estimated cost
-        let cost = Int(size.width * size.height * 4) // Approximate bytes
-        cache.setObject(thumbnail, forKey: key, cost: cost)
+        // Create a new generation task
+        let task = Task<NSImage?, Never> {
+            guard let image = NSImage(contentsOf: url) else { return nil }
+            return await generateThumbnail(from: image, size: size)
+        }
 
-        return thumbnail
+        // Track the in-flight task
+        inFlight[key] = task
+
+        // Await the result
+        let result = await task.value
+
+        // Clean up in-flight tracking
+        inFlight[key] = nil
+
+        // Cache the result if successful
+        if let thumbnail = result {
+            let cost = Int(size.width * size.height * 4) // Approximate bytes
+            cache.setObject(thumbnail, forKey: cacheKey, cost: cost)
+        }
+
+        return result
     }
 
-    /// Invalidates the cached thumbnail for a specific URL
+    /// Invalidates the cached thumbnail for a specific URL at all sizes
     func invalidate(for url: URL) {
-        cache.removeObject(forKey: url as NSURL)
+        // Since we use composite keys, we need to remove all size variants
+        // For simplicity, clear the entire cache - NSCache handles this efficiently
+        // A more sophisticated approach would track keys per URL
+        cache.removeAllObjects()
     }
 
     /// Clears all cached thumbnails
     func clearAll() {
         cache.removeAllObjects()
+        inFlight.removeAll()
     }
 
     /// Generates a thumbnail using high-quality CGContext scaling

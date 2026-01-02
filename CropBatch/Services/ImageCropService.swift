@@ -10,6 +10,11 @@ enum ImageCropError: LocalizedError {
     case failedToWriteImage
     case wouldOverwriteOriginal(String)
     case filenameCollision(String)
+    case failedToCreateContext
+    case failedToResize
+    case failedToRotate
+    case failedToFlip
+    case invalidTargetSize
 
     var errorDescription: String? {
         switch self {
@@ -25,6 +30,16 @@ enum ImageCropError: LocalizedError {
             return "Would overwrite original file: \(filename). Please use a different suffix."
         case .filenameCollision(let filename):
             return "Filename collision detected: \(filename). Multiple images would export to the same file."
+        case .failedToCreateContext:
+            return "Failed to create graphics context for image processing"
+        case .failedToResize:
+            return "Failed to resize image"
+        case .failedToRotate:
+            return "Failed to rotate image"
+        case .failedToFlip:
+            return "Failed to flip image"
+        case .invalidTargetSize:
+            return "Invalid target size for resize operation"
         }
     }
 }
@@ -86,12 +101,13 @@ struct ImageCropService {
     ///   - image: The source image to resize
     ///   - targetSize: The target size in pixels
     /// - Returns: A new resized NSImage
-    static func resize(_ image: NSImage, to targetSize: CGSize) -> NSImage {
+    /// - Throws: ImageCropError if resize fails
+    static func resize(_ image: NSImage, to targetSize: CGSize) throws -> NSImage {
         // Validate target size
         let targetWidth = Int(targetSize.width)
         let targetHeight = Int(targetSize.height)
         guard targetWidth > 0 && targetHeight > 0 else {
-            return image
+            throw ImageCropError.invalidTargetSize
         }
 
         // Create a bitmap context at the target size
@@ -104,7 +120,7 @@ struct ImageCropService {
             bytesPerRow: 0,
             space: colorSpace,
             bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-        ) else { return image }
+        ) else { throw ImageCropError.failedToCreateContext }
 
         // Set high quality interpolation for good downscaling
         context.interpolationQuality = .high
@@ -125,7 +141,7 @@ struct ImageCropService {
 
         NSGraphicsContext.restoreGraphicsState()
 
-        guard let resizedCGImage = context.makeImage() else { return image }
+        guard let resizedCGImage = context.makeImage() else { throw ImageCropError.failedToResize }
         return NSImage(cgImage: resizedCGImage, size: targetSize)
     }
 
@@ -136,10 +152,11 @@ struct ImageCropService {
     ///   - image: The source image
     ///   - angle: Rotation angle (90, 180, or 270 degrees)
     /// - Returns: Rotated image
-    static func rotate(_ image: NSImage, by angle: RotationAngle) -> NSImage {
+    /// - Throws: ImageCropError if rotation fails
+    static func rotate(_ image: NSImage, by angle: RotationAngle) throws -> NSImage {
         guard angle != .none else { return image }
         guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
-            return image
+            throw ImageCropError.failedToGetCGImage
         }
 
         // CRITICAL: Use CGImage pixel dimensions, NOT NSImage.size (which is in points)
@@ -163,7 +180,7 @@ struct ImageCropService {
             bytesPerRow: 0,
             space: colorSpace,
             bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-        ) else { return image }
+        ) else { throw ImageCropError.failedToCreateContext }
 
         // Move origin to center, rotate, then draw using pixel dimensions
         context.translateBy(x: rotatedSize.width / 2, y: rotatedSize.height / 2)
@@ -171,7 +188,7 @@ struct ImageCropService {
         context.translateBy(x: -pixelWidth / 2, y: -pixelHeight / 2)
         context.draw(cgImage, in: CGRect(x: 0, y: 0, width: pixelWidth, height: pixelHeight))
 
-        guard let rotatedCGImage = context.makeImage() else { return image }
+        guard let rotatedCGImage = context.makeImage() else { throw ImageCropError.failedToRotate }
         return NSImage(cgImage: rotatedCGImage, size: rotatedSize)
     }
 
@@ -181,10 +198,11 @@ struct ImageCropService {
     ///   - horizontal: Flip horizontally
     ///   - vertical: Flip vertically
     /// - Returns: Flipped image
-    static func flip(_ image: NSImage, horizontal: Bool, vertical: Bool) -> NSImage {
+    /// - Throws: ImageCropError if flip fails
+    static func flip(_ image: NSImage, horizontal: Bool, vertical: Bool) throws -> NSImage {
         guard horizontal || vertical else { return image }
         guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
-            return image
+            throw ImageCropError.failedToGetCGImage
         }
 
         // CRITICAL: Use CGImage pixel dimensions, NOT NSImage.size (which is in points)
@@ -203,7 +221,7 @@ struct ImageCropService {
             bytesPerRow: 0,
             space: colorSpace,
             bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-        ) else { return image }
+        ) else { throw ImageCropError.failedToCreateContext }
 
         // Apply flip transforms using pixel dimensions
         context.translateBy(
@@ -216,7 +234,7 @@ struct ImageCropService {
         )
         context.draw(cgImage, in: CGRect(origin: .zero, size: pixelSize))
 
-        guard let flippedCGImage = context.makeImage() else { return image }
+        guard let flippedCGImage = context.makeImage() else { throw ImageCropError.failedToFlip }
         return NSImage(cgImage: flippedCGImage, size: pixelSize)
     }
 
@@ -225,19 +243,20 @@ struct ImageCropService {
     ///   - image: The source image
     ///   - transform: The transform to apply
     /// - Returns: Transformed image
-    static func applyTransform(_ image: NSImage, transform: ImageTransform) -> NSImage {
+    /// - Throws: ImageCropError if transform fails
+    static func applyTransform(_ image: NSImage, transform: ImageTransform) throws -> NSImage {
         guard !transform.isIdentity else { return image }
 
         var result = image
 
         // Apply rotation first
         if transform.rotation != .none {
-            result = rotate(result, by: transform.rotation)
+            result = try rotate(result, by: transform.rotation)
         }
 
         // Then apply flip
         if transform.flipHorizontal || transform.flipVertical {
-            result = flip(result, horizontal: transform.flipHorizontal, vertical: transform.flipVertical)
+            result = try flip(result, horizontal: transform.flipHorizontal, vertical: transform.flipVertical)
         }
 
         return result
@@ -746,7 +765,7 @@ struct ImageCropService {
 
         // 1. Apply transform (rotation/flip) FIRST
         if !transform.isIdentity {
-            processedImage = applyTransform(processedImage, transform: transform)
+            processedImage = try applyTransform(processedImage, transform: transform)
         }
 
         // 2. Apply blur regions - MUST transform coordinates to match transformed image
@@ -766,7 +785,7 @@ struct ImageCropService {
 
         // 4. Apply resize if enabled
         if let targetSize = calculateResizedSize(from: processedImage.size, with: exportSettings.resizeSettings) {
-            processedImage = resize(processedImage, to: targetSize)
+            processedImage = try resize(processedImage, to: targetSize)
         }
 
         // 5. Apply watermark if enabled

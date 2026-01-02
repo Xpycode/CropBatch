@@ -235,10 +235,10 @@ struct CropSectionView: View {
 
         VStack(alignment: .leading, spacing: 12) {
             // Tool selector (centered)
-            // NOTE: Blur tool hidden - coordinate transform issues with rotations
-            // See docs/blur-feature-status.md for details. Code preserved for future.
+            // TODO: [SHELVED] Blur tool - transform coordinate mismatch when images are rotated/flipped
+            // See docs/blur-feature-status.md for details. Remove filter to re-enable.
             HStack(spacing: 0) {
-                ForEach(EditorTool.allCases.filter { $0 != .blur }) { tool in
+                ForEach(EditorTool.allCases.filter { $0 != .blur }) { tool in  // SHELVED: Blur tool
                     Button {
                         appState.currentTool = tool
                     } label: {
@@ -265,7 +265,7 @@ struct CropSectionView: View {
             if appState.currentTool == .crop {
                 // MARK: Crop Tool Controls
 
-                // Preset picker - shelved for simplicity
+                // TODO: [SHELVED] Preset picker - simplified UI for now
                 #if false
                 HStack {
                     Menu {
@@ -889,18 +889,7 @@ struct QualityResizeView: View {
 
 struct ExportFooterView: View {
     @Environment(AppState.self) private var appState
-
-    @State private var showReviewSheet = false
-    @State private var pendingOutputDirectory: URL?
-    @State private var showErrorAlert = false
-    @State private var exportError: String?
-    @State private var showSuccessAlert = false
-    @State private var exportedCount = 0
-    @State private var showOverwriteDialog = false
-    @State private var existingFilesCount = 0
-    @State private var pendingExportImages: [ImageItem] = []
-    @State private var pendingExportDirectory: URL?
-    @State private var dialogPresentationID = UUID()
+    @State private var coordinator = ExportCoordinator()
 
     private var imagesToProcess: [ImageItem] {
         if appState.selectedImageIDs.isEmpty {
@@ -928,7 +917,7 @@ struct ExportFooterView: View {
 
             // Export button - prominent action
             Button {
-                selectOutputFolder()
+                coordinator.selectOutputFolder()
             } label: {
                 HStack {
                     Image(systemName: "square.and.arrow.down.fill")
@@ -955,110 +944,8 @@ struct ExportFooterView: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
         .background(.regularMaterial)
-        .sheet(isPresented: $showReviewSheet) {
-            if let outputDir = pendingOutputDirectory {
-                BatchReviewView(images: imagesToProcess, outputDirectory: outputDir) { selectedImages in
-                    Task {
-                        await processImages(selectedImages, to: outputDir)
-                    }
-                }
-                .environment(appState)
-            }
-        }
-        .alert("Export Complete", isPresented: $showSuccessAlert) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text("Successfully exported \(exportedCount) images")
-        }
-        .alert("Export Failed", isPresented: $showErrorAlert) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(exportError ?? "Unknown error")
-        }
-        .confirmationDialog(
-            "Overwrite Existing Files?",
-            isPresented: $showOverwriteDialog,
-            titleVisibility: .visible
-        ) {
-            let images = pendingExportImages
-            let directory = pendingExportDirectory
-
-            Button("Overwrite", role: .destructive) {
-                guard let dir = directory else { return }
-                Task {
-                    await executeExport(images, to: dir, rename: false)
-                }
-            }
-            Button("Rename (add _1, _2...)") {
-                guard let dir = directory else { return }
-                Task {
-                    await executeExport(images, to: dir, rename: true)
-                }
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("\(existingFilesCount) file\(existingFilesCount == 1 ? "" : "s") already exist\(existingFilesCount == 1 ? "s" : "") in the destination folder.")
-        }
-        .id(dialogPresentationID)
-        .onChange(of: showOverwriteDialog) { _, isShowing in
-            if !isShowing {
-                pendingExportImages = []
-                pendingExportDirectory = nil
-            }
-        }
-    }
-
-    private func selectOutputFolder() {
-        let panel = NSOpenPanel()
-        panel.canChooseFiles = false
-        panel.canChooseDirectories = true
-        panel.allowsMultipleSelection = false
-        panel.prompt = "Choose"
-        panel.message = "Select output folder for cropped images"
-
-        if panel.runModal() == .OK, let url = panel.url {
-            pendingOutputDirectory = url
-            showReviewSheet = true
-        }
-    }
-
-    private func processImages(_ images: [ImageItem], to outputDirectory: URL) async {
-        var existingCount = 0
-        for image in images {
-            let outputFilename = appState.exportSettings.outputFilename(for: image.url)
-            let outputURL = outputDirectory.appendingPathComponent(outputFilename)
-            if FileManager.default.fileExists(atPath: outputURL.path) {
-                existingCount += 1
-            }
-        }
-
-        if existingCount > 0 {
-            pendingExportImages = images
-            pendingExportDirectory = outputDirectory
-            existingFilesCount = existingCount
-            dialogPresentationID = UUID()
-            showOverwriteDialog = true
-        } else {
-            await executeExport(images, to: outputDirectory, rename: false)
-        }
-    }
-
-    private func executeExport(_ images: [ImageItem], to outputDirectory: URL, rename: Bool) async {
-        do {
-            let results: [URL]
-
-            if rename {
-                results = try await appState.processAndExportWithRename(images: images, to: outputDirectory)
-            } else {
-                results = try await appState.processAndExport(images: images, to: outputDirectory)
-            }
-
-            exportedCount = results.count
-            showSuccessAlert = true
-        } catch {
-            exportError = error.localizedDescription
-            showErrorAlert = true
-        }
+        .onAppear { coordinator.setAppState(appState) }
+        .exportSheets(coordinator: coordinator, appState: appState, imagesToProcess: imagesToProcess)
     }
 }
 
@@ -1139,19 +1026,7 @@ struct TransformRowView: View {
 
 struct ExportSectionView: View {
     @Environment(AppState.self) private var appState
-    @State private var showReviewSheet = false
-    @State private var pendingOutputDirectory: URL?
-    @State private var showErrorAlert = false
-    @State private var exportError: String?
-    @State private var showSuccessAlert = false
-    @State private var exportedCount = 0
-
-    // Overwrite handling
-    @State private var showOverwriteDialog = false
-    @State private var existingFilesCount = 0
-    @State private var pendingExportImages: [ImageItem] = []
-    @State private var pendingExportDirectory: URL?
-    @State private var dialogPresentationID = UUID()  // Forces dialog rebuild on each presentation
+    @State private var coordinator = ExportCoordinator()
 
     private var imagesToProcess: [ImageItem] {
         appState.selectedImageIDs.isEmpty ? appState.images : appState.selectedImages
@@ -1235,9 +1110,9 @@ struct ExportSectionView: View {
 
             // Export button - at bottom with padding
             Spacer().frame(height: 8)
-            
+
             Button {
-                selectOutputFolder()
+                coordinator.selectOutputFolderAndProcess(images: imagesToProcess)
             } label: {
                 HStack {
                     Image(systemName: "square.and.arrow.down.fill")
@@ -1266,114 +1141,8 @@ struct ExportSectionView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
-        .sheet(isPresented: $showReviewSheet) {
-            if let outputDir = pendingOutputDirectory {
-                BatchReviewView(images: imagesToProcess, outputDirectory: outputDir) { selectedImages in
-                    Task {
-                        await processImages(selectedImages, to: outputDir)
-                    }
-                }
-                .environment(appState)
-            }
-        }
-        .alert("Export Complete", isPresented: $showSuccessAlert) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text("Successfully exported \(exportedCount) images")
-        }
-        .alert("Export Failed", isPresented: $showErrorAlert) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(exportError ?? "Unknown error")
-        }
-        .confirmationDialog(
-            "Overwrite Existing Files?",
-            isPresented: $showOverwriteDialog,
-            titleVisibility: .visible
-        ) {
-            // Capture values BEFORE the Task to avoid race conditions
-            // (dialog dismissal may clear state before Task starts)
-            let images = pendingExportImages
-            let directory = pendingExportDirectory
-
-            Button("Overwrite", role: .destructive) {
-                guard let dir = directory else { return }
-                Task {
-                    await executeExport(images, to: dir, rename: false)
-                }
-            }
-            Button("Rename (add _1, _2...)") {
-                guard let dir = directory else { return }
-                Task {
-                    await executeExport(images, to: dir, rename: true)
-                }
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("\(existingFilesCount) file\(existingFilesCount == 1 ? "" : "s") already exist\(existingFilesCount == 1 ? "s" : "") in the destination folder.")
-        }
-        .id(dialogPresentationID)  // Force SwiftUI to rebuild dialog content on each presentation
-        .onChange(of: showOverwriteDialog) { _, isShowing in
-            // Clear pending state when dialog closes
-            if !isShowing {
-                pendingExportImages = []
-                pendingExportDirectory = nil
-            }
-        }
-    }
-
-    private func selectOutputFolder() {
-        let panel = NSOpenPanel()
-        panel.title = "Choose Export Folder"
-        panel.canChooseFiles = false
-        panel.canChooseDirectories = true
-        panel.allowsMultipleSelection = false
-        panel.canCreateDirectories = true
-
-        panel.begin { response in
-            guard response == .OK, let outputDirectory = panel.url else { return }
-            Task {
-                await processImages(imagesToProcess, to: outputDirectory)
-            }
-        }
-    }
-
-    private func processImages(_ images: [ImageItem], to outputDirectory: URL) async {
-        // Check for existing files before exporting
-        var settings = appState.exportSettings
-        settings.outputDirectory = .custom(outputDirectory)
-        let existingFiles = settings.findExistingFiles(items: images)
-
-        if !existingFiles.isEmpty {
-            // Show confirmation dialog
-            existingFilesCount = existingFiles.count
-            pendingExportImages = images
-            pendingExportDirectory = outputDirectory
-            dialogPresentationID = UUID()  // Force dialog content rebuild
-            showOverwriteDialog = true
-        } else {
-            // No conflicts, proceed directly
-            await executeExport(images, to: outputDirectory, rename: false)
-        }
-    }
-
-    private func executeExport(_ images: [ImageItem], to outputDirectory: URL, rename: Bool) async {
-        do {
-            let results: [URL]
-
-            if rename {
-                results = try await appState.processAndExportWithRename(images: images, to: outputDirectory)
-            } else {
-                results = try await appState.processAndExport(images: images, to: outputDirectory)
-            }
-
-            exportedCount = results.count
-            showSuccessAlert = true
-        } catch {
-            exportError = error.localizedDescription
-            showErrorAlert = true
-        }
-        // Note: pending state is cleared by .onChange(of: showOverwriteDialog)
+        .onAppear { coordinator.setAppState(appState) }
+        .exportSheets(coordinator: coordinator, appState: appState, imagesToProcess: imagesToProcess)
     }
 }
 

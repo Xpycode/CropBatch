@@ -299,7 +299,8 @@ struct ThumbnailItemView: View {
         if transform.isIdentity {
             return item.originalImage
         }
-        return ImageCropService.applyTransform(item.originalImage, transform: transform)
+        // Fall back to original if transform fails
+        return (try? ImageCropService.applyTransform(item.originalImage, transform: transform)) ?? item.originalImage
     }
 
     var body: some View {

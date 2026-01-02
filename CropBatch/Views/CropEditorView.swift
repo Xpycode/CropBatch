@@ -341,7 +341,8 @@ struct CropEditorView: View {
         if currentTransform.isIdentity {
             return image.originalImage
         }
-        return ImageCropService.applyTransform(image.originalImage, transform: currentTransform)
+        // Fall back to original if transform fails
+        return (try? ImageCropService.applyTransform(image.originalImage, transform: currentTransform)) ?? image.originalImage
     }
 
     /// Size of the image after transform (accounts for rotation dimension swap)
@@ -820,7 +821,7 @@ struct CropHandlesView: View {
             // MARK: Corner Handles
 
             // Top-Left corner
-            CornerHandle(isSnapping: NSEvent.modifierFlags.contains(.control))
+            CornerHandle(corner: .topLeft, isSnapping: NSEvent.modifierFlags.contains(.control))
                 .position(
                     x: offsetX + CGFloat(cropSettings.cropLeft) * scale,
                     y: offsetY + CGFloat(cropSettings.cropTop) * scale
@@ -848,7 +849,7 @@ struct CropHandlesView: View {
                 }
 
             // Top-Right corner
-            CornerHandle(isSnapping: NSEvent.modifierFlags.contains(.control))
+            CornerHandle(corner: .topRight, isSnapping: NSEvent.modifierFlags.contains(.control))
                 .position(
                     x: offsetX + displayedSize.width - CGFloat(cropSettings.cropRight) * scale,
                     y: offsetY + CGFloat(cropSettings.cropTop) * scale
@@ -877,7 +878,7 @@ struct CropHandlesView: View {
                 }
 
             // Bottom-Left corner
-            CornerHandle(isSnapping: NSEvent.modifierFlags.contains(.control))
+            CornerHandle(corner: .bottomLeft, isSnapping: NSEvent.modifierFlags.contains(.control))
                 .position(
                     x: offsetX + CGFloat(cropSettings.cropLeft) * scale,
                     y: offsetY + displayedSize.height - CGFloat(cropSettings.cropBottom) * scale
@@ -906,7 +907,7 @@ struct CropHandlesView: View {
                 }
 
             // Bottom-Right corner
-            CornerHandle(isSnapping: NSEvent.modifierFlags.contains(.control))
+            CornerHandle(corner: .bottomRight, isSnapping: NSEvent.modifierFlags.contains(.control))
                 .position(
                     x: offsetX + displayedSize.width - CGFloat(cropSettings.cropRight) * scale,
                     y: offsetY + displayedSize.height - CGFloat(cropSettings.cropBottom) * scale
@@ -1030,13 +1031,24 @@ struct EdgeHandle: View {
         .shadow(color: isRectangleSnapping ? .green.opacity(0.5) : .black.opacity(0.3), radius: isRectangleSnapping ? 4 : 2, x: 0, y: 1)
         .contentShape(Rectangle().size(width: 44, height: 44))
         .cursor(isVertical ? .resizeLeftRight : .resizeUpDown)
+        .accessibilityLabel("\(edge.rawValue.capitalized) crop handle")
+        .accessibilityValue("\(value) pixels")
+        .accessibilityHint("Drag to adjust \(edge.rawValue) crop")
     }
 }
 
 // MARK: - Corner Handle
 
 struct CornerHandle: View {
+    let corner: Corner
     let isSnapping: Bool
+
+    enum Corner: String {
+        case topLeft = "top-left"
+        case topRight = "top-right"
+        case bottomLeft = "bottom-left"
+        case bottomRight = "bottom-right"
+    }
 
     var body: some View {
         Circle()
@@ -1049,6 +1061,8 @@ struct CornerHandle: View {
             )
             .shadow(color: .black.opacity(0.3), radius: 2, x: 0, y: 1)
             .contentShape(Rectangle().size(width: 30, height: 30))
+            .accessibilityLabel("\(corner.rawValue) corner handle")
+            .accessibilityHint("Drag to adjust crop from \(corner.rawValue) corner")
             .cursor(.crosshair)
     }
 }
@@ -1261,6 +1275,8 @@ struct WatermarkPreviewOverlay: View {
                         NSCursor.pop()
                     }
                 }
+                .accessibilityLabel("Watermark image preview")
+                .accessibilityHint("Drag to reposition watermark")
         }
     }
 
@@ -1325,6 +1341,8 @@ struct WatermarkPreviewOverlay: View {
                     NSCursor.pop()
                 }
             }
+            .accessibilityLabel("Watermark text: \(previewText)")
+            .accessibilityHint("Drag to reposition watermark")
     }
 
     // MARK: - Shared

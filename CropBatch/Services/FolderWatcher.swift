@@ -54,14 +54,18 @@ final class FolderWatcher {
         )
 
         source.setEventHandler { [weak self] in
-            self?.checkForNewFiles()
+            Task { @MainActor in
+                self?.checkForNewFiles()
+            }
         }
 
         source.setCancelHandler { [weak self] in
-            if let fd = self?.fileDescriptor, fd >= 0 {
-                close(fd)
+            Task { @MainActor in
+                if let fd = self?.fileDescriptor, fd >= 0 {
+                    close(fd)
+                }
+                self?.fileDescriptor = -1
             }
-            self?.fileDescriptor = -1
         }
 
         dispatchSource = source

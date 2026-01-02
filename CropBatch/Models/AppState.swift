@@ -54,6 +54,42 @@ final class AppState {
     var images: [ImageItem] = []
     var cropSettings = CropSettings()
     var exportSettings = ExportSettings()
+
+    // MARK: - Memory Warnings
+
+    /// Warning level for memory usage based on image count
+    enum MemoryWarningLevel {
+        case none
+        case warning   // Approaching limit
+        case critical  // At or above critical threshold
+    }
+
+    /// Current memory warning level based on loaded image count
+    var memoryWarningLevel: MemoryWarningLevel {
+        if images.count >= Config.Memory.imageCountCriticalThreshold {
+            return .critical
+        } else if images.count >= Config.Memory.imageCountWarningThreshold {
+            return .warning
+        }
+        return .none
+    }
+
+    /// Whether a memory warning should be displayed
+    var shouldShowMemoryWarning: Bool {
+        memoryWarningLevel != .none
+    }
+
+    /// Human-readable memory warning message
+    var memoryWarningMessage: String? {
+        switch memoryWarningLevel {
+        case .none:
+            return nil
+        case .warning:
+            return "You have \(images.count) images loaded. Consider exporting in batches to reduce memory usage."
+        case .critical:
+            return "⚠️ \(images.count) images loaded. This may cause performance issues or crashes. Export some images and remove them."
+        }
+    }
     var selectedPresetID: String? = "png_lossless"
     var showOutputDirectoryPicker = false
     var isProcessing = false
@@ -79,7 +115,7 @@ final class AppState {
     var snapPointsCache: [UUID: SnapPoints] = [:]
     var isDetectingSnapPoints = false
     var snapEnabled = true  // Master toggle for snap functionality
-    var snapThreshold: Int = 15  // Pixels threshold for snapping (5-30)
+    var snapThreshold: Int = Config.Snap.defaultThreshold  // Pixels threshold for snapping (5-30)
     var snapToCenter = true  // Also snap to image center lines
     var showSnapDebug = false  // Show all detected edges overlay
 
@@ -91,9 +127,9 @@ final class AppState {
         recentPresetIDs.removeAll { $0 == presetID }
         // Insert at front
         recentPresetIDs.insert(presetID, at: 0)
-        // Keep only last 5
-        if recentPresetIDs.count > 5 {
-            recentPresetIDs = Array(recentPresetIDs.prefix(5))
+        // Keep only recent presets up to limit
+        if recentPresetIDs.count > Config.Presets.recentLimit {
+            recentPresetIDs = Array(recentPresetIDs.prefix(Config.Presets.recentLimit))
         }
         // Persist
         let strings = recentPresetIDs.map { $0.uuidString }
@@ -128,8 +164,8 @@ final class AppState {
         cropHistory.append(cropSettings)
         cropHistoryIndex = cropHistory.count - 1
 
-        // Limit history to 50 items
-        if cropHistory.count > 50 {
+        // Limit history size
+        if cropHistory.count > Config.History.maxUndoSteps {
             cropHistory.removeFirst()
             cropHistoryIndex -= 1
         }
@@ -675,7 +711,7 @@ final class AppState {
 
             // Apply transform if any
             if !imageTransform.isIdentity {
-                processedImage = ImageCropService.applyTransform(processedImage, transform: imageTransform)
+                processedImage = try ImageCropService.applyTransform(processedImage, transform: imageTransform)
             }
 
             // Apply blur regions if any
@@ -688,7 +724,7 @@ final class AppState {
 
             // Apply resize if enabled
             if let targetSize = ImageCropService.calculateResizedSize(from: processedImage.size, with: settings.resizeSettings) {
-                processedImage = ImageCropService.resize(processedImage, to: targetSize)
+                processedImage = try ImageCropService.resize(processedImage, to: targetSize)
             }
 
             // Apply watermark if enabled

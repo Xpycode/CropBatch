@@ -140,8 +140,9 @@ struct BlurEditorView: View {
             height: abs(endNorm.y - startNorm.y)
         ).clamped()
 
-        // Minimum size check (at least 2% of image in each dimension)
-        guard transformedRect.width >= 0.02 && transformedRect.height >= 0.02 else { return }
+        // Minimum size check
+        let minSize = Config.Blur.minimumRegionSize
+        guard transformedRect.width >= minSize && transformedRect.height >= minSize else { return }
 
         // Convert to ORIGINAL image coordinates for storage
         let originalRect = transformedRect.applyingInverseTransform(transform)
@@ -280,6 +281,11 @@ struct BlurRegionOverlay: View {
         .onTapGesture { onSelect() }
         .gesture(moveGesture)
         .onHover { isHovering = $0 }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(region.style.rawValue) region")
+        .accessibilityValue(isSelected ? "Selected" : "")
+        .accessibilityHint("Tap to select, drag to move")
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     // MARK: - Preview Content
@@ -422,8 +428,9 @@ struct BlurRegionOverlay: View {
             newRect.height += dy
         }
 
-        // Minimum size (2% of image)
-        guard newRect.width >= 0.02 && newRect.height >= 0.02 else {
+        // Minimum size check
+        let minSize = Config.Blur.minimumRegionSize
+        guard newRect.width >= minSize && newRect.height >= minSize else {
             // Return original transformed rect if too small
             return displayNormalizedRect
         }

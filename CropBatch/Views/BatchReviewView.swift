@@ -183,7 +183,7 @@ struct BatchReviewView: View {
 
         // 1. Apply transforms (rotation, flip) - global transform applies to all
         if !appState.imageTransform.isIdentity {
-            result = ImageCropService.applyTransform(result, transform: appState.imageTransform)
+            result = try ImageCropService.applyTransform(result, transform: appState.imageTransform)
         }
 
         // 2. Apply blur regions
@@ -202,7 +202,7 @@ struct BatchReviewView: View {
                from: result.size,
                with: appState.exportSettings.resizeSettings
            ) {
-            result = ImageCropService.resize(result, to: targetSize)
+            result = try ImageCropService.resize(result, to: targetSize)
         }
 
         return result

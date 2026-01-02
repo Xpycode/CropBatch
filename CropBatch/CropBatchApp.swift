@@ -151,7 +151,8 @@ struct CropBatchApp: App {
                 .keyboardShortcut(.downArrow, modifiers: .command)
                 .disabled(appState.images.count < 2)
 
-                // Transform items - shelved (breaks crop state)
+                // TODO: [SHELVED] Rotation/flip menu - breaks crop state when applied
+                // Needs investigation into proper coordinate system handling
                 #if false
                 Divider()
 
@@ -208,8 +209,8 @@ struct CropBatchApp: App {
                 .keyboardShortcut("r", modifiers: .command)
                 .disabled(!appState.cropSettings.hasAnyCrop)
 
-                // Link Mode menu - shelved (not working reliably)
-                // Presets menu - shelved for simplicity
+                // TODO: [SHELVED] Link Mode menu - not working reliably
+                // TODO: [SHELVED] Presets menu - simplified UI for now
                 #if false
                 Divider()
 
