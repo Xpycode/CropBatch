@@ -649,6 +649,93 @@ struct RenameSettingsSection: View {
 }
 
 
+// MARK: - Draggable Number Field
+
+struct DraggableNumberField: View {
+    let label: String
+    @Binding var value: Double
+    var range: ClosedRange<Double> = 0...9999
+    var suffix: String? = nil
+    var onCommit: (() -> Void)? = nil
+    
+    @State private var isDragging = false
+    @State private var isHovering = false
+    @State private var dragStartValue: Double = 0
+    
+    private let dragSensitivity: CGFloat = 2.0
+    
+    var body: some View {
+        HStack(spacing: 4) {
+            // Draggable label
+            HStack(spacing: 2) {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 6, weight: .bold))
+                    .foregroundStyle(isDragging ? .primary : .tertiary)
+                
+                Text(label)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(isDragging ? .primary : (isHovering ? .primary : .secondary))
+                
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 6, weight: .bold))
+                    .foregroundStyle(isDragging ? .primary : .tertiary)
+            }
+            .padding(.horizontal, 4)
+            .padding(.vertical, 4)
+            .background(
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(isDragging ? Color.accentColor.opacity(0.25) : Color.secondary.opacity(0.1))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 4)
+                    .strokeBorder(isDragging ? Color.accentColor : Color.secondary.opacity(0.3), lineWidth: 1)
+            )
+            .contentShape(Rectangle())
+            .onHover { hovering in
+                isHovering = hovering
+                if hovering {
+                    NSCursor.resizeLeftRight.push()
+                } else if !isDragging {
+                    NSCursor.pop()
+                }
+            }
+            .gesture(
+                DragGesture(minimumDistance: 1)
+                    .onChanged { gesture in
+                        if !isDragging {
+                            isDragging = true
+                            dragStartValue = value
+                        }
+                        let delta = gesture.translation.width / dragSensitivity
+                        let newValue = dragStartValue + delta
+                        value = min(range.upperBound, max(range.lowerBound, newValue))
+                    }
+                    .onEnded { _ in
+                        isDragging = false
+                        if !isHovering {
+                            NSCursor.pop()
+                        }
+                        onCommit?()
+                    }
+            )
+            .help("Drag left/right to adjust value")
+            
+            TextField("", value: $value, format: .number)
+                .textFieldStyle(.roundedBorder)
+                .frame(width: 46)
+                .font(.system(size: 11, design: .monospaced))
+                .multilineTextAlignment(.trailing)
+                .onSubmit { onCommit?() }
+            
+            if let suffix = suffix {
+                Text(suffix)
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
+        }
+    }
+}
+
 // MARK: - Watermark Settings Section
 
 struct WatermarkSettingsSection: View {
@@ -764,37 +851,39 @@ struct WatermarkSettingsSection: View {
                 }
             }
 
-            // Font row
-            HStack(spacing: 8) {
-                // Font picker
-                Picker("", selection: Binding(
-                    get: { appState.exportSettings.watermarkSettings.fontFamily },
-                    set: {
-                        appState.exportSettings.watermarkSettings.fontFamily = $0
-                        appState.markCustomSettings()
+            // Font row - use LabeledContent pattern that works with Form
+            LabeledContent {
+                HStack(spacing: 8) {
+                    // Font picker
+                    Picker("", selection: Binding(
+                        get: { appState.exportSettings.watermarkSettings.fontFamily },
+                        set: {
+                            appState.exportSettings.watermarkSettings.fontFamily = $0
+                            appState.markCustomSettings()
+                        }
+                    )) {
+                        ForEach(availableFontFamilies, id: \.self) { family in
+                            Text(family).tag(family)
+                        }
                     }
-                )) {
-                    ForEach(availableFontFamilies, id: \.self) { family in
-                        Text(family).tag(family)
-                    }
+                    .labelsHidden()
+                    
+                    // Size with drag control
+                    DraggableNumberField(
+                        label: "Size",
+                        value: Binding(
+                            get: { appState.exportSettings.watermarkSettings.fontSize },
+                            set: {
+                                appState.exportSettings.watermarkSettings.fontSize = $0
+                                appState.markCustomSettings()
+                            }
+                        ),
+                        range: 8...500,
+                        suffix: "pt"
+                    )
                 }
-                .labelsHidden()
-                .frame(maxWidth: .infinity)
-
-                // Size stepper
-                TextField("", value: Binding(
-                    get: { appState.exportSettings.watermarkSettings.fontSize },
-                    set: {
-                        appState.exportSettings.watermarkSettings.fontSize = max(8, min(500, $0))
-                        appState.markCustomSettings()
-                    }
-                ), format: .number)
-                .textFieldStyle(.roundedBorder)
-                .frame(width: 50)
-
-                Text("pt")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            } label: {
+                EmptyView()
             }
 
             // Style row: Bold, Italic, Color
@@ -1231,68 +1320,50 @@ struct WatermarkSettingsSection: View {
         }
     }
 
-    @ViewBuilder
     private var marginControl: some View {
         VStack(spacing: 8) {
-            // Margin from edge
-            HStack {
-                Text("Margin")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                TextField("", value: Binding(
-                    get: { appState.exportSettings.watermarkSettings.margin },
-                    set: {
-                        appState.exportSettings.watermarkSettings.margin = max(0, $0)
-                        appState.markCustomSettings()
-                    }
-                ), format: .number)
-                .textFieldStyle(.roundedBorder)
-                .frame(width: 56)
-                Text("px")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
+            // Margin from edge - use LabeledContent like CropControlsView
+            LabeledContent("Margin") {
+                DraggableNumberField(
+                    label: "M",
+                    value: Binding(
+                        get: { appState.exportSettings.watermarkSettings.margin },
+                        set: {
+                            appState.exportSettings.watermarkSettings.margin = $0
+                            appState.markCustomSettings()
+                        }
+                    ),
+                    range: 0...500,
+                    suffix: "px"
+                )
             }
 
-            // Fine-tune offset (pixels, integers only)
-            HStack {
-                Text("Offset")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-
-                Spacer()
-
-                HStack(spacing: 6) {
-                    HStack(spacing: 3) {
-                        Text("X")
-                            .font(.caption)
-                            .foregroundStyle(.tertiary)
-                        TextField("", value: Binding(
-                            get: { Int(appState.exportSettings.watermarkSettings.offsetX) },
+            // Fine-tune offset (pixels) - use LabeledContent like CropControlsView
+            LabeledContent("Offset") {
+                HStack(spacing: 4) {
+                    DraggableNumberField(
+                        label: "X",
+                        value: Binding(
+                            get: { appState.exportSettings.watermarkSettings.offsetX },
                             set: {
-                                appState.exportSettings.watermarkSettings.offsetX = Double($0)
+                                appState.exportSettings.watermarkSettings.offsetX = $0
                                 appState.markCustomSettings()
                             }
-                        ), format: .number.grouping(.never))
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 54)
-                        .multilineTextAlignment(.trailing)
-                    }
-                    HStack(spacing: 3) {
-                        Text("Y")
-                            .font(.caption)
-                            .foregroundStyle(.tertiary)
-                        TextField("", value: Binding(
-                            get: { Int(appState.exportSettings.watermarkSettings.offsetY) },
+                        ),
+                        range: -2000...2000
+                    )
+                    
+                    DraggableNumberField(
+                        label: "Y",
+                        value: Binding(
+                            get: { appState.exportSettings.watermarkSettings.offsetY },
                             set: {
-                                appState.exportSettings.watermarkSettings.offsetY = Double($0)
+                                appState.exportSettings.watermarkSettings.offsetY = $0
                                 appState.markCustomSettings()
                             }
-                        ), format: .number.grouping(.never))
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 54)
-                        .multilineTextAlignment(.trailing)
-                    }
+                        ),
+                        range: -2000...2000
+                    )
 
                     // Reset button
                     if appState.exportSettings.watermarkSettings.offsetX != 0 ||
@@ -1307,7 +1378,7 @@ struct WatermarkSettingsSection: View {
                         }
                         .buttonStyle(.plain)
                         .foregroundStyle(.secondary)
-                        .help("Reset offset")
+                        .help("Reset offset to 0")
                     }
                 }
             }

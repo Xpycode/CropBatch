@@ -513,7 +513,7 @@ struct CompactCropField: View {
             )
             .help("Drag left/right to adjust value")
 
-            TextField("0", value: $value, format: .number)
+            TextField("", value: $value, format: .number)
                 .textFieldStyle(.roundedBorder)
                 .frame(width: 46)
                 .font(.system(size: 11, design: .monospaced))
