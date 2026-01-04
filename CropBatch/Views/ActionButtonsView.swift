@@ -199,13 +199,9 @@ struct ActionButtonsView: View {
             Text("\(existingFilesCount) file\(existingFilesCount == 1 ? "" : "s") already exist\(existingFilesCount == 1 ? "s" : "") in the destination folder.")
         }
         .id(dialogPresentationID)  // Force SwiftUI to rebuild dialog content on each presentation
-        .onChange(of: showOverwriteDialog) { _, isShowing in
-            // Clear pending state when dialog closes
-            if !isShowing {
-                pendingExportImages = []
-                pendingExportDirectory = nil
-            }
-        }
+        // Note: pending state is cleared in executeExport() after export completes,
+        // NOT on dialog dismiss. This prevents a race where the onChange fires
+        // before the button action captures the pending values.
     }
 
     /// Opens NSOpenPanel to select output folder
@@ -253,6 +249,13 @@ struct ActionButtonsView: View {
     }
 
     private func executeExport(_ images: [ImageItem], to outputDirectory: URL, rename: Bool) async {
+        // Clear pending state AFTER export completes (not on dialog dismiss)
+        // This prevents race conditions where state is cleared before it's used
+        defer {
+            pendingExportImages = []
+            pendingExportDirectory = nil
+        }
+
         do {
             let results: [URL]
 
@@ -275,7 +278,6 @@ struct ActionButtonsView: View {
             exportError = error.localizedDescription
             showErrorAlert = true
         }
-        // Note: pending state is cleared by .onChange(of: showOverwriteDialog)
     }
 }
 

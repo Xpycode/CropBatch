@@ -13,6 +13,7 @@ struct CropEditorView: View {
     @State private var cachedImageID: UUID?
     @State private var cachedTargetSize: CGSize?
     @State private var cachedTransform: ImageTransform?
+    @State private var cacheUpdateTask: Task<Void, Never>?
 
     var body: some View {
         GeometryReader { geometry in
@@ -69,6 +70,68 @@ struct CropEditorView: View {
         .onKeyPress(.init("s")) {
             appState.snapEnabled.toggle()
             return .handled
+        }
+        // Update image cache when size/image/transform changes (not during body evaluation)
+        .onChange(of: scaledImageSize) { _, newSize in
+            updateImageCache(targetSize: newSize)
+        }
+        .onChange(of: image.id) { _, _ in
+            updateImageCache(targetSize: scaledImageSize)
+        }
+        .onChange(of: currentTransform) { _, _ in
+            updateImageCache(targetSize: scaledImageSize)
+        }
+        .onDisappear {
+            cacheUpdateTask?.cancel()
+        }
+    }
+
+    // MARK: - Cache Management
+
+    /// Updates the scaled image cache asynchronously
+    /// Called from onChange modifiers to avoid state mutation during view body evaluation
+    private func updateImageCache(targetSize: CGSize) {
+        cacheUpdateTask?.cancel()
+        cacheUpdateTask = Task { @MainActor in
+            guard !Task.isCancelled else { return }
+
+            // Check if cache is already valid
+            if cachedImageID == image.id,
+               cachedTargetSize == targetSize,
+               cachedTransform == currentTransform,
+               cachedScaledImage != nil {
+                return
+            }
+
+            let sourceImage = displayedImage
+            guard targetSize.width > 0, targetSize.height > 0 else { return }
+
+            guard let cgImage = sourceImage.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+                return
+            }
+
+            let colorSpace = cgImage.colorSpace ?? CGColorSpaceCreateDeviceRGB()
+            guard let context = CGContext(
+                data: nil,
+                width: Int(targetSize.width),
+                height: Int(targetSize.height),
+                bitsPerComponent: 8,
+                bytesPerRow: 0,
+                space: colorSpace,
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            ) else { return }
+
+            context.interpolationQuality = .high
+            context.draw(cgImage, in: CGRect(origin: .zero, size: targetSize))
+
+            guard let scaledCGImage = context.makeImage() else { return }
+            guard !Task.isCancelled else { return }
+
+            let newImage = NSImage(cgImage: scaledCGImage, size: targetSize)
+            cachedScaledImage = newImage
+            cachedImageID = image.id
+            cachedTargetSize = targetSize
+            cachedTransform = currentTransform
         }
     }
 
@@ -230,56 +293,22 @@ struct CropEditorView: View {
         }
     }
 
-    /// Creates a high-quality downscaled version of the image using Core Graphics
-    /// Uses caching to prevent expensive recomputation on every UI update
+    /// Returns the cached high-quality downscaled image, or the source image if cache is invalid
+    /// Cache is updated by onChange modifiers to avoid state mutation during view body evaluation
     private var highQualityScaledImage: NSImage {
         let targetSize = scaledImageSize
-        let currentID = image.id
 
         // Return cached image if valid (must check transform too for 180° rotations where size doesn't change)
         if let cached = cachedScaledImage,
-           cachedImageID == currentID,
+           cachedImageID == image.id,
            cachedTargetSize == targetSize,
            cachedTransform == currentTransform {
             return cached
         }
 
-        // Generate new scaled image
-        let sourceImage = displayedImage
-        guard targetSize.width > 0, targetSize.height > 0 else {
-            return sourceImage
-        }
-
-        guard let cgImage = sourceImage.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
-            return sourceImage
-        }
-
-        let colorSpace = cgImage.colorSpace ?? CGColorSpaceCreateDeviceRGB()
-        guard let context = CGContext(
-            data: nil,
-            width: Int(targetSize.width),
-            height: Int(targetSize.height),
-            bitsPerComponent: 8,
-            bytesPerRow: 0,
-            space: colorSpace,
-            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-        ) else { return sourceImage }
-
-        context.interpolationQuality = .high
-        context.draw(cgImage, in: CGRect(origin: .zero, size: targetSize))
-
-        guard let scaledCGImage = context.makeImage() else { return sourceImage }
-        let newImage = NSImage(cgImage: scaledCGImage, size: targetSize)
-
-        // Update cache (async to avoid modifying state during view update)
-        Task { @MainActor in
-            cachedScaledImage = newImage
-            cachedImageID = currentID
-            cachedTargetSize = targetSize
-            cachedTransform = currentTransform
-        }
-
-        return newImage
+        // Cache miss - return source image (cache will be updated by onChange modifier)
+        // This prevents state mutation during view body evaluation which can cause infinite loops
+        return displayedImage
     }
 
     private var cropOverlay: some View {

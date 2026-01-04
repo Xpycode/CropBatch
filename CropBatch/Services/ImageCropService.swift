@@ -96,12 +96,14 @@ struct ImageCropService {
         }
     }
 
-    /// Resizes an NSImage to the specified size using CGContext (thread-safe)
+    /// Resizes an NSImage to the specified size using pure CGContext (thread-safe)
     /// - Parameters:
     ///   - image: The source image to resize
     ///   - targetSize: The target size in pixels
     /// - Returns: A new resized NSImage
     /// - Throws: ImageCropError if resize fails
+    /// - Note: Uses pure CGContext operations to be thread-safe for TaskGroup parallelism.
+    ///         NSGraphicsContext is NOT thread-safe and must not be used in concurrent contexts.
     static func resize(_ image: NSImage, to targetSize: CGSize) throws -> NSImage {
         // Validate target size
         let targetWidth = Int(targetSize.width)
@@ -110,8 +112,15 @@ struct ImageCropService {
             throw ImageCropError.invalidTargetSize
         }
 
+        // Get CGImage from NSImage (required for thread-safe drawing)
+        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+            throw ImageCropError.failedToGetCGImage
+        }
+
+        // Use source image's color space for color accuracy, fallback to sRGB
+        let colorSpace = cgImage.colorSpace ?? CGColorSpaceCreateDeviceRGB()
+
         // Create a bitmap context at the target size
-        let colorSpace = CGColorSpaceCreateDeviceRGB()
         guard let context = CGContext(
             data: nil,
             width: targetWidth,
@@ -125,21 +134,9 @@ struct ImageCropService {
         // Set high quality interpolation for good downscaling
         context.interpolationQuality = .high
 
-        // Create NSGraphicsContext from CGContext to draw the NSImage
-        // This properly handles all NSImage representations and transforms
-        let graphicsContext = NSGraphicsContext(cgContext: context, flipped: false)
-        NSGraphicsContext.saveGraphicsState()
-        NSGraphicsContext.current = graphicsContext
-
-        // Draw the NSImage scaled to fit the context
-        // CGContext has origin at bottom-left, NSImage.draw also uses bottom-left
-        let targetRect = NSRect(x: 0, y: 0, width: targetWidth, height: targetHeight)
-        image.draw(in: targetRect,
-                   from: NSRect(origin: .zero, size: image.size),
-                   operation: .copy,
-                   fraction: 1.0)
-
-        NSGraphicsContext.restoreGraphicsState()
+        // Draw CGImage directly (thread-safe, no NSGraphicsContext)
+        // CGContext has origin at bottom-left, which matches CGImage's coordinate system
+        context.draw(cgImage, in: CGRect(origin: .zero, size: targetSize))
 
         guard let resizedCGImage = context.makeImage() else { throw ImageCropError.failedToResize }
         return NSImage(cgImage: resizedCGImage, size: targetSize)

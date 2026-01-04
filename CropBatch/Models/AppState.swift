@@ -73,6 +73,10 @@ final class AppState {
     var isProcessing = false
     var processingProgress: Double = 0
 
+    /// Tracks the current export task to prevent concurrent exports
+    /// and enable cancellation when a new export is requested
+    private var currentExportTask: Task<[URL], Error>?
+
     // MARK: - View State
 
     var zoomMode: ZoomMode = .fit
@@ -417,126 +421,169 @@ final class AppState {
 
     @MainActor
     func processAndExport(images imagesToExport: [ImageItem]? = nil, to outputDirectory: URL) async throws -> [URL] {
+        // Cancel any existing export to prevent concurrent operations
+        currentExportTask?.cancel()
+
         let images = imagesToExport ?? (selectedImageIDs.isEmpty ? self.images : selectedImages)
+
+        // Capture settings at start to prevent mid-export changes
+        let capturedCropSettings = cropSettings
+        let capturedTransform = imageTransform
+        let capturedBlurRegions = blurRegions
+        var capturedExportSettings = exportSettings
+        capturedExportSettings.outputDirectory = .custom(outputDirectory)
 
         isProcessing = true
         processingProgress = 0
 
-        defer {
-            isProcessing = false
+        let task = Task<[URL], Error> { [weak self] in
+            defer {
+                Task { @MainActor in
+                    self?.isProcessing = false
+                    self?.currentExportTask = nil
+                }
+            }
+
+            try Task.checkCancellation()
+
+            let results = try await ImageCropService.batchCrop(
+                items: images,
+                cropSettings: capturedCropSettings,
+                exportSettings: capturedExportSettings,
+                transform: capturedTransform,
+                blurRegions: capturedBlurRegions
+            ) { progress in
+                Task { @MainActor in
+                    self?.processingProgress = progress
+                }
+            }
+
+            return results
         }
 
-        var settings = exportSettings
-        settings.outputDirectory = .custom(outputDirectory)
-
-        let results = try await ImageCropService.batchCrop(
-            items: images,
-            cropSettings: cropSettings,
-            exportSettings: settings,
-            transform: imageTransform,
-            blurRegions: blurRegions
-        ) { [weak self] progress in
-            self?.processingProgress = progress
-        }
-
-        return results
+        currentExportTask = task
+        return try await task.value
     }
 
     @MainActor
     func processAndExportWithRename(images imagesToExport: [ImageItem], to outputDirectory: URL) async throws -> [URL] {
+        // Cancel any existing export to prevent concurrent operations
+        currentExportTask?.cancel()
+
+        // Capture settings at start to prevent mid-export changes
+        let capturedCropSettings = cropSettings
+        let capturedTransform = imageTransform
+        let capturedBlurRegions = blurRegions
+        var capturedExportSettings = exportSettings
+        capturedExportSettings.outputDirectory = .custom(outputDirectory)
+
         isProcessing = true
         processingProgress = 0
 
-        defer {
-            isProcessing = false
+        let task = Task<[URL], Error> { [weak self] in
+            defer {
+                Task { @MainActor in
+                    self?.isProcessing = false
+                    self?.currentExportTask = nil
+                }
+            }
+
+            try Task.checkCancellation()
+
+            // Separate images into conflicting and non-conflicting
+            var nonConflicting: [(index: Int, item: ImageItem)] = []
+            var conflicting: [(index: Int, item: ImageItem, renamedURL: URL)] = []
+
+            for (index, item) in imagesToExport.enumerated() {
+                let plannedURL = capturedExportSettings.outputURL(for: item.url, index: index)
+                if FileManager.default.fileExists(atPath: plannedURL.path) {
+                    let renamedURL = ExportSettings.appendNumericSuffix(to: plannedURL)
+                    conflicting.append((index, item, renamedURL))
+                } else {
+                    nonConflicting.append((index, item))
+                }
+            }
+
+            var results: [(index: Int, url: URL)] = []
+            let total = Double(imagesToExport.count)
+
+            // Process non-conflicting images in batch (fast path)
+            if !nonConflicting.isEmpty {
+                try Task.checkCancellation()
+                let nonConflictingItems = nonConflicting.map { $0.item }
+                let batchResults = try await ImageCropService.batchCrop(
+                    items: nonConflictingItems,
+                    cropSettings: capturedCropSettings,
+                    exportSettings: capturedExportSettings,
+                    transform: capturedTransform,
+                    blurRegions: capturedBlurRegions
+                ) { progress in
+                    let completed = Double(nonConflicting.count) * progress
+                    Task { @MainActor in
+                        self?.processingProgress = completed / total
+                    }
+                }
+
+                for (i, result) in batchResults.enumerated() {
+                    results.append((nonConflicting[i].index, result))
+                }
+            }
+
+            // Process conflicting images one by one to custom locations
+            for (i, (originalIndex, item, renamedURL)) in conflicting.enumerated() {
+                try Task.checkCancellation()
+
+                var processedImage = item.originalImage
+
+                if !capturedTransform.isIdentity {
+                    processedImage = try ImageCropService.applyTransform(processedImage, transform: capturedTransform)
+                }
+
+                if let imageBlurData = capturedBlurRegions[item.id], imageBlurData.hasRegions {
+                    processedImage = ImageCropService.applyBlurRegions(processedImage, regions: imageBlurData.regions)
+                }
+
+                processedImage = try ImageCropService.crop(processedImage, with: capturedCropSettings)
+
+                if let targetSize = ImageCropService.calculateResizedSize(from: processedImage.size, with: capturedExportSettings.resizeSettings) {
+                    processedImage = try ImageCropService.resize(processedImage, to: targetSize)
+                }
+
+                if capturedExportSettings.watermarkSettings.isValid {
+                    let filename = item.url.deletingPathExtension().lastPathComponent
+                    processedImage = ImageCropService.applyWatermark(
+                        processedImage,
+                        settings: capturedExportSettings.watermarkSettings,
+                        filename: filename,
+                        index: originalIndex + 1,
+                        count: imagesToExport.count
+                    )
+                }
+
+                let format: UTType
+                if capturedExportSettings.preserveOriginalFormat {
+                    let ext = item.url.pathExtension.lowercased()
+                    format = ExportFormat.allCases.first {
+                        $0.fileExtension == ext || (ext == "jpeg" && $0 == .jpeg)
+                    }?.utType ?? capturedExportSettings.format.utType
+                } else {
+                    format = capturedExportSettings.format.utType
+                }
+
+                try ImageCropService.save(processedImage, to: renamedURL, format: format, quality: capturedExportSettings.quality)
+                results.append((originalIndex, renamedURL))
+
+                let completed = Double(nonConflicting.count + i + 1)
+                Task { @MainActor in
+                    self?.processingProgress = completed / total
+                }
+            }
+
+            return results.sorted { $0.index < $1.index }.map { $0.url }
         }
 
-        var settings = exportSettings
-        settings.outputDirectory = .custom(outputDirectory)
-
-        // Separate images into conflicting and non-conflicting
-        var nonConflicting: [(index: Int, item: ImageItem)] = []
-        var conflicting: [(index: Int, item: ImageItem, renamedURL: URL)] = []
-
-        for (index, item) in imagesToExport.enumerated() {
-            let plannedURL = settings.outputURL(for: item.url, index: index)
-            if FileManager.default.fileExists(atPath: plannedURL.path) {
-                let renamedURL = ExportSettings.appendNumericSuffix(to: plannedURL)
-                conflicting.append((index, item, renamedURL))
-            } else {
-                nonConflicting.append((index, item))
-            }
-        }
-
-        var results: [(index: Int, url: URL)] = []
-        let total = Double(imagesToExport.count)
-
-        // Process non-conflicting images in batch (fast path)
-        if !nonConflicting.isEmpty {
-            let nonConflictingItems = nonConflicting.map { $0.item }
-            let batchResults = try await ImageCropService.batchCrop(
-                items: nonConflictingItems,
-                cropSettings: cropSettings,
-                exportSettings: settings,
-                transform: imageTransform,
-                blurRegions: blurRegions
-            ) { [weak self] progress in
-                let completed = Double(nonConflicting.count) * progress
-                self?.processingProgress = completed / total
-            }
-
-            for (i, result) in batchResults.enumerated() {
-                results.append((nonConflicting[i].index, result))
-            }
-        }
-
-        // Process conflicting images one by one to custom locations
-        for (i, (originalIndex, item, renamedURL)) in conflicting.enumerated() {
-            var processedImage = item.originalImage
-
-            if !imageTransform.isIdentity {
-                processedImage = try ImageCropService.applyTransform(processedImage, transform: imageTransform)
-            }
-
-            if let imageBlurData = blurRegions[item.id], imageBlurData.hasRegions {
-                processedImage = ImageCropService.applyBlurRegions(processedImage, regions: imageBlurData.regions)
-            }
-
-            processedImage = try ImageCropService.crop(processedImage, with: cropSettings)
-
-            if let targetSize = ImageCropService.calculateResizedSize(from: processedImage.size, with: settings.resizeSettings) {
-                processedImage = try ImageCropService.resize(processedImage, to: targetSize)
-            }
-
-            if settings.watermarkSettings.isValid {
-                let filename = item.url.deletingPathExtension().lastPathComponent
-                processedImage = ImageCropService.applyWatermark(
-                    processedImage,
-                    settings: settings.watermarkSettings,
-                    filename: filename,
-                    index: originalIndex + 1,
-                    count: imagesToExport.count
-                )
-            }
-
-            let format: UTType
-            if settings.preserveOriginalFormat {
-                let ext = item.url.pathExtension.lowercased()
-                format = ExportFormat.allCases.first {
-                    $0.fileExtension == ext || (ext == "jpeg" && $0 == .jpeg)
-                }?.utType ?? settings.format.utType
-            } else {
-                format = settings.format.utType
-            }
-
-            try ImageCropService.save(processedImage, to: renamedURL, format: format, quality: settings.quality)
-            results.append((originalIndex, renamedURL))
-
-            let completed = Double(nonConflicting.count + i + 1)
-            processingProgress = completed / total
-        }
-
-        return results.sorted { $0.index < $1.index }.map { $0.url }
+        currentExportTask = task
+        return try await task.value
     }
 
     func sendExportNotification(count: Int) {

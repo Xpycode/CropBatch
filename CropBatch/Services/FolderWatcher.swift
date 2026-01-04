@@ -39,16 +39,17 @@ final class FolderWatcher {
         // Get initial list of files
         knownFiles = Set(existingFiles(in: folder))
 
-        // Open folder for monitoring
-        fileDescriptor = open(folder.path, O_EVTONLY)
-        guard fileDescriptor >= 0 else {
+        // Open folder for monitoring (store in local var first for safe cleanup)
+        let fd = open(folder.path, O_EVTONLY)
+        guard fd >= 0 else {
             errorMessage = "Cannot access folder"
             return
         }
 
         // Create dispatch source for file system events
+        // Use main queue for thread safety with @MainActor class
         let source = DispatchSource.makeFileSystemObjectSource(
-            fileDescriptor: fileDescriptor,
+            fileDescriptor: fd,
             eventMask: .write,
             queue: .main
         )
@@ -59,15 +60,17 @@ final class FolderWatcher {
             }
         }
 
+        // Cancel handler runs on the dispatch source's queue (.main)
+        // Capture fd directly to ensure proper cleanup even if self is deallocated
         source.setCancelHandler { [weak self] in
+            close(fd)  // Always close the captured fd
             Task { @MainActor in
-                if let fd = self?.fileDescriptor, fd >= 0 {
-                    close(fd)
-                }
                 self?.fileDescriptor = -1
             }
         }
 
+        // Only store after successful setup
+        fileDescriptor = fd
         dispatchSource = source
         source.resume()
         isWatching = true
