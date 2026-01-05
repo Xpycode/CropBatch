@@ -345,6 +345,7 @@ struct ExportSettingsCodable: Codable, Equatable {
     var preserveOriginalFormat: Bool
     var resizeSettings: ResizeSettings
     var renameSettings: RenameSettings
+    var watermarkSettings: WatermarkSettings?  // Optional for backward compatibility with existing profiles
 
     init(from settings: ExportSettings) {
         self.format = settings.format
@@ -353,10 +354,12 @@ struct ExportSettingsCodable: Codable, Equatable {
         self.preserveOriginalFormat = settings.preserveOriginalFormat
         self.resizeSettings = settings.resizeSettings
         self.renameSettings = settings.renameSettings
+        // Only persist watermark if enabled (avoid bloating profiles with default disabled state)
+        self.watermarkSettings = settings.watermarkSettings.isEnabled ? settings.watermarkSettings : nil
     }
 
     func toExportSettings() -> ExportSettings {
-        ExportSettings(
+        var settings = ExportSettings(
             format: format,
             quality: quality,
             suffix: suffix,
@@ -364,6 +367,11 @@ struct ExportSettingsCodable: Codable, Equatable {
             resizeSettings: resizeSettings,
             renameSettings: renameSettings
         )
+        // Restore watermark settings if present
+        if let watermark = watermarkSettings {
+            settings.watermarkSettings = watermark
+        }
+        return settings
     }
 }
 

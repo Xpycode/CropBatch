@@ -47,7 +47,7 @@ final class BlurManager {
 
     /// Clear all blur regions for an image
     func clearRegions(for imageID: UUID) {
-        regions[imageID] = ImageBlurData()
+        regions.removeValue(forKey: imageID)
         selectedRegionID = nil
     }
 
@@ -76,20 +76,20 @@ final class BlurManager {
     }
 
     /// Update a blur region's properties
+    /// Uses direct array mutation to avoid copy-mutate-writeback fragility
     func updateRegion(_ regionID: UUID, in imageID: UUID, normalizedRect: NormalizedRect? = nil, style: BlurRegion.BlurStyle? = nil, intensity: Double? = nil) {
-        guard var data = regions[imageID],
-              let index = data.regions.firstIndex(where: { $0.id == regionID }) else { return }
+        guard regions[imageID] != nil,
+              let index = regions[imageID]?.regions.firstIndex(where: { $0.id == regionID }) else { return }
 
         if let normalizedRect = normalizedRect {
-            data.regions[index].normalizedRect = normalizedRect.clamped()
+            regions[imageID]?.regions[index].normalizedRect = normalizedRect.clamped()
         }
         if let style = style {
-            data.regions[index].style = style
+            regions[imageID]?.regions[index].style = style
         }
         if let intensity = intensity {
-            data.regions[index].intensity = intensity
+            regions[imageID]?.regions[index].intensity = intensity
         }
-        regions[imageID] = data
     }
 
     /// Count of blur regions outside the crop area

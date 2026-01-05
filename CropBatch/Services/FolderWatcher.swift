@@ -131,7 +131,13 @@ final class FolderWatcher {
                 // Determine output URL
                 var exportSettings = self.exportSettings
                 exportSettings.outputDirectory = .custom(outputFolder)
-                let outputURL = exportSettings.outputURL(for: url)
+                var outputURL = exportSettings.outputURL(for: url)
+
+                // Safety check: don't overwrite original file
+                if outputURL == url || exportSettings.wouldOverwriteOriginal(for: url) {
+                    // Append numeric suffix to avoid overwriting original
+                    outputURL = ExportSettings.appendNumericSuffix(to: outputURL)
+                }
 
                 // Save
                 let format = exportSettings.preserveOriginalFormat

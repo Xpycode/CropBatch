@@ -295,7 +295,7 @@ struct ThumbnailItemView: View {
 
     /// The thumbnail image with any transforms applied
     private var displayedThumbnail: NSImage {
-        let transform = appState.transformForImage(item.id)
+        let transform = appState.globalTransform
         if transform.isIdentity {
             return item.originalImage
         }

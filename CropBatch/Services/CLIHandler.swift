@@ -206,7 +206,12 @@ struct CLIHandler {
             let outputURL = URL(fileURLWithPath: expandedPath)
 
             // Create output directory if needed
-            try? FileManager.default.createDirectory(at: outputURL, withIntermediateDirectories: true)
+            do {
+                try FileManager.default.createDirectory(at: outputURL, withIntermediateDirectories: true)
+            } catch {
+                print("Error: Cannot create output directory '\(outputDir)': \(error.localizedDescription)")
+                return 1
+            }
             exportSettings.outputDirectory = .custom(outputURL)
         }
 

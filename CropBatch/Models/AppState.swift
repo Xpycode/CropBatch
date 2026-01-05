@@ -203,12 +203,23 @@ final class AppState {
 
     // Image methods
     func addImages(from urls: [URL]) {
-        imageManager.addImages(from: urls, exportSettings: &exportSettings, selectedPresetID: &selectedPresetID)
+        let result = imageManager.addImages(from: urls)
+        // Apply detected format if available
+        if let format = result.detectedFormat {
+            exportSettings.format = format
+            selectedPresetID = nil  // Mark as custom since we changed the format
+        }
     }
 
     @MainActor
     func showImportPanel() {
-        imageManager.showImportPanel(exportSettings: &exportSettings, selectedPresetID: &selectedPresetID)
+        imageManager.showImportPanel { [weak self] detectedFormat in
+            guard let self else { return }
+            if let format = detectedFormat {
+                self.exportSettings.format = format
+                self.selectedPresetID = nil  // Mark as custom since we changed the format
+            }
+        }
     }
 
     func removeImages(ids: Set<UUID>) {
@@ -354,8 +365,17 @@ final class AppState {
         validateAndClampCrop()
     }
 
-    func transformForImage(_ imageID: UUID) -> ImageTransform {
+    /// The global transform applied to all images
+    /// (Currently transforms are batch-applied, not per-image)
+    var globalTransform: ImageTransform {
         blurManager.transform
+    }
+
+    /// Deprecated: Use `globalTransform` instead.
+    /// The imageID parameter was misleading as transforms apply globally.
+    @available(*, deprecated, message: "Use globalTransform instead - transforms apply to all images globally")
+    func transformForImage(_ imageID: UUID) -> ImageTransform {
+        globalTransform
     }
 
     /// Returns the effective image size after applying current transform
@@ -539,8 +559,15 @@ final class AppState {
                     processedImage = try ImageCropService.applyTransform(processedImage, transform: capturedTransform)
                 }
 
+                // Blur regions are stored in ORIGINAL image coordinates
+                // The image has been transformed, so we need to transform the blur coords too
                 if let imageBlurData = capturedBlurRegions[item.id], imageBlurData.hasRegions {
-                    processedImage = ImageCropService.applyBlurRegions(processedImage, regions: imageBlurData.regions)
+                    let transformedRegions = imageBlurData.regions.map { region in
+                        var transformed = region
+                        transformed.normalizedRect = region.normalizedRect.applyingTransform(capturedTransform)
+                        return transformed
+                    }
+                    processedImage = ImageCropService.applyBlurRegions(processedImage, regions: transformedRegions)
                 }
 
                 processedImage = try ImageCropService.crop(processedImage, with: capturedCropSettings)
