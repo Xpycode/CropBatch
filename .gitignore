@@ -31,6 +31,16 @@ Thumbs.db
 *.app/
 *.dmg
 
+# Icon assets and exports
+NewIcon/
+CropBatch-icon Exports/
+CropBatch-iconNEW Exports/
+CropBatch-iconNEW.icon/
+*.icns
+
+# Screenshots
+Screenshots/
+
 # Tool configs
 .serena/
 
