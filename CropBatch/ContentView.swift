@@ -119,10 +119,23 @@ struct SidebarView: View {
 
     var body: some View {
         @Bindable var state = appState
-        
+
         VStack(spacing: 0) {
             // Scrollable content using Form for inspector-style layout
             Form {
+                // ═══════════════════════════════════════
+                // TOOL SELECTOR - Crop / Blur tabs
+                // ═══════════════════════════════════════
+                Section {
+                    Picker("Tool", selection: $state.currentTool) {
+                        ForEach(EditorTool.allCases) { tool in
+                            Label(tool.rawValue, systemImage: tool.icon).tag(tool)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                }
+
                 // Resolution warning (always visible if needed)
                 if appState.hasResolutionMismatch {
                     Section {
@@ -131,17 +144,28 @@ struct SidebarView: View {
                 }
 
                 // ═══════════════════════════════════════
-                // CROP - Primary controls, always visible
+                // TOOL-SPECIFIC CONTROLS
                 // ═══════════════════════════════════════
-                Section {
-                    CropControlsView()
-                }
+                if appState.currentTool == .crop {
+                    // CROP - Primary controls
+                    Section {
+                        CropControlsView()
+                    }
 
-                // ═══════════════════════════════════════
-                // ASPECT GUIDE - Always visible (quick access)
-                // ═══════════════════════════════════════
-                Section {
-                    AspectGuideView()
+                    // ASPECT GUIDE - Quick access
+                    Section {
+                        AspectGuideView()
+                    }
+
+                    // TRANSFORM - Rotation/Flip
+                    Section {
+                        TransformRowView()
+                    }
+                } else if appState.currentTool == .blur {
+                    // BLUR - Settings panel
+                    Section {
+                        BlurToolSettingsPanel()
+                    }
                 }
 
                 // ═══════════════════════════════════════
@@ -235,10 +259,8 @@ struct CropSectionView: View {
 
         VStack(alignment: .leading, spacing: 12) {
             // Tool selector (centered)
-            // TODO: [SHELVED] Blur tool - transform coordinate mismatch when images are rotated/flipped
-            // See docs/blur-feature-status.md for details. Remove filter to re-enable.
             HStack(spacing: 0) {
-                ForEach(EditorTool.allCases.filter { $0 != .blur }) { tool in  // SHELVED: Blur tool
+                ForEach(EditorTool.allCases) { tool in
                     Button {
                         appState.currentTool = tool
                     } label: {

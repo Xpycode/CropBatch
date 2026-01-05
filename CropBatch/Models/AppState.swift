@@ -319,6 +319,28 @@ final class AppState {
         blurManager.clearRegions(for: id)
     }
 
+    /// Copy blur regions from active image to all other images
+    func applyBlurRegionsToAllImages() {
+        guard let sourceID = activeImageID else { return }
+        let sourceRegions = blurManager.regionsForImage(sourceID)
+        guard !sourceRegions.isEmpty else { return }
+
+        for image in images where image.id != sourceID {
+            // Clear existing regions for this image
+            blurManager.clearRegions(for: image.id)
+            // Copy all regions from source
+            for region in sourceRegions {
+                // Create new region with same properties but new ID
+                let newRegion = BlurRegion(
+                    normalizedRect: region.normalizedRect,
+                    style: region.style,
+                    intensity: region.intensity
+                )
+                blurManager.addRegion(newRegion, to: image.id)
+            }
+        }
+    }
+
     func blurRegionsForImage(_ imageID: UUID) -> [BlurRegion] {
         blurManager.regionsForImage(imageID)
     }

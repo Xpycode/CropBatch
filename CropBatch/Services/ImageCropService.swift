@@ -783,23 +783,20 @@ struct ImageCropService {
     ) throws -> URL {
         var processedImage = item.originalImage
 
-        // Pipeline order: Transform -> Blur -> Crop -> Resize -> Watermark
+        // Pipeline order: Blur -> Transform -> Crop -> Resize -> Watermark
+        // IMPORTANT: Blur FIRST on original image - no coordinate transform needed!
+        // The blur "bakes into" pixels, then rotates naturally with the image.
 
-        // 1. Apply transform (rotation/flip) FIRST
-        if !transform.isIdentity {
-            processedImage = try applyTransform(processedImage, transform: transform)
+        // 1. Apply blur regions FIRST - coords are already in original image space
+        if let imageBlurData = blurRegions[item.id], imageBlurData.hasRegions {
+            // Blur regions stored in normalized (0-1) original image coordinates
+            // Apply directly - no coordinate transformation needed!
+            processedImage = applyBlurRegions(processedImage, regions: imageBlurData.regions)
         }
 
-        // 2. Apply blur regions - MUST transform coordinates to match transformed image
-        if let imageBlurData = blurRegions[item.id], imageBlurData.hasRegions {
-            // Blur regions are stored in ORIGINAL image coordinates
-            // The image has been transformed, so we need to transform the blur coords too
-            let transformedRegions = imageBlurData.regions.map { region in
-                var transformed = region
-                transformed.normalizedRect = region.normalizedRect.applyingTransform(transform)
-                return transformed
-            }
-            processedImage = applyBlurRegions(processedImage, regions: transformedRegions)
+        // 2. Apply transform (rotation/flip) AFTER blur
+        if !transform.isIdentity {
+            processedImage = try applyTransform(processedImage, transform: transform)
         }
 
         // 3. Apply crop
