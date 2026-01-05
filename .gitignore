@@ -38,9 +38,6 @@ CropBatch-iconNEW Exports/
 CropBatch-iconNEW.icon/
 *.icns
 
-# Screenshots
-Screenshots/
-
 # Tool configs
 .serena/
 
