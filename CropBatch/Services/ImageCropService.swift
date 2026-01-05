@@ -46,6 +46,18 @@ enum ImageCropError: LocalizedError {
 
 struct ImageCropService {
 
+    // MARK: - Shared Resources
+
+    /// Shared CIContext for GPU-accelerated blur operations.
+    /// Creating CIContext is expensive (~50-100ms) as it initializes GPU resources.
+    /// Reusing a single instance across all blur operations significantly improves batch performance.
+    private static let sharedCIContext: CIContext = {
+        CIContext(options: [
+            .useSoftwareRenderer: false,
+            .highQualityDownsample: true
+        ])
+    }()
+
     /// Calculates the target size based on resize settings
     /// - Parameters:
     ///   - originalSize: The original image size
@@ -281,16 +293,23 @@ struct ImageCropService {
             return image
         }
 
-        let imageSize = image.size
-        let ciImage = CIImage(cgImage: cgImage)
-        let ciContext = CIContext(options: [.useSoftwareRenderer: false])
+        // CRITICAL: Use CGImage pixel dimensions, NOT NSImage.size (which is in points)
+        // On Retina displays, NSImage.size might be 589×1278 points while the actual
+        // CGImage is 1178×2556 pixels. Using point dimensions causes blur placement
+        // to be offset on Retina displays.
+        let pixelWidth = cgImage.width
+        let pixelHeight = cgImage.height
+        let imageSize = CGSize(width: pixelWidth, height: pixelHeight)
 
-        // Create CGContext for compositing
+        let ciImage = CIImage(cgImage: cgImage)
+        let ciContext = sharedCIContext  // Use shared instance for performance
+
+        // Create CGContext for compositing at pixel dimensions
         let colorSpace = cgImage.colorSpace ?? CGColorSpaceCreateDeviceRGB()
         guard let context = CGContext(
             data: nil,
-            width: Int(imageSize.width),
-            height: Int(imageSize.height),
+            width: pixelWidth,
+            height: pixelHeight,
             bitsPerComponent: 8,
             bytesPerRow: 0,
             space: colorSpace,
@@ -549,13 +568,19 @@ struct ImageCropService {
         let originalWidth = normalizedCGImage.width
         let originalHeight = normalizedCGImage.height
 
-        // Calculate crop rectangle in top-left origin coordinates (matching user's view)
-        // Then convert to CGImage bottom-left origin for the actual crop
+        // Calculate crop dimensions
+        let cropWidth = originalWidth - settings.cropLeft - settings.cropRight
+        let cropHeight = originalHeight - settings.cropTop - settings.cropBottom
+
+        // CRITICAL: CGImage uses bottom-left origin (y=0 at bottom)
+        // User's cropTop means "remove N pixels from visual top" (high Y in CGImage)
+        // User's cropBottom means "remove N pixels from visual bottom" (low Y in CGImage)
+        // Therefore: crop rect starts at y = cropBottom (skip those pixels from CGImage bottom)
         let cropRect = CGRect(
             x: settings.cropLeft,
-            y: settings.cropTop,  // In normalized image, y=0 is TOP (standard image coords)
-            width: originalWidth - settings.cropLeft - settings.cropRight,
-            height: originalHeight - settings.cropTop - settings.cropBottom
+            y: settings.cropBottom,  // Convert to CGImage coords: y starts at cropBottom from bottom
+            width: cropWidth,
+            height: cropHeight
         )
 
         // Validate crop region

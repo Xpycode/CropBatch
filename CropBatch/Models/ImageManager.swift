@@ -96,7 +96,17 @@ final class ImageManager {
 
     // MARK: - Image Management
 
-    func addImages(from urls: [URL], exportSettings: inout ExportSettings, selectedPresetID: inout String?) {
+    /// Result of adding images, including any auto-detected format
+    struct AddImagesResult {
+        let addedCount: Int
+        let detectedFormat: ExportFormat?
+    }
+
+    /// Adds images from URLs and returns the result including any auto-detected format
+    /// - Parameter urls: URLs to load images from
+    /// - Returns: Result containing added count and detected format (if first import)
+    @discardableResult
+    func addImages(from urls: [URL]) -> AddImagesResult {
         let wasEmpty = images.isEmpty
 
         let newImages = urls.compactMap { url -> ImageItem? in
@@ -111,20 +121,21 @@ final class ImageManager {
         }
 
         // Auto-detect export format from first imported image
+        var detectedFormat: ExportFormat?
         if wasEmpty, let firstImage = newImages.first {
             let ext = firstImage.fileExtension
-            if let detectedFormat = ExportFormat.allCases.first(where: {
+            detectedFormat = ExportFormat.allCases.first(where: {
                 $0.fileExtension == ext || (ext == "jpeg" && $0 == .jpeg)
-            }) {
-                exportSettings.format = detectedFormat
-                selectedPresetID = nil  // Mark as custom since we changed the format
-            }
+            })
         }
+
+        return AddImagesResult(addedCount: newImages.count, detectedFormat: detectedFormat)
     }
 
     /// Shows NSOpenPanel to import images
+    /// - Parameter completion: Callback with the detected format (if any) that should be applied to export settings
     @MainActor
-    func showImportPanel(exportSettings: inout ExportSettings, selectedPresetID: inout String?) {
+    func showImportPanel(completion: @escaping (ExportFormat?) -> Void) {
         let panel = NSOpenPanel()
         panel.title = "Import Images"
         panel.canChooseFiles = true
@@ -132,15 +143,18 @@ final class ImageManager {
         panel.allowsMultipleSelection = true
         panel.allowedContentTypes = [.png, .jpeg, .heic, .tiff, .bmp]
 
-        // Capture current values for the closure
-        var settings = exportSettings
-        var presetID = selectedPresetID
-
         panel.begin { [weak self] response in
-            guard response == .OK else { return }
-            let urls = panel.urls
+            guard response == .OK else {
+                completion(nil)
+                return
+            }
             Task { @MainActor in
-                self?.addImages(from: urls, exportSettings: &settings, selectedPresetID: &presetID)
+                guard let self else {
+                    completion(nil)
+                    return
+                }
+                let result = self.addImages(from: panel.urls)
+                completion(result.detectedFormat)
             }
         }
     }

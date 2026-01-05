@@ -46,7 +46,7 @@ actor ThumbnailCache {
         let result = await task.value
 
         // Clean up in-flight tracking
-        inFlight[key] = nil
+        inFlight.removeValue(forKey: key)
 
         // Cache the result if successful
         if let thumbnail = result {

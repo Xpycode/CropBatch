@@ -1447,61 +1447,120 @@ struct WatermarkSettingsSection: View {
 struct FileSizeEstimateView: View {
     @Environment(AppState.self) private var appState
 
-    private var estimate: FileSizeEstimate {
+    // Batch estimate (all images)
+    private var batchEstimate: FileSizeEstimate {
         FileSizeEstimator.estimate(
             images: appState.images,
             cropSettings: appState.cropSettings,
             exportSettings: appState.exportSettings
         )
     }
+    
+    // Single file estimate (active image only)
+    private var activeFileEstimate: FileSizeEstimate? {
+        guard let activeImage = appState.activeImage else { return nil }
+        return FileSizeEstimator.estimate(
+            images: [activeImage],
+            cropSettings: appState.cropSettings,
+            exportSettings: appState.exportSettings
+        )
+    }
 
     var body: some View {
-        HStack(spacing: 8) {
-            // Percentage badge
-            Text("\(Int(estimate.percentage))%")
-                .font(.system(size: 11, weight: .semibold, design: .rounded))
-                .foregroundStyle(percentageColor)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
-                .background(Capsule().fill(percentageColor.opacity(0.15)))
-
-            // Size: estimated from original
-            Text("\(estimate.estimatedTotal.formattedFileSize) from \(estimate.originalTotal.formattedFileSize)")
-                .font(.system(size: 11, design: .rounded))
-                .foregroundStyle(.secondary)
-
-            Spacer()
-
-            // Savings indicator
-            if estimate.savings > 0 {
-                HStack(spacing: 2) {
-                    Image(systemName: "arrow.down.circle.fill")
-                        .font(.caption2)
-                        .foregroundStyle(.green)
-                    Text("−\(estimate.savings.formattedFileSize)")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(.green)
-                }
-            } else if estimate.savings < 0 {
-                HStack(spacing: 2) {
-                    Image(systemName: "arrow.up.circle.fill")
-                        .font(.caption2)
-                        .foregroundStyle(.orange)
-                    Text("+\((-estimate.savings).formattedFileSize)")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(.orange)
+        HStack(spacing: 12) {
+            // Left: Current file
+            if let fileEstimate = activeFileEstimate {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Current")
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundStyle(.tertiary)
+                        .textCase(.uppercase)
+                    
+                    HStack(spacing: 4) {
+                        // Percentage badge
+                        Text("\(Int(fileEstimate.percentage))%")
+                            .font(.system(size: 10, weight: .semibold, design: .rounded))
+                            .foregroundStyle(percentageColor(for: fileEstimate.percentage))
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1)
+                            .background(Capsule().fill(percentageColor(for: fileEstimate.percentage).opacity(0.15)))
+                        
+                        // Size info
+                        Text("\(fileEstimate.estimatedTotal.formattedFileSize)")
+                            .font(.system(size: 10, design: .rounded))
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
+            
+            // Divider between columns
+            if activeFileEstimate != nil && appState.images.count > 1 {
+                Divider()
+                    .frame(height: 28)
+            }
+            
+            // Right: Batch total (only show if multiple images)
+            if appState.images.count > 1 {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Batch (\(appState.images.count))")
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundStyle(.tertiary)
+                        .textCase(.uppercase)
+                    
+                    HStack(spacing: 4) {
+                        // Percentage badge
+                        Text("\(Int(batchEstimate.percentage))%")
+                            .font(.system(size: 10, weight: .semibold, design: .rounded))
+                            .foregroundStyle(percentageColor(for: batchEstimate.percentage))
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1)
+                            .background(Capsule().fill(percentageColor(for: batchEstimate.percentage).opacity(0.15)))
+                        
+                        // Size info
+                        Text("\(batchEstimate.estimatedTotal.formattedFileSize)")
+                            .font(.system(size: 10, design: .rounded))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            
+            Spacer()
+            
+            // Savings indicator (batch)
+            savingsIndicator(for: batchEstimate)
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
         .background(RoundedRectangle(cornerRadius: 6).fill(Color(nsColor: .controlBackgroundColor)))
     }
+    
+    @ViewBuilder
+    private func savingsIndicator(for estimate: FileSizeEstimate) -> some View {
+        if estimate.savings > 0 {
+            HStack(spacing: 2) {
+                Image(systemName: "arrow.down.circle.fill")
+                    .font(.caption2)
+                    .foregroundStyle(.green)
+                Text("−\(estimate.savings.formattedFileSize)")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.green)
+            }
+        } else if estimate.savings < 0 {
+            HStack(spacing: 2) {
+                Image(systemName: "arrow.up.circle.fill")
+                    .font(.caption2)
+                    .foregroundStyle(.orange)
+                Text("+\((-estimate.savings).formattedFileSize)")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.orange)
+            }
+        }
+    }
 
-    private var percentageColor: Color {
-        if estimate.percentage < 50 {
+    private func percentageColor(for percentage: Double) -> Color {
+        if percentage < 50 {
             return .green
-        } else if estimate.percentage < 100 {
+        } else if percentage < 100 {
             return .blue
         } else {
             return .orange

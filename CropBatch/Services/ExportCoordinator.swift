@@ -88,22 +88,20 @@ final class ExportCoordinator {
     }
 
     /// Checks for existing files and either exports or shows overwrite dialog
+    /// Uses ExportSettings.findExistingFiles to properly handle rename patterns with indices
     func processImages(_ images: [ImageItem], to outputDirectory: URL) async {
         guard let appState else { return }
 
-        var existingCount = 0
-        for image in images {
-            let outputFilename = appState.exportSettings.outputFilename(for: image.url)
-            let outputURL = outputDirectory.appendingPathComponent(outputFilename)
-            if FileManager.default.fileExists(atPath: outputURL.path) {
-                existingCount += 1
-            }
-        }
+        // Use the same approach as processImagesWithConflictCheck to properly
+        // check for conflicts with rename patterns (e.g., {filename}_{index})
+        var settings = appState.exportSettings
+        settings.outputDirectory = .custom(outputDirectory)
+        let existingFiles = settings.findExistingFiles(items: images)
 
-        if existingCount > 0 {
+        if !existingFiles.isEmpty {
             pendingExportImages = images
             pendingExportDirectory = outputDirectory
-            existingFilesCount = existingCount
+            existingFilesCount = existingFiles.count
             dialogPresentationID = UUID()
             showOverwriteDialog = true
         } else {
