@@ -19,15 +19,13 @@ A macOS app for batch cropping images with configurable edge trimming.
 
 - **Batch Processing** — Import multiple images via drag & drop or file browser
 - **Visual Crop Editor** — Draggable handles on the image preview
-- **Blur/Redact Tool** — Draw regions to blur, pixelate, or solid-fill sensitive areas
 - **Watermarks** — Add image or text overlays with position, opacity, and styling
-- **Image Transforms** — Rotate 90°/180°/270° and flip horizontal/vertical
 - **Snap-to-Edge** — Crop handles snap to detected UI element boundaries
+- **Scrubber Controls** — Drag the T/B/L/R labels to quickly adjust crop values
 - **Aspect Ratio Guides** — 16:9, 4:3, 1:1, 9:16, 3:2, 21:9 overlays
 - **Multiple Export Formats** — PNG, JPEG, HEIC, TIFF, WebP
 - **Resize Options** — Exact size, max width/height, or percentage scaling
 - **Flexible Naming** — Keep original names with suffix, or use patterns
-- **Folder Watch Mode** — Auto-process new images dropped in watched folders
 - **File Size Estimation** — Preview output size for current file and batch
 - **Keyboard Shortcuts** — Arrow keys for navigation, Shift+Arrow for crop adjustment
 
@@ -53,9 +51,6 @@ A macOS app for batch cropping images with configurable edge trimming.
 | ⇧⌥ Arrow | Uncrop (expand) |
 | ⇧⌃ Arrow | Adjust by 10px |
 | ⌘1/2/3/4 | Zoom modes |
-| B | Toggle blur mode |
-| R/L | Rotate right/left |
-| H/V | Flip horizontal/vertical |
 | S | Toggle snap-to-edge |
 
 ## Building from Source
