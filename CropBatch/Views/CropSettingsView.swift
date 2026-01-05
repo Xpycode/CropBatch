@@ -182,6 +182,10 @@ struct CropEdgeField: View {
                         onCommit?()
                     }
             )
+            .accessibilityLabel("\(edge.rawValue) crop drag handle")
+            .accessibilityValue("\(value) pixels")
+            .accessibilityHint("Drag left or right to adjust \(edge.rawValue) crop value")
+            .accessibilityAddTraits(.allowsDirectInteraction)
     }
 }
 

@@ -719,7 +719,11 @@ struct DraggableNumberField: View {
                     }
             )
             .help("Drag left/right to adjust value")
-            
+            .accessibilityLabel("\(label) drag control")
+            .accessibilityValue("\(Int(value))")
+            .accessibilityHint("Drag left or right to adjust value")
+            .accessibilityAddTraits(.allowsDirectInteraction)
+
             TextField("", value: $value, format: .number)
                 .textFieldStyle(.roundedBorder)
                 .frame(width: 46)
