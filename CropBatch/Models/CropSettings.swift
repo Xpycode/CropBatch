@@ -1,4 +1,4 @@
-import Foundation
+import SwiftUI
 
 struct CropSettings: Equatable, Codable {
     var cropTop: Int = 0
@@ -6,8 +6,41 @@ struct CropSettings: Equatable, Codable {
     var cropLeft: Int = 0
     var cropRight: Int = 0
 
+    // Corner radius properties
+    var cornerRadiusEnabled: Bool = false
+    var cornerRadius: Int = 10
+    var independentCorners: Bool = false
+    var cornerRadiusTL: Int = 10  // top-leading
+    var cornerRadiusTR: Int = 10  // top-trailing
+    var cornerRadiusBL: Int = 10  // bottom-leading
+    var cornerRadiusBR: Int = 10  // bottom-trailing
+
     var hasAnyCrop: Bool {
         cropTop > 0 || cropBottom > 0 || cropLeft > 0 || cropRight > 0
+    }
+
+    /// Computed property with auto-clamping for corner radii
+    func effectiveCornerRadii(for croppedSize: CGSize) -> RectangleCornerRadii? {
+        guard cornerRadiusEnabled else { return nil }
+
+        let maxRadius = Int(min(croppedSize.width, croppedSize.height) / 2)
+
+        if independentCorners {
+            return RectangleCornerRadii(
+                topLeading: CGFloat(min(cornerRadiusTL, maxRadius)),
+                bottomLeading: CGFloat(min(cornerRadiusBL, maxRadius)),
+                bottomTrailing: CGFloat(min(cornerRadiusBR, maxRadius)),
+                topTrailing: CGFloat(min(cornerRadiusTR, maxRadius))
+            )
+        } else {
+            let clamped = CGFloat(min(cornerRadius, maxRadius))
+            return RectangleCornerRadii(
+                topLeading: clamped,
+                bottomLeading: clamped,
+                bottomTrailing: clamped,
+                topTrailing: clamped
+            )
+        }
     }
 
     func croppedSize(from originalSize: CGSize) -> CGSize {

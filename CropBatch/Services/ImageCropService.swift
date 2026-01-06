@@ -1,6 +1,7 @@
 import AppKit
 import CoreGraphics
 import CoreImage
+import SwiftUI
 import UniformTypeIdentifiers
 
 enum ImageCropError: LocalizedError {
@@ -595,6 +596,49 @@ struct ImageCropService {
         return NSImage(cgImage: croppedCGImage, size: NSSize(width: cropRect.width, height: cropRect.height))
     }
 
+    /// Applies a rounded corner mask to the image, making corners transparent
+    /// - Parameters:
+    ///   - image: The source image
+    ///   - radii: Corner radii for each corner (auto-clamped)
+    /// - Returns: A new image with rounded corners and transparent background
+    static func applyRoundedCornerMask(
+        _ image: NSImage,
+        radii: RectangleCornerRadii
+    ) -> NSImage {
+        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+            return image
+        }
+
+        let width = cgImage.width
+        let height = cgImage.height
+
+        // Create RGBA context with alpha channel for transparency
+        guard let context = CGContext(
+            data: nil,
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return image }
+
+        let rect = CGRect(x: 0, y: 0, width: width, height: height)
+
+        // Create rounded rect path using SwiftUI's RectangleCornerRadii
+        let path = Path(roundedRect: rect, cornerRadii: radii, style: .continuous)
+        context.beginPath()
+        context.addPath(path.cgPath)
+        context.closePath()
+        context.clip()
+
+        // Draw image into clipped context
+        context.draw(cgImage, in: rect)
+
+        guard let maskedCGImage = context.makeImage() else { return image }
+        return NSImage(cgImage: maskedCGImage, size: image.size)
+    }
+
     /// Creates a normalized CGImage from an NSImage by drawing it into a bitmap context.
     /// This applies any EXIF orientation transforms so the pixel data matches display.
     private static func createNormalizedCGImage(from image: NSImage) -> CGImage? {
@@ -805,6 +849,11 @@ struct ImageCropService {
         // 3. Apply crop
         processedImage = try crop(processedImage, with: cropSettings)
 
+        // 3.5. Apply rounded corner mask (must be after crop)
+        if let radii = cropSettings.effectiveCornerRadii(for: processedImage.size) {
+            processedImage = applyRoundedCornerMask(processedImage, radii: radii)
+        }
+
         // 4. Apply resize if enabled
         if let targetSize = calculateResizedSize(from: processedImage.size, with: exportSettings.resizeSettings) {
             processedImage = try resize(processedImage, to: targetSize)
@@ -823,11 +872,19 @@ struct ImageCropService {
         }
 
         // Get output URL from export settings (with index for batch rename)
-        let outputURL = exportSettings.outputURL(for: item.url, index: index)
+        var outputURL = exportSettings.outputURL(for: item.url, index: index)
 
         // Determine the actual format to use
+        // Force PNG when corner radius is enabled (transparency required)
         let format: UTType
-        if exportSettings.preserveOriginalFormat {
+        if cropSettings.cornerRadiusEnabled {
+            format = UTType.png
+            // Update file extension to .png if corners are enabled
+            let baseName = outputURL.deletingPathExtension().lastPathComponent
+            outputURL = outputURL.deletingLastPathComponent()
+                .appendingPathComponent(baseName)
+                .appendingPathExtension("png")
+        } else if exportSettings.preserveOriginalFormat {
             let ext = item.url.pathExtension.lowercased()
             format = ExportFormat.allCases.first {
                 $0.fileExtension == ext || (ext == "jpeg" && $0 == .jpeg)

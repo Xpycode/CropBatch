@@ -17,6 +17,9 @@ struct CropOverlayView: View {
 
             ZStack {
                 cropRectangles(offsetX: offsetX, offsetY: offsetY)
+                if cropSettings.cornerRadiusEnabled {
+                    cornerMasks(offsetX: offsetX, offsetY: offsetY)
+                }
                 cropBorder(offsetX: offsetX, offsetY: offsetY)
             }
         }
@@ -56,6 +59,56 @@ struct CropOverlayView: View {
     }
 
     @ViewBuilder
+    private func cornerMasks(offsetX: CGFloat, offsetY: CGFloat) -> some View {
+        let cropRect = CGRect(
+            x: offsetX + CGFloat(cropSettings.cropLeft) * scale,
+            y: offsetY + CGFloat(cropSettings.cropTop) * scale,
+            width: displayedSize.width - CGFloat(cropSettings.cropLeft + cropSettings.cropRight) * scale,
+            height: displayedSize.height - CGFloat(cropSettings.cropTop + cropSettings.cropBottom) * scale
+        )
+
+        // Get scaled corner radii
+        if let radii = cropSettings.effectiveCornerRadii(for: cropRect.size) {
+            let scaledRadii = RectangleCornerRadii(
+                topLeading: radii.topLeading * scale,
+                bottomLeading: radii.bottomLeading * scale,
+                bottomTrailing: radii.bottomTrailing * scale,
+                topTrailing: radii.topTrailing * scale
+            )
+
+            // Draw corner masks using a checkerboard pattern to indicate transparency
+            Canvas { context, size in
+                // Create the rectangular crop area
+                let rect = cropRect
+
+                // Create a rounded rectangle path
+                let roundedPath = Path(roundedRect: rect, cornerRadii: scaledRadii, style: .continuous)
+
+                // Create corner rectangles and subtract the rounded path to show only corners
+                // Top-left corner
+                let tlRect = CGRect(x: rect.minX, y: rect.minY, width: scaledRadii.topLeading, height: scaledRadii.topLeading)
+                // Top-right corner
+                let trRect = CGRect(x: rect.maxX - scaledRadii.topTrailing, y: rect.minY, width: scaledRadii.topTrailing, height: scaledRadii.topTrailing)
+                // Bottom-left corner
+                let blRect = CGRect(x: rect.minX, y: rect.maxY - scaledRadii.bottomLeading, width: scaledRadii.bottomLeading, height: scaledRadii.bottomLeading)
+                // Bottom-right corner
+                let brRect = CGRect(x: rect.maxX - scaledRadii.bottomTrailing, y: rect.maxY - scaledRadii.bottomTrailing, width: scaledRadii.bottomTrailing, height: scaledRadii.bottomTrailing)
+
+                // Fill corners with semi-transparent overlay (will be transparent in output)
+                for cornerRect in [tlRect, trRect, blRect, brRect] {
+                    let cornerPath = Path(cornerRect)
+                    // We want to show what's OUTSIDE the rounded rect but INSIDE the corner squares
+                    context.fill(cornerPath, with: .color(.black.opacity(0.5)))
+                }
+
+                // Then "cut out" the rounded rect area from the corners
+                context.blendMode = .destinationOut
+                context.fill(roundedPath, with: .color(.white))
+            }
+        }
+    }
+
+    @ViewBuilder
     private func cropBorder(offsetX: CGFloat, offsetY: CGFloat) -> some View {
         let cropRect = CGRect(
             x: offsetX + CGFloat(cropSettings.cropLeft) * scale,
@@ -64,9 +117,24 @@ struct CropOverlayView: View {
             height: displayedSize.height - CGFloat(cropSettings.cropTop + cropSettings.cropBottom) * scale
         )
 
-        Rectangle()
-            .strokeBorder(Color.white, lineWidth: 2)
-            .frame(width: cropRect.width, height: cropRect.height)
-            .position(x: cropRect.midX, y: cropRect.midY)
+        if cropSettings.cornerRadiusEnabled,
+           let radii = cropSettings.effectiveCornerRadii(for: cropRect.size) {
+            let scaledRadii = RectangleCornerRadii(
+                topLeading: radii.topLeading * scale,
+                bottomLeading: radii.bottomLeading * scale,
+                bottomTrailing: radii.bottomTrailing * scale,
+                topTrailing: radii.topTrailing * scale
+            )
+
+            UnevenRoundedRectangle(cornerRadii: scaledRadii, style: .continuous)
+                .strokeBorder(Color.white, lineWidth: 2)
+                .frame(width: cropRect.width, height: cropRect.height)
+                .position(x: cropRect.midX, y: cropRect.midY)
+        } else {
+            Rectangle()
+                .strokeBorder(Color.white, lineWidth: 2)
+                .frame(width: cropRect.width, height: cropRect.height)
+                .position(x: cropRect.midX, y: cropRect.midY)
+        }
     }
 }

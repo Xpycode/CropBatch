@@ -349,6 +349,91 @@ struct CropSectionView: View {
                 .help("Reset crop")
                 .frame(maxWidth: .infinity)
 
+                // Corner Radius section
+                VStack(alignment: .leading, spacing: 6) {
+                    Toggle(isOn: $state.cropSettings.cornerRadiusEnabled) {
+                        Text("Corner Radius")
+                            .font(.caption)
+                    }
+                    .toggleStyle(.checkbox)
+                    .controlSize(.small)
+
+                    if appState.cropSettings.cornerRadiusEnabled {
+                        HStack(spacing: 6) {
+                            TextField("10", value: $state.cropSettings.cornerRadius, format: .number)
+                                .textFieldStyle(.roundedBorder)
+                                .frame(width: 50)
+                                .multilineTextAlignment(.trailing)
+                                .controlSize(.small)
+
+                            Text("px")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+
+                            Spacer()
+
+                            Toggle(isOn: $state.cropSettings.independentCorners) {
+                                Text("Per-corner")
+                                    .font(.caption2)
+                            }
+                            .toggleStyle(.checkbox)
+                            .controlSize(.mini)
+                        }
+
+                        if appState.cropSettings.independentCorners {
+                            HStack(spacing: 4) {
+                                VStack(spacing: 2) {
+                                    HStack(spacing: 2) {
+                                        Text("TL")
+                                            .font(.system(size: 9))
+                                            .foregroundStyle(.secondary)
+                                        TextField("", value: $state.cropSettings.cornerRadiusTL, format: .number)
+                                            .textFieldStyle(.roundedBorder)
+                                            .frame(width: 36)
+                                            .controlSize(.mini)
+                                    }
+                                    HStack(spacing: 2) {
+                                        Text("BL")
+                                            .font(.system(size: 9))
+                                            .foregroundStyle(.secondary)
+                                        TextField("", value: $state.cropSettings.cornerRadiusBL, format: .number)
+                                            .textFieldStyle(.roundedBorder)
+                                            .frame(width: 36)
+                                            .controlSize(.mini)
+                                    }
+                                }
+                                Spacer()
+                                VStack(spacing: 2) {
+                                    HStack(spacing: 2) {
+                                        TextField("", value: $state.cropSettings.cornerRadiusTR, format: .number)
+                                            .textFieldStyle(.roundedBorder)
+                                            .frame(width: 36)
+                                            .controlSize(.mini)
+                                        Text("TR")
+                                            .font(.system(size: 9))
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    HStack(spacing: 2) {
+                                        TextField("", value: $state.cropSettings.cornerRadiusBR, format: .number)
+                                            .textFieldStyle(.roundedBorder)
+                                            .frame(width: 36)
+                                            .controlSize(.mini)
+                                        Text("BR")
+                                            .font(.system(size: 9))
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+                            }
+                        }
+
+                        Text("PNG output (transparency)")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.top, 4)
+
                 Divider()
 
                 // Snap to edges toggle
@@ -469,6 +554,8 @@ struct CompactCropField: View {
                 Text(label)
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(isDragging ? .primary : (isHovering ? .primary : .secondary))
+                    .lineLimit(1)
+                    .fixedSize()
                 
                 Image(systemName: "chevron.right")
                     .font(.system(size: 6, weight: .bold))
@@ -604,6 +691,37 @@ struct CropControlsView: View {
         .controlSize(.small)
         .disabled(!appState.cropSettings.hasAnyCrop)
         .help("Reset crop to zero")
+
+        // Corner Radius
+        LabeledContent("Corner Radius") {
+            Toggle("", isOn: $state.cropSettings.cornerRadiusEnabled)
+                .labelsHidden()
+                .controlSize(.small)
+        }
+
+        if appState.cropSettings.cornerRadiusEnabled {
+            // Radius controls - same structure as crop section
+            LabeledContent {
+                HStack(spacing: 6) {
+                    if appState.cropSettings.independentCorners {
+                        CompactCropField(label: "TL", value: $state.cropSettings.cornerRadiusTL)
+                        CompactCropField(label: "TR", value: $state.cropSettings.cornerRadiusTR)
+                        CompactCropField(label: "BL", value: $state.cropSettings.cornerRadiusBL)
+                        CompactCropField(label: "BR", value: $state.cropSettings.cornerRadiusBR)
+                    } else {
+                        CompactCropField(label: "R", value: $state.cropSettings.cornerRadius)
+                    }
+                }
+            } label: {
+                Toggle("Per-corner", isOn: $state.cropSettings.independentCorners)
+                    .toggleStyle(.checkbox)
+                    .controlSize(.small)
+            }
+
+            Text("Exports as PNG for transparency")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+        }
     }
 }
 
