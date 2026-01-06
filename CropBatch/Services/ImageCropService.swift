@@ -361,20 +361,19 @@ struct ImageCropService {
         return NSImage(cgImage: resultImage, size: imageSize)
     }
 
-    /// Creates a blurred CGImage for a region with proper edge handling
-    /// Uses clampedToExtent() to prevent gray/black edge artifacts
+    /// Creates a blurred CGImage for a region with edge clamping
+    /// Note: Blur regions touching image edges may show slight gradient artifacts
+    /// due to edge pixel clamping. This is a known limitation.
     private static func createBlurredRegion(
         from ciImage: CIImage,
         in rect: CGRect,
         radius: Double,
         ciContext: CIContext
     ) -> CGImage? {
-        // CRITICAL: Clamp edges BEFORE cropping to prevent gray fringe artifacts
-        // The blur filter samples beyond the crop bounds; clampedToExtent() extends
-        // edge pixels infinitely to provide clean samples at the borders.
+        // Clamp edges to prevent black/gray fringe from sampling outside image
         let clamped = ciImage.clampedToExtent()
 
-        // Expand the crop region by the blur radius to capture edge samples
+        // Expand crop region to capture blur samples
         let expandedRect = rect.insetBy(dx: -radius * 3, dy: -radius * 3)
         let cropped = clamped.cropped(to: expandedRect)
 
@@ -383,8 +382,6 @@ struct ImageCropService {
         blurFilter.setValue(radius, forKey: kCIInputRadiusKey)
 
         guard let blurred = blurFilter.outputImage else { return nil }
-
-        // Crop back to the original requested rect
         return ciContext.createCGImage(blurred, from: rect)
     }
 

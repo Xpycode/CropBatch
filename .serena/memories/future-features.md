@@ -31,11 +31,18 @@ Core focus: Load images → Configure crop → Export batch
 - [ ] Drag & drop export to Finder
 
 ## Blur Tool Status
-**Status:** Disabled (code exists but commented out)
+**Status:** Re-enabled on `blur-again` branch (2026-01-06)
 **Documentation:** `docs/blur-feature-status.md`
 
-Key issues to fix:
-1. CGImage Y-coordinate flip (bottom-left vs top-left origin)
-2. Gesture priority conflicts between resize/move handles
-3. State update race conditions during drag
-4. Live preview performance with large images
+### Fixed Issues:
+- ✅ Intensity slider now updates selected region (was only setting default for new regions)
+- ✅ Style picker now updates selected region
+- ✅ Blur, Black, White styles work with live preview
+
+### Remaining Work:
+- [ ] **Pixelate live preview** - Currently hidden. SwiftUI has no `.pixelate()` modifier like `.blur()`. Options:
+  - Use CIPixellate filter with cached rendering
+  - Downscale/upscale approximation
+  - Keep grid indicator (current placeholder approach)
+- [ ] **Edge gradient artifact** - Blur regions touching image edges show gradient fade due to edge pixel clamping. Tried mirroring approaches (manual + CIAffineTile) but they didn't work or caused performance issues. Would need Metal shader or more complex solution.
+- [ ] Performance optimization for large images (throttle slider if needed)

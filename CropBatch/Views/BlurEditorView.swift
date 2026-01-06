@@ -300,7 +300,7 @@ struct BlurRegionOverlay: View {
                     .resizable()
                     .aspectRatio(contentMode: .fill)
                     .frame(width: converter.displayedSize.width, height: converter.displayedSize.height)
-                    .blur(radius: 5 + 25 * region.intensity)
+                    .blur(radius: 30 * region.intensity)
                     .offset(x: -displayRect.minX, y: -displayRect.minY)
             }
             .frame(width: displayRect.width, height: displayRect.height)
@@ -613,38 +613,62 @@ struct BlurRegionsCropPreview: View {
 struct BlurToolSettingsPanel: View {
     @Environment(AppState.self) private var appState
 
+    /// The currently selected region (if any)
+    private var selectedRegion: BlurRegion? {
+        appState.selectedBlurRegion
+    }
+
+    /// Current style - from selected region or default
+    private var currentStyle: BlurRegion.BlurStyle {
+        selectedRegion?.style ?? appState.blurStyle
+    }
+
+    /// Current intensity - from selected region or default
+    private var currentIntensity: Double {
+        selectedRegion?.intensity ?? appState.blurIntensity
+    }
+
     var body: some View {
         @Bindable var state = appState
 
         VStack(alignment: .leading, spacing: 12) {
             // Style picker
             VStack(alignment: .leading, spacing: 6) {
-                Text("Style")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                HStack {
+                    Text("Style")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    if selectedRegion != nil {
+                        Spacer()
+                        Text("(editing selected)")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
+                }
 
-                Picker("Style", selection: $state.blurStyle) {
-                    ForEach(BlurRegion.BlurStyle.allCases) { style in
+                // Note: Pixelate hidden until live preview is implemented (see future-features.md)
+                Picker("Style", selection: styleBinding) {
+                    ForEach(BlurRegion.BlurStyle.allCases.filter { $0 != .pixelate }) { style in
                         Text(style.rawValue).tag(style)
                     }
                 }
                 .pickerStyle(.segmented)
             }
 
-            // Intensity slider (for blur/pixelate only)
-            if appState.blurStyle == .blur || appState.blurStyle == .pixelate {
+            // Intensity slider (for blur style)
+            if currentStyle == .blur {
                 VStack(alignment: .leading, spacing: 6) {
                     HStack {
                         Text("Intensity")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                         Spacer()
-                        Text("\(Int(appState.blurIntensity * 100))%")
+                        Text("\(Int(currentIntensity * 100))%")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
 
-                    Slider(value: $state.blurIntensity, in: 0.1...1.0)
+                    Slider(value: intensityBinding, in: 0.0...1.0)
                 }
             }
 
@@ -690,5 +714,35 @@ struct BlurToolSettingsPanel: View {
                     .foregroundStyle(.tertiary)
             }
         }
+    }
+
+    // MARK: - Bindings
+
+    /// Binding for style - updates selected region or default
+    private var styleBinding: Binding<BlurRegion.BlurStyle> {
+        Binding(
+            get: { currentStyle },
+            set: { newStyle in
+                if let regionID = selectedRegion?.id {
+                    appState.updateBlurRegion(regionID, style: newStyle)
+                } else {
+                    appState.blurStyle = newStyle
+                }
+            }
+        )
+    }
+
+    /// Binding for intensity - updates selected region or default
+    private var intensityBinding: Binding<Double> {
+        Binding(
+            get: { currentIntensity },
+            set: { newIntensity in
+                if let regionID = selectedRegion?.id {
+                    appState.updateBlurRegion(regionID, intensity: newIntensity)
+                } else {
+                    appState.blurIntensity = newIntensity
+                }
+            }
+        )
     }
 }
