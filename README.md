@@ -11,12 +11,12 @@ A macOS app for batch cropping images with configurable edge trimming.
 
 ## Screenshots
 
-![CropBatch](Screenshots/mainwindow-1.png)
-![CropBatch](Screenshots/mainwindow-2.png)
-![CropBatch](Screenshots/mainwindow-3.png)
-![Snap to Edges](Screenshots/mainwindow-4-mismatch-cropsnap.png)
-![Watermark Icon](Screenshots/mainwindow-5-WatermarkIcon.png)
-![Watermark Text](Screenshots/mainwindow-6-WatermarkText.png)
+![CropBatch](03_Screenshots/mainwindow-1.png)
+![CropBatch](03_Screenshots/mainwindow-2.png)
+![CropBatch](03_Screenshots/mainwindow-3.png)
+![Snap to Edges](03_Screenshots/mainwindow-4-mismatch-cropsnap.png)
+![Watermark Icon](03_Screenshots/mainwindow-5-WatermarkIcon.png)
+![Watermark Text](03_Screenshots/mainwindow-6-WatermarkText.png)
 
 ## Features
 
@@ -62,7 +62,7 @@ Requires Xcode 16+ and macOS 15.0+
 
 ```bash
 git clone https://github.com/Xpycode/CropBatch.git
-cd CropBatch
+cd CropBatch/01_Project
 xcodebuild -scheme CropBatch -configuration Release
 ```
 
