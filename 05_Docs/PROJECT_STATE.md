@@ -5,7 +5,7 @@
 - **Started:** ~December 2025
 - **Current Phase:** implementation
 - **Last Session:** 2026-01-12
-- **Version:** 1.1
+- **Version:** 1.2
 - **Downloads:** 61 (GitHub releases)
 
 ## What Is This?

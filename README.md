@@ -5,8 +5,8 @@ A macOS app for batch cropping images with configurable edge trimming.
 ![macOS](https://img.shields.io/badge/macOS-15.0+-blue.svg)
 ![Swift](https://img.shields.io/badge/Swift-6.0-orange.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
-![Version](https://img.shields.io/badge/version-1.1-brightgreen.svg)
-[![Download](https://img.shields.io/badge/Download-v1.1-blue.svg)](https://github.com/Xpycode/CropBatch/releases/latest)
+![Version](https://img.shields.io/badge/version-1.2-brightgreen.svg)
+[![Download](https://img.shields.io/badge/Download-v1.2-blue.svg)](https://github.com/Xpycode/CropBatch/releases/latest)
 ![Downloads](https://img.shields.io/github/downloads/Xpycode/CropBatch/total.svg)
 
 ## Screenshots
@@ -34,7 +34,7 @@ A macOS app for batch cropping images with configurable edge trimming.
 
 ## Installation
 
-1. Download `CropBatch-1.1.dmg` from [Releases](https://github.com/Xpycode/CropBatch/releases/latest)
+1. Download `CropBatch-1.2.dmg` from [Releases](https://github.com/Xpycode/CropBatch/releases/latest)
 2. Open the DMG and drag CropBatch to Applications
 3. Launch from Applications folder
 
