@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <channel>
+        <title>CropBatch Updates</title>
+        <link>https://github.com/Xpycode/CropBatch</link>
+        <description>Updates for CropBatch</description>
+        <language>en</language>
+
+        <!--
+        RELEASE PROCESS:
+        1. Build for release: Product → Archive in Xcode
+        2. Export notarized app, create DMG
+        3. Sign the DMG: ./sign_update CropBatch-vX.X.dmg
+        4. Copy the signature from output
+        5. Add new <item> below with version, signature, download URL
+        6. Push appcast.xml to main branch
+        -->
+
+        <!-- Latest release first -->
+        <item>
+            <title>Version 1.2</title>
+            <description><![CDATA[
+                <h2>What's New in 1.2</h2>
+                <ul>
+                    <li>Corner radius for transparent cropping</li>
+                    <li>Blur regions with adjustable intensity</li>
+                </ul>
+            ]]></description>
+            <pubDate>Sun, 12 Jan 2026 12:00:00 +0000</pubDate>
+            <enclosure
+                url="https://github.com/Xpycode/CropBatch/releases/download/v1.2/CropBatch-v1.2.dmg"
+                sparkle:version="3"
+                sparkle:shortVersionString="1.2"
+                length="0"
+                type="application/octet-stream"
+                sparkle:edSignature="SIGNATURE_HERE"
+            />
+            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+        </item>
+
+    </channel>
+</rss>

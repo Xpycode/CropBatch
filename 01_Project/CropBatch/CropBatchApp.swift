@@ -6,6 +6,8 @@ struct CropBatchApp: App {
     @State private var appState = AppState()
     @State private var isCLIMode = false
 
+    private let updateController = UpdateController()
+
     init() {
         // Check if launched with CLI arguments
         if CLIHandler.hasArguments() {
@@ -26,6 +28,14 @@ struct CropBatchApp: App {
         .windowResizability(.contentSize)
         .defaultSize(width: 900, height: 600)
         .commands {
+            // MARK: - App Menu (Check for Updates)
+            CommandGroup(after: .appInfo) {
+                Button("Check for Updates...") {
+                    updateController.checkForUpdates()
+                }
+                .disabled(!updateController.canCheckForUpdates)
+            }
+
             // MARK: - File Menu
             CommandGroup(replacing: .newItem) {
                 Button("Import Images...") {

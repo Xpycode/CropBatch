@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		23630F672F150E810067B77B /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 23630F662F150E810067B77B /* Sparkle */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		A1000001238ABCDE /* CropBatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CropBatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -36,6 +40,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				23630F672F150E810067B77B /* Sparkle in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -78,6 +83,7 @@
 			);
 			name = CropBatch;
 			packageProductDependencies = (
+				23630F662F150E810067B77B /* Sparkle */,
 			);
 			productName = CropBatch;
 			productReference = A1000001238ABCDE /* CropBatch.app */;
@@ -107,6 +113,9 @@
 			);
 			mainGroup = A1000006238ABCDE;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				23630F652F150E810067B77B /* XCRemoteSwiftPackageReference "Sparkle" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = A1000007238ABCDE /* Products */;
 			projectDirPath = "";
@@ -270,7 +279,7 @@
 				CODE_SIGN_ENTITLEMENTS = CropBatch/CropBatch.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"CropBatch/Preview Content\"";
 				DEVELOPMENT_TEAM = FDMSRXXN73;
@@ -280,6 +289,7 @@
 				ENABLE_USER_SELECTED_FILES = readwrite;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = CropBatch/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = CropBatch;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -287,7 +297,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 1.2;
-				PRODUCT_BUNDLE_IDENTIFIER = com.yourcompany.CropBatch;
+				PRODUCT_BUNDLE_IDENTIFIER = com.lucesumbrarum.CropBatch;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 6.0;
@@ -302,7 +312,7 @@
 				CODE_SIGN_ENTITLEMENTS = CropBatch/CropBatch.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"CropBatch/Preview Content\"";
 				DEVELOPMENT_TEAM = FDMSRXXN73;
@@ -312,6 +322,7 @@
 				ENABLE_USER_SELECTED_FILES = readwrite;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = CropBatch/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = CropBatch;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -319,7 +330,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 1.2;
-				PRODUCT_BUNDLE_IDENTIFIER = com.yourcompany.CropBatch;
+				PRODUCT_BUNDLE_IDENTIFIER = com.lucesumbrarum.CropBatch;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 6.0;
@@ -348,6 +359,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		23630F652F150E810067B77B /* XCRemoteSwiftPackageReference "Sparkle" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sparkle-project/Sparkle";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.8.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		23630F662F150E810067B77B /* Sparkle */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 23630F652F150E810067B77B /* XCRemoteSwiftPackageReference "Sparkle" */;
+			productName = Sparkle;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = A100000B238ABCDE /* Project object */;
 }

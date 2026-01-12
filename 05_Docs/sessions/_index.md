@@ -10,7 +10,7 @@ CropBatch — macOS batch image cropping app
 
 | Date | Focus | Outcome | Log |
 |------|-------|---------|-----|
-| 2026-01-12 | Project reorg + Directions setup | Completed | [2026-01-12-a](2026-01-12-a.md) |
+| 2026-01-12 | Reorg + Directions + merge branches | v1.2 ready | [2026-01-12-a](2026-01-12-a.md) |
 
 ---
 *One log per session. Link from here.*
