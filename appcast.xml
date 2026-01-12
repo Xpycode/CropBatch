@@ -24,6 +24,7 @@
                 <ul>
                     <li>Corner radius for transparent cropping</li>
                     <li>Blur regions with adjustable intensity</li>
+                    <li>Auto-update support (Check for Updates menu)</li>
                 </ul>
             ]]></description>
             <pubDate>Sun, 12 Jan 2026 12:00:00 +0000</pubDate>
@@ -31,9 +32,9 @@
                 url="https://github.com/Xpycode/CropBatch/releases/download/v1.2/CropBatch-v1.2.dmg"
                 sparkle:version="3"
                 sparkle:shortVersionString="1.2"
-                length="0"
+                length="10343878"
                 type="application/octet-stream"
-                sparkle:edSignature="SIGNATURE_HERE"
+                sparkle:edSignature="dKP1LqeW17PB7vURc4ssqEmyieBnB+YPy162/tepi7ngEpDJXIBPjx2szEgl9pfvkGCwzGF51EbxaqM+zz7ACQ=="
             />
             <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
         </item>
