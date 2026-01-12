@@ -1,4 +1,4 @@
-# CropBatch
+# <img src="01_Project/CropBatch/Assets.xcassets/AppIcon.appiconset/icon_128x128.png" width="48" align="top" /> CropBatch
 
 A macOS app for batch cropping images with configurable edge trimming.
 
@@ -11,19 +11,20 @@ A macOS app for batch cropping images with configurable edge trimming.
 
 ## Screenshots
 
-![CropBatch](03_Screenshots/mainwindow-1.png)
-![CropBatch](03_Screenshots/mainwindow-2.png)
-![CropBatch](03_Screenshots/mainwindow-3.png)
-![Snap to Edges](03_Screenshots/mainwindow-4-mismatch-cropsnap.png)
-![Watermark Icon](03_Screenshots/mainwindow-5-WatermarkIcon.png)
-![Watermark Text](03_Screenshots/mainwindow-6-WatermarkText.png)
+![Crop with Snap-to-Edge](03_Screenshots/mainWindow1-Crop-Snap.png)
+![Blur Regions](03_Screenshots/mainWindow2-Blur.png)
+![Watermark with Image](03_Screenshots/mainWindow3-watermarkPNG.png)
+![Watermark with Text](03_Screenshots/mainWindow4-WatermarkTEXT.png)
 
 ## Features
 
 - **Batch Processing** — Import multiple images via drag & drop or file browser
 - **Visual Crop Editor** — Draggable handles on the image preview
+- **Corner Radius** — Round corners with transparent cropping (PNG)
+- **Blur Regions** — Blur sensitive areas with adjustable intensity
 - **Watermarks** — Add image or text overlays with position, opacity, and styling
 - **Snap-to-Edge** — Crop handles snap to detected UI element boundaries
+- **Auto-Update** — Check for updates from the app menu
 - **Scrubber Controls** — Drag the T/B/L/R labels to quickly adjust crop values
 - **Aspect Ratio Guides** — 16:9, 4:3, 1:1, 9:16, 3:2, 21:9 overlays
 - **Multiple Export Formats** — PNG, JPEG, HEIC, TIFF, WebP
@@ -34,7 +35,7 @@ A macOS app for batch cropping images with configurable edge trimming.
 
 ## Installation
 
-1. Download `CropBatch-1.2.dmg` from [Releases](https://github.com/Xpycode/CropBatch/releases/latest)
+1. Download `CropBatch-v1.2.dmg` from [Releases](https://github.com/Xpycode/CropBatch/releases/latest)
 2. Open the DMG and drag CropBatch to Applications
 3. Launch from Applications folder
 
