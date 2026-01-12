@@ -50,9 +50,9 @@ struct BlurRegion: Identifiable, Equatable, Hashable {
 
     // MARK: - Blur Parameters
 
-    /// Calculate the effective blur radius based on intensity (5-40 range)
+    /// Calculate the effective blur radius based on intensity (0-40 range)
     var effectiveBlurRadius: Double {
-        5.0 + (intensity * 35.0)
+        intensity * 40.0
     }
 
     /// Calculate the effective pixelate scale based on intensity and region size

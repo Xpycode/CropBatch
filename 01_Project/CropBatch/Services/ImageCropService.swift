@@ -362,20 +362,19 @@ struct ImageCropService {
         return NSImage(cgImage: resultImage, size: imageSize)
     }
 
-    /// Creates a blurred CGImage for a region with proper edge handling
-    /// Uses clampedToExtent() to prevent gray/black edge artifacts
+    /// Creates a blurred CGImage for a region with edge clamping
+    /// Note: Blur regions touching image edges may show slight gradient artifacts
+    /// due to edge pixel clamping. This is a known limitation.
     private static func createBlurredRegion(
         from ciImage: CIImage,
         in rect: CGRect,
         radius: Double,
         ciContext: CIContext
     ) -> CGImage? {
-        // CRITICAL: Clamp edges BEFORE cropping to prevent gray fringe artifacts
-        // The blur filter samples beyond the crop bounds; clampedToExtent() extends
-        // edge pixels infinitely to provide clean samples at the borders.
+        // Clamp edges to prevent black/gray fringe from sampling outside image
         let clamped = ciImage.clampedToExtent()
 
-        // Expand the crop region by the blur radius to capture edge samples
+        // Expand crop region to capture blur samples
         let expandedRect = rect.insetBy(dx: -radius * 3, dy: -radius * 3)
         let cropped = clamped.cropped(to: expandedRect)
 
@@ -384,8 +383,6 @@ struct ImageCropService {
         blurFilter.setValue(radius, forKey: kCIInputRadiusKey)
 
         guard let blurred = blurFilter.outputImage else { return nil }
-
-        // Crop back to the original requested rect
         return ciContext.createCGImage(blurred, from: rect)
     }
 
@@ -827,23 +824,20 @@ struct ImageCropService {
     ) throws -> URL {
         var processedImage = item.originalImage
 
-        // Pipeline order: Transform -> Blur -> Crop -> Resize -> Watermark
+        // Pipeline order: Blur -> Transform -> Crop -> Resize -> Watermark
+        // IMPORTANT: Blur FIRST on original image - no coordinate transform needed!
+        // The blur "bakes into" pixels, then rotates naturally with the image.
 
-        // 1. Apply transform (rotation/flip) FIRST
-        if !transform.isIdentity {
-            processedImage = try applyTransform(processedImage, transform: transform)
+        // 1. Apply blur regions FIRST - coords are already in original image space
+        if let imageBlurData = blurRegions[item.id], imageBlurData.hasRegions {
+            // Blur regions stored in normalized (0-1) original image coordinates
+            // Apply directly - no coordinate transformation needed!
+            processedImage = applyBlurRegions(processedImage, regions: imageBlurData.regions)
         }
 
-        // 2. Apply blur regions - MUST transform coordinates to match transformed image
-        if let imageBlurData = blurRegions[item.id], imageBlurData.hasRegions {
-            // Blur regions are stored in ORIGINAL image coordinates
-            // The image has been transformed, so we need to transform the blur coords too
-            let transformedRegions = imageBlurData.regions.map { region in
-                var transformed = region
-                transformed.normalizedRect = region.normalizedRect.applyingTransform(transform)
-                return transformed
-            }
-            processedImage = applyBlurRegions(processedImage, regions: transformedRegions)
+        // 2. Apply transform (rotation/flip) AFTER blur
+        if !transform.isIdentity {
+            processedImage = try applyTransform(processedImage, transform: transform)
         }
 
         // 3. Apply crop

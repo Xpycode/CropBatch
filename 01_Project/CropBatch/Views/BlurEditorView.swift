@@ -294,25 +294,25 @@ struct BlurRegionOverlay: View {
     private var previewContent: some View {
         switch region.style {
         case .blur:
-            // Use SwiftUI's native blur for preview - much simpler and reliable
-            // The actual CI blur is only applied during export
-            Rectangle()
-                .fill(.ultraThinMaterial)
-                .background {
-                    // Show a hint of the underlying content with blur
-                    Color.clear
-                        .background(.ultraThinMaterial)
-                }
+            // Live blur preview - show the image portion with blur applied
+            GeometryReader { geo in
+                Image(nsImage: displayedImage)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: converter.displayedSize.width, height: converter.displayedSize.height)
+                    .blur(radius: 30 * region.intensity)
+                    .offset(x: -displayRect.minX, y: -displayRect.minY)
+            }
+            .frame(width: displayRect.width, height: displayRect.height)
+            .clipped()
 
         case .pixelate:
-            // Mosaic/pixelate preview - show a grid pattern to indicate pixelation
-            Rectangle()
-                .fill(.ultraThinMaterial)
-                .overlay {
-                    // Grid pattern to indicate pixelation
-                    GridPattern(spacing: max(8, 20 * region.intensity))
-                        .stroke(Color.purple.opacity(0.3), lineWidth: 0.5)
-                }
+            // Pixelate preview - mosaic effect indicator
+            ZStack {
+                Color.purple.opacity(0.2)
+                GridPattern(spacing: max(4, 12 * (1 - region.intensity)))
+                    .stroke(Color.purple.opacity(0.4), lineWidth: 1)
+            }
 
         case .solidBlack:
             Color.black
@@ -511,6 +511,25 @@ struct GridPattern: Shape {
     }
 }
 
+struct DiagonalLinesPattern: Shape {
+    let spacing: Double = 8
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let s = spacing
+
+        // Diagonal lines from top-left to bottom-right
+        var offset: CGFloat = -rect.height
+        while offset <= rect.width {
+            path.move(to: CGPoint(x: offset, y: 0))
+            path.addLine(to: CGPoint(x: offset + rect.height, y: rect.height))
+            offset += s
+        }
+
+        return path
+    }
+}
+
 // MARK: - Blur Regions Crop Preview
 
 /// Shows blur regions as outlines when in crop mode (read-only preview)
@@ -594,38 +613,62 @@ struct BlurRegionsCropPreview: View {
 struct BlurToolSettingsPanel: View {
     @Environment(AppState.self) private var appState
 
+    /// The currently selected region (if any)
+    private var selectedRegion: BlurRegion? {
+        appState.selectedBlurRegion
+    }
+
+    /// Current style - from selected region or default
+    private var currentStyle: BlurRegion.BlurStyle {
+        selectedRegion?.style ?? appState.blurStyle
+    }
+
+    /// Current intensity - from selected region or default
+    private var currentIntensity: Double {
+        selectedRegion?.intensity ?? appState.blurIntensity
+    }
+
     var body: some View {
         @Bindable var state = appState
 
         VStack(alignment: .leading, spacing: 12) {
             // Style picker
             VStack(alignment: .leading, spacing: 6) {
-                Text("Style")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                HStack {
+                    Text("Style")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    if selectedRegion != nil {
+                        Spacer()
+                        Text("(editing selected)")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
+                }
 
-                Picker("Style", selection: $state.blurStyle) {
-                    ForEach(BlurRegion.BlurStyle.allCases) { style in
+                // Note: Pixelate hidden until live preview is implemented (see future-features.md)
+                Picker("Style", selection: styleBinding) {
+                    ForEach(BlurRegion.BlurStyle.allCases.filter { $0 != .pixelate }) { style in
                         Text(style.rawValue).tag(style)
                     }
                 }
                 .pickerStyle(.segmented)
             }
 
-            // Intensity slider (for blur/pixelate only)
-            if appState.blurStyle == .blur || appState.blurStyle == .pixelate {
+            // Intensity slider (for blur style)
+            if currentStyle == .blur {
                 VStack(alignment: .leading, spacing: 6) {
                     HStack {
                         Text("Intensity")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                         Spacer()
-                        Text("\(Int(appState.blurIntensity * 100))%")
+                        Text("\(Int(currentIntensity * 100))%")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
 
-                    Slider(value: $state.blurIntensity, in: 0.1...1.0)
+                    Slider(value: intensityBinding, in: 0.0...1.0)
                 }
             }
 
@@ -649,6 +692,18 @@ struct BlurToolSettingsPanel: View {
                 }
             }
 
+            // Apply to all images button
+            if !appState.activeImageBlurRegions.isEmpty && appState.images.count > 1 {
+                Button {
+                    appState.applyBlurRegionsToAllImages()
+                } label: {
+                    Label("Apply to All Images", systemImage: "rectangle.stack")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .help("Copy these blur regions to all other images")
+            }
+
             // Instructions
             VStack(alignment: .leading, spacing: 4) {
                 Text("Draw rectangles to add blur regions")
@@ -659,5 +714,35 @@ struct BlurToolSettingsPanel: View {
                     .foregroundStyle(.tertiary)
             }
         }
+    }
+
+    // MARK: - Bindings
+
+    /// Binding for style - updates selected region or default
+    private var styleBinding: Binding<BlurRegion.BlurStyle> {
+        Binding(
+            get: { currentStyle },
+            set: { newStyle in
+                if let regionID = selectedRegion?.id {
+                    appState.updateBlurRegion(regionID, style: newStyle)
+                } else {
+                    appState.blurStyle = newStyle
+                }
+            }
+        )
+    }
+
+    /// Binding for intensity - updates selected region or default
+    private var intensityBinding: Binding<Double> {
+        Binding(
+            get: { currentIntensity },
+            set: { newIntensity in
+                if let regionID = selectedRegion?.id {
+                    appState.updateBlurRegion(regionID, intensity: newIntensity)
+                } else {
+                    appState.blurIntensity = newIntensity
+                }
+            }
+        )
     }
 }
