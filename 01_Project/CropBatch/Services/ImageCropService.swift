@@ -768,10 +768,12 @@ struct ImageCropService {
     ) async throws -> [URL] {
         let total = Double(items.count)
 
-        // Pre-check: ensure no files would be overwritten
-        for item in items {
-            if exportSettings.wouldOverwriteOriginal(for: item.url) {
-                throw ImageCropError.wouldOverwriteOriginal(item.filename)
+        // Pre-check: ensure no accidental overwrites (skip if user explicitly chose overwrite mode)
+        if !exportSettings.outputDirectory.isOverwriteMode {
+            for item in items {
+                if exportSettings.wouldOverwriteOriginal(for: item.url) {
+                    throw ImageCropError.wouldOverwriteOriginal(item.filename)
+                }
             }
         }
 

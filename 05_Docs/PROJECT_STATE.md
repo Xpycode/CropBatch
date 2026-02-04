@@ -1,56 +1,45 @@
 # Project State
 
-## Quick Facts
+> **Size limit: <100 lines.** This is a digest, not an archive.
+
+## Identity
 - **Project:** CropBatch
-- **Started:** ~December 2025
-- **Current Phase:** implementation
-- **Last Session:** 2026-01-12
-- **Version:** 1.2
-- **Downloads:** 61 (GitHub releases)
+- **One-liner:** macOS app for batch cropping images with consistent settings
+- **Started:** December 2025
 
-## What Is This?
-A macOS app for batch cropping images. Born from needing to crop iOS screenshots for pdf2calendar.eu documentation — apply the same top/bottom crop to 20-30 images at once.
+## Current Position
+- **Phase:** polish
+- **Focus:** v1.2 released — monitoring, minor improvements
+- **Status:** shipped
+- **Last updated:** 2026-02-04
 
-**Core use:** Batch crop screenshots with consistent settings.
+## Progress
+```
+[##############......] 70% - v1.2 released with corner radius, blur, auto-update
+```
 
-## Who Uses It
-- **Primary user:** You (scratching your own itch)
-- **Secondary:** 61 public downloaders
-- **Polish level:** "Works for me" — not obsessing over edge cases
+| Phase | Status | Notes |
+|-------|--------|-------|
+| Discovery | done | Born from iOS screenshot cropping need |
+| Planning | done | Feature set defined, 61+ public downloads |
+| Implementation | done | v1.2 shipped |
+| Polish | **active** | "Works for me" level — no edge case obsession |
 
-## Feature Origin
-| Feature | Origin |
-|---------|--------|
-| Crop handles, batch apply | Core need |
-| Watermarks | User requested |
-| Snap-to-edge | User requested |
-| Blur (sensitive info) | Your wishlist |
-| Corner radius | Your wishlist |
+## Tech Stack
+- macOS 15.0+ / Swift 6.0 / SwiftUI / Xcode 16+
+- Notarized for distribution (not sandboxed)
+- Processing pipeline: Blur → Transform → Crop → Corner Mask → Resize → Watermark
+- Auto-update: Sparkle 2.8.1
 
-## Current Focus
-Merge two feature branches, then continue development.
+## Active Decisions
+- 2026-01-12: v1.2 released (corner radius, blur intensity, Sparkle auto-update)
+- ~Dec 2025: No persistence needed — "use and close" tool
+- ~Dec 2025: No Mac App Store yet (setup complexity)
+- ~Dec 2025: PNG required for transparency features
+- ~Dec 2025: Folder watching shelved
 
-## Branches in Flight
-| Branch | Status | Description |
-|--------|--------|-------------|
-| `corner-radius` | Ready to merge | Transparent corner cropping |
-| `blur-again` | Ready to merge | Blur with working intensity slider |
-
-## Technical Notes
-- **Platform:** macOS 15.0+ / Swift 6.0 / Xcode 16+
-- **Distribution:** Notarized, GitHub releases (not MAS yet)
-- **Sandbox:** Not sandboxed (empty entitlements)
-- **Persistence:** Not needed — "use and close" tool
-
-## On Hold
-- Folder watching (shelved)
-- Mac App Store (setup complexity)
-
-## Next Actions
-1. [ ] Merge `corner-radius` to main
-2. [ ] Merge `blur-again` to main
-3. [ ] Verify both features work together
-4. [ ] Continue development
+## Blockers
+[None]
 
 ---
-*Updated: 2026-01-12*
+*Updated by Claude. Source of truth for project position.*

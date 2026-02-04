@@ -22,6 +22,10 @@ final class ExportCoordinator {
     var pendingExportDirectory: URL?
     var dialogPresentationID = UUID()
 
+    // MARK: - Save in Place State
+
+    var showSaveInPlaceConfirmation = false
+
     // MARK: - Dependencies
 
     private weak var appState: AppState?
@@ -153,6 +157,22 @@ final class ExportCoordinator {
             await executeExport(images, to: dir, rename: true)
         }
     }
+
+    // MARK: - Save in Place
+
+    /// Executes Save in Place - overwrites original files
+    func executeSaveInPlace(_ images: [ImageItem]) async {
+        guard let appState else { return }
+
+        do {
+            let results = try await appState.processAndExportInPlace(images: images)
+            exportedCount = results.count
+            showSuccessAlert = true
+        } catch {
+            exportError = error.localizedDescription
+            showErrorAlert = true
+        }
+    }
 }
 
 // MARK: - View Modifier for Export Sheets/Alerts
@@ -217,6 +237,26 @@ extension View {
                 if !isShowing {
                     coordinator.onOverwriteDialogDismissed()
                 }
+            }
+            // Save in Place confirmation dialog
+            .confirmationDialog(
+                "Overwrite Original Files?",
+                isPresented: Binding(
+                    get: { coordinator.showSaveInPlaceConfirmation },
+                    set: { coordinator.showSaveInPlaceConfirmation = $0 }
+                ),
+                titleVisibility: .visible
+            ) {
+                let count = imagesToProcess.count
+                Button("Overwrite \(count) Original\(count == 1 ? "" : "s")", role: .destructive) {
+                    let images = imagesToProcess
+                    Task {
+                        await coordinator.executeSaveInPlace(images)
+                    }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This will permanently replace your original files. This action cannot be undone.")
             }
     }
 }

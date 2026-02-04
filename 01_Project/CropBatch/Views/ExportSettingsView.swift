@@ -34,18 +34,25 @@ struct ExportSettingsView: View {
                 ))
             }
 
-            // Rename settings
-            RenameSettingsSection()
+            // Rename settings (hidden in overwrite mode)
+            if !appState.exportSettings.outputDirectory.isOverwriteMode {
+                RenameSettingsSection()
+            }
 
-            // Preserve original format toggle
-            Toggle("Keep original format", isOn: Binding(
-                get: { appState.exportSettings.preserveOriginalFormat },
-                set: {
-                    appState.exportSettings.preserveOriginalFormat = $0
-                    appState.markCustomSettings()
-                }
-            ))
-            .font(.callout)
+            // Save in Place toggle
+            SaveInPlaceToggle()
+
+            // Preserve original format toggle (hidden in overwrite mode)
+            if !appState.exportSettings.outputDirectory.isOverwriteMode {
+                Toggle("Keep original format", isOn: Binding(
+                    get: { appState.exportSettings.preserveOriginalFormat },
+                    set: {
+                        appState.exportSettings.preserveOriginalFormat = $0
+                        appState.markCustomSettings()
+                    }
+                ))
+                .font(.callout)
+            }
 
             Divider()
 
@@ -220,6 +227,74 @@ struct SaveExportProfileSheet: View {
         }
         .padding()
         .frame(width: 300)
+    }
+}
+
+// MARK: - Save in Place Toggle
+
+struct SaveInPlaceToggle: View {
+    @Environment(AppState.self) private var appState
+
+    private var isEnabled: Bool {
+        appState.exportSettings.outputDirectory.isOverwriteMode
+    }
+
+    /// Validation error message, if any
+    private var validationError: String? {
+        appState.exportSettings.validateOverwriteMode(
+            cornerRadiusEnabled: appState.cropSettings.cornerRadiusEnabled,
+            items: appState.images
+        )
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Toggle(isOn: Binding(
+                get: { isEnabled },
+                set: { newValue in
+                    if newValue {
+                        appState.exportSettings.outputDirectory = .overwriteOriginal
+                    } else {
+                        appState.exportSettings.outputDirectory = .sameAsSource
+                    }
+                    appState.markCustomSettings()
+                }
+            )) {
+                HStack(spacing: 4) {
+                    Text("Save in place")
+                        .font(.callout)
+                    Text("(overwrite originals)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            // Show validation error
+            if isEnabled, let error = validationError {
+                HStack(spacing: 4) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                        .font(.caption)
+                    Text(error)
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                }
+                .padding(.leading, 20)
+            }
+
+            // Show warning when enabled
+            if isEnabled && validationError == nil {
+                HStack(spacing: 4) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.red)
+                        .font(.caption)
+                    Text("Original files will be replaced!")
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
+                .padding(.leading, 20)
+            }
+        }
     }
 }
 

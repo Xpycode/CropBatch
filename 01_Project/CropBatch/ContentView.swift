@@ -755,28 +755,89 @@ struct ExportFormatView: View {
             .controlSize(.small)
         }
 
-        // Naming selection
-        LabeledContent("Naming") {
-            Picker("", selection: Binding(
-                get: { appState.exportSettings.renameSettings.mode },
-                set: { appState.exportSettings.renameSettings.mode = $0; appState.markCustomSettings() }
-            )) {
-                ForEach(RenameMode.allCases) { mode in
-                    Text(mode.rawValue).tag(mode)
+        // Naming selection (hidden in save-in-place mode)
+        if !appState.exportSettings.outputDirectory.isOverwriteMode {
+            LabeledContent("Naming") {
+                Picker("", selection: Binding(
+                    get: { appState.exportSettings.renameSettings.mode },
+                    set: { appState.exportSettings.renameSettings.mode = $0; appState.markCustomSettings() }
+                )) {
+                    ForEach(RenameMode.allCases) { mode in
+                        Text(mode.rawValue).tag(mode)
+                    }
                 }
+                .pickerStyle(.segmented)
+                .frame(width: 160)
             }
-            .pickerStyle(.segmented)
-            .frame(width: 160)
         }
 
-        // Output preview
-        if let firstImage = appState.images.first {
+        // Save in Place toggle
+        SaveInPlaceSection()
+
+        // Output preview (hidden in save-in-place mode)
+        if !appState.exportSettings.outputDirectory.isOverwriteMode,
+           let firstImage = appState.images.first {
             LabeledContent("Output") {
                 Text(appState.exportSettings.outputFilename(for: firstImage.url))
                     .font(.system(.caption, design: .monospaced))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
+            }
+        }
+    }
+}
+
+// MARK: - Save in Place Section
+
+struct SaveInPlaceSection: View {
+    @Environment(AppState.self) private var appState
+
+    private var isEnabled: Bool {
+        appState.exportSettings.outputDirectory.isOverwriteMode
+    }
+
+    private var validationError: String? {
+        appState.exportSettings.validateOverwriteMode(
+            cornerRadiusEnabled: appState.cropSettings.cornerRadiusEnabled,
+            items: appState.images
+        )
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Toggle(isOn: Binding(
+                get: { isEnabled },
+                set: { newValue in
+                    if newValue {
+                        appState.exportSettings.outputDirectory = .overwriteOriginal
+                    } else {
+                        appState.exportSettings.outputDirectory = .sameAsSource
+                    }
+                    appState.markCustomSettings()
+                }
+            )) {
+                Text("Save in place")
+            }
+
+            if isEnabled {
+                if let error = validationError {
+                    HStack(spacing: 4) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                        Text(error)
+                            .foregroundStyle(.orange)
+                    }
+                    .font(.caption)
+                } else {
+                    HStack(spacing: 4) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.red)
+                        Text("Originals will be replaced!")
+                            .foregroundStyle(.red)
+                    }
+                    .font(.caption)
+                }
             }
         }
     }
@@ -970,21 +1031,44 @@ struct ExportFooterView: View {
                     .foregroundStyle(.orange)
             }
 
-            // Export button - prominent action
-            Button {
-                coordinator.selectOutputFolder()
-            } label: {
-                HStack {
-                    Image(systemName: "square.and.arrow.down.fill")
-                    Text(appState.selectedImageIDs.isEmpty
-                         ? "Export All (\(appState.images.count))"
-                         : "Export Selected (\(appState.selectedImageIDs.count))")
+            // Export button - changes behavior based on Save in Place mode
+            if appState.exportSettings.outputDirectory.isOverwriteMode {
+                // Save in Place mode - no folder picker, direct confirmation
+                Button {
+                    coordinator.showSaveInPlaceConfirmation = true
+                } label: {
+                    HStack {
+                        Image(systemName: "arrow.triangle.2.circlepath")
+                        Text(appState.selectedImageIDs.isEmpty
+                             ? "Save in Place (\(appState.images.count))"
+                             : "Save in Place (\(appState.selectedImageIDs.count))")
+                    }
+                    .frame(maxWidth: .infinity)
                 }
-                .frame(maxWidth: .infinity)
+                .buttonStyle(.borderedProminent)
+                .tint(.red)
+                .controlSize(.large)
+                .disabled(!appState.canExport || appState.exportSettings.validateOverwriteMode(
+                    cornerRadiusEnabled: appState.cropSettings.cornerRadiusEnabled,
+                    items: imagesToProcess
+                ) != nil)
+            } else {
+                // Normal export - folder picker
+                Button {
+                    coordinator.selectOutputFolder()
+                } label: {
+                    HStack {
+                        Image(systemName: "square.and.arrow.down.fill")
+                        Text(appState.selectedImageIDs.isEmpty
+                             ? "Export All (\(appState.images.count))"
+                             : "Export Selected (\(appState.selectedImageIDs.count))")
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .disabled(!appState.canExport)
             }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            .disabled(!appState.canExport)
 
             // Progress indicator
             if appState.isProcessing {

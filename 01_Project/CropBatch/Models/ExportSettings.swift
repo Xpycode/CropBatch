@@ -128,12 +128,19 @@ struct ExportSettings: Equatable {
     enum OutputDirectory: Equatable {
         case sameAsSource
         case custom(URL)
+        case overwriteOriginal  // Save in place - replaces original files
 
         var displayName: String {
             switch self {
             case .sameAsSource: return "Same as original"
             case .custom(let url): return url.lastPathComponent
+            case .overwriteOriginal: return "Overwrite originals"
             }
+        }
+
+        var isOverwriteMode: Bool {
+            if case .overwriteOriginal = self { return true }
+            return false
         }
     }
 
@@ -144,6 +151,11 @@ struct ExportSettings: Equatable {
 
     /// Generates the output URL for a given input URL with batch index
     func outputURL(for inputURL: URL, index: Int) -> URL {
+        // Overwrite mode: return original URL directly (same file, same extension)
+        if case .overwriteOriginal = outputDirectory {
+            return inputURL
+        }
+
         let originalName = inputURL.deletingPathExtension().lastPathComponent
         let originalExtension = inputURL.pathExtension.lowercased()
 
@@ -175,6 +187,9 @@ struct ExportSettings: Equatable {
             outputDir = inputURL.deletingLastPathComponent()
         case .custom(let url):
             outputDir = url
+        case .overwriteOriginal:
+            // Already handled above, but Swift requires exhaustive switch
+            return inputURL
         }
 
         return outputDir.appendingPathComponent(newFilename)
@@ -183,6 +198,27 @@ struct ExportSettings: Equatable {
     /// Checks if the output would overwrite the original
     func wouldOverwriteOriginal(for inputURL: URL) -> Bool {
         return outputURL(for: inputURL) == inputURL
+    }
+
+    /// Checks if "Save in Place" mode is valid for the given settings
+    /// Returns nil if valid, or an error message explaining why it's blocked
+    func validateOverwriteMode(cornerRadiusEnabled: Bool, items: [ImageItem]) -> String? {
+        guard outputDirectory.isOverwriteMode else { return nil }
+
+        // Corner radius requires PNG (transparency). Block if any original isn't PNG.
+        if cornerRadiusEnabled {
+            let nonPNGFiles = items.filter { item in
+                let ext = item.url.pathExtension.lowercased()
+                return ext != "png"
+            }
+            if !nonPNGFiles.isEmpty {
+                let count = nonPNGFiles.count
+                let fileWord = count == 1 ? "file" : "files"
+                return "Corner radius requires PNG format. \(count) \(fileWord) would need format conversion."
+            }
+        }
+
+        return nil
     }
 
     /// Generates just the output filename (without directory) for a given input URL

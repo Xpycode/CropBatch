@@ -635,6 +635,51 @@ final class AppState {
         return try await task.value
     }
 
+    /// Export images by overwriting original files ("Save in Place")
+    @MainActor
+    func processAndExportInPlace(images imagesToExport: [ImageItem]) async throws -> [URL] {
+        // Cancel any existing export to prevent concurrent operations
+        currentExportTask?.cancel()
+
+        // Capture settings at start to prevent mid-export changes
+        let capturedCropSettings = cropSettings
+        let capturedTransform = imageTransform
+        let capturedBlurRegions = blurRegions
+        var capturedExportSettings = exportSettings
+        capturedExportSettings.outputDirectory = .overwriteOriginal
+
+        isProcessing = true
+        processingProgress = 0
+
+        let task = Task<[URL], Error> { [weak self] in
+            defer {
+                Task { @MainActor in
+                    self?.isProcessing = false
+                    self?.currentExportTask = nil
+                }
+            }
+
+            try Task.checkCancellation()
+
+            let results = try await ImageCropService.batchCrop(
+                items: imagesToExport,
+                cropSettings: capturedCropSettings,
+                exportSettings: capturedExportSettings,
+                transform: capturedTransform,
+                blurRegions: capturedBlurRegions
+            ) { progress in
+                Task { @MainActor in
+                    self?.processingProgress = progress
+                }
+            }
+
+            return results
+        }
+
+        currentExportTask = task
+        return try await task.value
+    }
+
     func sendExportNotification(count: Int) {
         let content = UNMutableNotificationContent()
         content.title = "Export Complete"

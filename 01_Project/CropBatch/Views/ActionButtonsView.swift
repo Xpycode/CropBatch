@@ -20,6 +20,9 @@ struct ActionButtonsView: View {
     @State private var pendingExportDirectory: URL?
     @State private var dialogPresentationID = UUID()  // Forces dialog rebuild on each presentation
 
+    // Save in Place confirmation
+    @State private var showSaveInPlaceConfirmation = false
+
     private var imagesToProcess: [ImageItem] {
         appState.selectedImageIDs.isEmpty
             ? appState.images
@@ -28,6 +31,18 @@ struct ActionButtonsView: View {
 
     private var wouldOverwriteAny: Bool {
         imagesToProcess.contains { appState.exportSettings.wouldOverwriteOriginal(for: $0.url) }
+    }
+
+    private var isSaveInPlaceMode: Bool {
+        appState.exportSettings.outputDirectory.isOverwriteMode
+    }
+
+    /// Validation error for Save in Place mode (corner radius + non-PNG)
+    private var saveInPlaceValidationError: String? {
+        appState.exportSettings.validateOverwriteMode(
+            cornerRadiusEnabled: appState.cropSettings.cornerRadiusEnabled,
+            items: imagesToProcess
+        )
     }
 
     var body: some View {
@@ -117,30 +132,53 @@ struct ActionButtonsView: View {
                 .font(.caption)
                 .toggleStyle(.checkbox)
 
-            Button {
-                selectOutputFolder()
-            } label: {
-                Label(
-                    appState.selectedImageIDs.isEmpty
-                        ? "Export All (\(appState.images.count))"
-                        : "Export Selected (\(appState.selectedImageIDs.count))",
-                    systemImage: "square.and.arrow.down"
-                )
-                .frame(maxWidth: .infinity)
+            // Export button - different behavior for Save in Place vs normal export
+            if isSaveInPlaceMode {
+                Button {
+                    showSaveInPlaceConfirmation = true
+                } label: {
+                    Label(
+                        appState.selectedImageIDs.isEmpty
+                            ? "Save in Place (\(appState.images.count))"
+                            : "Save in Place (\(appState.selectedImageIDs.count))",
+                        systemImage: "arrow.triangle.2.circlepath"
+                    )
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.red)
+                .controlSize(.large)
+                .disabled(!appState.canExport || saveInPlaceValidationError != nil)
+            } else {
+                Button {
+                    selectOutputFolder()
+                } label: {
+                    Label(
+                        appState.selectedImageIDs.isEmpty
+                            ? "Export All (\(appState.images.count))"
+                            : "Export Selected (\(appState.selectedImageIDs.count))",
+                        systemImage: "square.and.arrow.down"
+                    )
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .disabled(!appState.canExport || wouldOverwriteAny)
             }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            .disabled(!appState.canExport || wouldOverwriteAny)
 
             // Warning messages
             if !appState.images.isEmpty && !appState.canExport && !appState.isProcessing {
                 Text("Apply crop, rotate, resize, or rename to export")
                     .font(.caption)
                     .foregroundStyle(.orange)
-            } else if wouldOverwriteAny {
+            } else if !isSaveInPlaceMode && wouldOverwriteAny {
                 Text("Change suffix to avoid overwriting originals")
                     .font(.caption)
                     .foregroundStyle(.red)
+            } else if let error = saveInPlaceValidationError {
+                Text(error)
+                    .font(.caption)
+                    .foregroundStyle(.orange)
             }
         }
         .sheet(isPresented: $showReviewSheet) {
@@ -202,6 +240,21 @@ struct ActionButtonsView: View {
         // Note: pending state is cleared in executeExport() after export completes,
         // NOT on dialog dismiss. This prevents a race where the onChange fires
         // before the button action captures the pending values.
+        .confirmationDialog(
+            "Overwrite Original Files?",
+            isPresented: $showSaveInPlaceConfirmation,
+            titleVisibility: .visible
+        ) {
+            let images = imagesToProcess
+            Button("Overwrite \(images.count) file\(images.count == 1 ? "" : "s")", role: .destructive) {
+                Task {
+                    await executeSaveInPlace(images)
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This will permanently replace your original files. This action cannot be undone.")
+        }
     }
 
     /// Opens NSOpenPanel to select output folder
@@ -268,6 +321,28 @@ struct ActionButtonsView: View {
 
             exportedCount = results.count
             lastExportDirectory = outputDirectory
+            showSuccessAlert = true
+
+            // Send system notification if app is not active
+            if !NSApp.isActive {
+                appState.sendExportNotification(count: results.count)
+            }
+        } catch {
+            exportError = error.localizedDescription
+            showErrorAlert = true
+        }
+    }
+
+    /// Execute "Save in Place" - overwrites original files
+    private func executeSaveInPlace(_ images: [ImageItem]) async {
+        do {
+            // Use the first image's directory as "output" for the success dialog
+            let firstDir = images.first?.url.deletingLastPathComponent()
+
+            let results = try await appState.processAndExportInPlace(images: images)
+
+            exportedCount = results.count
+            lastExportDirectory = firstDir
             showSuccessAlert = true
 
             // Send system notification if app is not active
