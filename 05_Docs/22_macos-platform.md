@@ -231,6 +231,12 @@ Files in SPM packages are auto-discovered (no pbxproj needed).
 </plist>
 ```
 
+### Sandbox + Sparkle Auto-Update
+
+If your app uses Sparkle and is sandboxed, you **must** include `com.apple.security.network.client` in your entitlements. Without it, the sandbox blocks all outgoing HTTP — Sparkle can't fetch `appcast.xml` and shows a generic "Update Error" with no useful diagnostic.
+
+Note that `ENABLE_APP_SANDBOX = YES` in Xcode build settings injects the sandbox at build time **even if the `.entitlements` file is empty**. Always verify the build setting, not just the entitlements file.
+
 ### When to Go Non-Sandboxed
 
 - System-level audio routing (HAL drivers)

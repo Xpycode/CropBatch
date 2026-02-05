@@ -6,7 +6,11 @@ LOAD: full
 
 # Production Readiness Checklist
 
-*What makes code "production ready" based on 10 code reviews across 6 projects.*
+*Code quality checks based on 10 code reviews across 6 projects.*
+
+> **Two-part release flow:**
+> 1. First run `/minimums` → Feature baselines (updates, logging, UI polish)
+> 2. Then run `/review` → Code quality (this file)
 
 ---
 
@@ -14,7 +18,7 @@ LOAD: full
 
 ### Code Quality
 
-- [ ] **No debug print statements** in production code
+- [ ] **No debug print statements** in production code paths (see verification below)
 - [ ] **No `try?` swallowing errors** silently — handle or propagate
 - [ ] **No `@unchecked Sendable`** without documented justification
 - [ ] **No force unwraps (`!`)** without nil guards
@@ -69,24 +73,56 @@ LOAD: full
 | `@unchecked Sendable` | Bypasses thread safety checks | Use proper actor isolation |
 | Force unwrap `!` | Crash on nil | Guard with `if let` or `guard` |
 | 1000+ line file | Unmaintainable | Split into modules |
-| Debug prints in code | Information leak, noise | Use logging framework or `#if DEBUG` |
+| Debug prints in code | Information leak, noise | Use `#if DEBUG`, `Logger`, or remove |
 | Missing Release config | Not optimized, debug symbols exposed | Add Release configuration |
 | `inout` in async | Changes lost silently | Copy, modify, return |
 | Plain Bool across threads | Race condition | Use actor or atomic |
 
 ---
 
+## Context-Aware Verification
+
+**Pattern matching finds candidates. Context determines if they're issues.**
+
+### Debug Print Verification
+
+Don't just grep for `print(` — verify each match:
+
+| Context | Verdict |
+|---------|---------|
+| Inside `#if DEBUG ... #endif` | ✅ OK |
+| Inside `#Preview { }` block | ✅ OK |
+| Uses `Logger` or `os_log` | ✅ OK |
+| CLI tool output (intentional) | ✅ OK |
+| Bare `print()` in production path | ❌ Issue |
+| `print()` in View body (not Preview) | ❌ Issue |
+
+### Error Swallowing Verification
+
+Don't just grep for `try?` — check intent:
+
+| Context | Verdict |
+|---------|---------|
+| Intentional ignore with comment | ✅ OK (if justified) |
+| Optional result actually used | ✅ OK |
+| Failure logged/handled elsewhere | ✅ OK |
+| Silent failure, no handling | ❌ Issue |
+| User action fails silently | ❌ Issue |
+
+### Deep Review Option
+
+For thorough contextual analysis, use the `feature-dev:code-reviewer` agent:
+
+```
+Review this code for production readiness using contextual analysis.
+Only report issues you're confident about.
+```
+
+---
+
 ## Review Checklist by Category
 
-### UI/UX Review
-
-- [ ] **Accessibility labels** on interactive elements
-- [ ] **Loading states shown** — not blank screens
-- [ ] **Error states handled** — not silent failures
-- [ ] **Empty states designed** — not just missing content
-- [ ] **Keyboard navigation works** — Tab, Enter, Escape
-- [ ] **Dark mode tested** — if supported
-- [ ] **Different screen sizes tested** — window resize behavior
+> **UI/UX Review:** See [33_app-minimums.md](33_app-minimums.md) for UI polish checklist (empty states, loading states, keyboard shortcuts, etc.)
 
 ### Data Persistence Review
 
@@ -132,12 +168,14 @@ Before distributing to users:
 
 ```
 [ ] Full production checklist above
+[ ] App Minimums verified (see 33_app-minimums.md)
 [ ] Tested on clean install (delete app data)
 [ ] Tested app update path (if updating existing app)
 [ ] Crash reports reviewed (if available)
 [ ] README updated with new features
 [ ] CHANGELOG entry added
 [ ] Version number incremented
+[ ] Build number follows scheme (v1.2 → 1200, v1.3.4 → 1340) and matches sparkle:version in appcast
 [ ] Code signed and notarized (macOS)
 ```
 
