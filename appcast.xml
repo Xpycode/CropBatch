@@ -29,11 +29,11 @@
             <pubDate>Wed, 05 Feb 2026 12:00:00 +0000</pubDate>
             <enclosure
                 url="https://github.com/Xpycode/CropBatch/releases/download/v1.3/CropBatch-1.3.dmg"
-                sparkle:version="2"
+                sparkle:version="130"
                 sparkle:shortVersionString="1.3"
-                length="10368072"
+                length="10368079"
                 type="application/octet-stream"
-                sparkle:edSignature="DYUPKwzxdn8Upm5Ab8Jhi+x5ElzXIZdK8KgVhWdNl2Mop+cjz2ma1aD9rO8f3VFb1rZsFgjInfxkHsWZkTK0BQ=="
+                sparkle:edSignature="reMtw3tjH5se/6Dz3L/bkoQpD2qx7VLVaPQgeXJgmdtLJMwXBx4akPq8iAyBZVZnKRSz9siSvZx8EcE3UDSUBA=="
             />
             <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
         </item>
