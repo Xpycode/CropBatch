@@ -1009,7 +1009,7 @@ struct WatermarkSettingsSection: View {
                     Text("Color")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    ColorPicker("", selection: Binding(
+                    ColorPicker("Color", selection: Binding(
                         get: { Color(nsColor: appState.exportSettings.watermarkSettings.textColor.nsColor) },
                         set: {
                             appState.exportSettings.watermarkSettings.textColor = CodableColor(NSColor($0))
@@ -1017,6 +1017,7 @@ struct WatermarkSettingsSection: View {
                         }
                     ))
                     .labelsHidden()
+                    .frame(width: 44, height: 24)
                 }
             }
 
@@ -1055,7 +1056,7 @@ struct WatermarkSettingsSection: View {
                 Spacer()
 
                 if appState.exportSettings.watermarkSettings.shadow.isEnabled {
-                    ColorPicker("", selection: Binding(
+                    ColorPicker("Color", selection: Binding(
                         get: { Color(nsColor: appState.exportSettings.watermarkSettings.shadow.color.nsColor) },
                         set: {
                             appState.exportSettings.watermarkSettings.shadow.color = CodableColor(NSColor($0))
@@ -1063,6 +1064,7 @@ struct WatermarkSettingsSection: View {
                         }
                     ))
                     .labelsHidden()
+                    .frame(width: 44, height: 24)
                 }
             }
 
@@ -1087,7 +1089,7 @@ struct WatermarkSettingsSection: View {
                 Spacer()
 
                 if appState.exportSettings.watermarkSettings.outline.isEnabled {
-                    ColorPicker("", selection: Binding(
+                    ColorPicker("Color", selection: Binding(
                         get: { Color(nsColor: appState.exportSettings.watermarkSettings.outline.color.nsColor) },
                         set: {
                             appState.exportSettings.watermarkSettings.outline.color = CodableColor(NSColor($0))
@@ -1095,6 +1097,7 @@ struct WatermarkSettingsSection: View {
                         }
                     ))
                     .labelsHidden()
+                    .frame(width: 44, height: 24)
                 }
             }
 
