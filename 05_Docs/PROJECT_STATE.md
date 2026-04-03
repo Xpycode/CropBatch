@@ -48,11 +48,12 @@
 [None]
 
 ## Next Actions (v1.5)
-- Live blur preview in crop mode (actual effect, not just rectangles)
-- Unified crop+blur tool (remove mode switching)
-- Undo/redo toolbar buttons
-- Keyboard shortcuts as toolbar popover
-- Folder watcher GUI
+- Live blur preview in crop mode (actual effect, not just dashed rectangles)
+- Unified crop+blur tool (remove Crop/Blur segmented picker, blur always available)
+- Undo/redo toolbar buttons for discoverability
+- Keyboard shortcuts as toolbar popover (instead of sidebar section)
+- Folder watcher GUI (currently CLI-only)
+- Snap-to-edge: consider minimum edge strength filter for natural photos (too noisy on organic images)
 
 ---
 *Updated by Claude. Source of truth for project position.*
