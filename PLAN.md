@@ -1,187 +1,101 @@
-# Execution Plan: Production Hardening — pre-v1.4
+# Execution Plan: v1.4 Bug Fixes
 
 ## Goal
-Fix the 4 real issues found in the production review (1 High, 3 Medium). One reviewer finding
-was a false positive (ThumbnailCache) — no action needed there.
+Fix blur coordinate bug and corner-radius auto-PNG before v1.4 release.
 
 ---
 
-## False Positive: ThumbnailCache TOCTOU — NO ACTION
+## Wave 1 (parallel — no dependencies between tasks)
 
-The reviewer flagged an actor re-entrancy race between `inFlight[key]` check and write.
-This cannot happen: there are zero suspension points between those two lines. An actor
-serializes all synchronous sequences. The code is correct as written.
+### Task 1.1 — Fix blur coordinates: reorder pipeline
+**File:** `Services/ImageCropService.swift`
 
----
-
-## Issues to Fix (Priority Order)
-
-### Issue 1 — HIGH: `@MainActor` missing from `@Observable` model classes
-
-**Files:** `ImageManager.swift`, `BlurManager.swift`, `CropManager.swift`,
-`SnapPointsManager.swift`, `AppState.swift`
-
-**Why it matters:** In Swift 6, `@Observable` without `@MainActor` permits mutation from any
-concurrency context. The current code patches this per-call with `Task { @MainActor in }` hops,
-but the compiler doesn't enforce it. One missed call site = a data race.
-
-**The fix:** Add `@MainActor` above `@Observable` on each of the 5 classes. One line per file.
-
-**Expected compiler impact:** Minimal. `processAndExport` and all async methods are already
-explicitly `@MainActor`. The `Task { @MainActor in self?.isProcessing = false }` hops inside
-them become redundant but compile cleanly. The Swift 6 compiler will flag any genuinely unsafe
-call sites — fix those as they appear.
-
-**Note on sub-managers:** ImageManager, BlurManager, CropManager, SnapPointsManager are only
-accessed through AppState (which is `@MainActor` after this fix), so they're safe to mark too.
-Doing it anyway enforces it at the type level, not just at the call site.
-
-```swift
-// Before
-@Observable
-final class ImageManager {
-
-// After
-@MainActor
-@Observable
-final class ImageManager {
+In `processImageThroughPipeline` (line ~883), the current pipeline order is:
+```
+Blur → Transform → Crop → Corner Mask → Grid → Resize → Watermark
 ```
 
-Apply to all 5. Do AppState last (gives clearer compiler errors if any exist in sub-managers first).
+Change to:
+```
+Transform → Crop → Blur → Corner Mask → Grid → Resize → Watermark
+```
 
----
-
-### Issue 2 — MEDIUM: `FolderWatcher.processNewFile` uses `DispatchQueue.main.asyncAfter`
-
-**File:** `Services/FolderWatcher.swift` line ~115
-
-**Why it matters:** `FolderWatcher` is `@MainActor`. Using `DispatchQueue.main.asyncAfter`
-inside a `@MainActor` method bypasses actor isolation — the closure runs on the dispatch queue
-without the actor's guarantee, creating a conceptual inconsistency and a potential Swift 6 warning.
-
-**The fix:** Replace `DispatchQueue.main.asyncAfter(deadline: .now() + 0.5)` with a structured
-async delay inside a `@MainActor` Task:
+After crop, blur regions need remapping from original-image space to cropped-image space.
+Use the existing `regionsForExport` method:
 
 ```swift
-// Before
-private func processNewFile(_ url: URL) {
-    guard let outputFolder = outputFolder else { return }
-    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-        guard let self = self else { return }
-        do { ... } catch { ... }
-    }
-}
-
-// After
-private func processNewFile(_ url: URL) {
-    guard let outputFolder = outputFolder else { return }
-    Task { @MainActor [weak self] in
-        try? await Task.sleep(for: .milliseconds(500))
-        guard let self else { return }
-        do { ... } catch { ... }
-    }
+// After crop, remap blur regions to post-crop coordinates and apply
+if let imageBlurData = blurRegions[item.id], imageBlurData.hasRegions {
+    let croppedRegions = imageBlurData.regionsForExport(cropSettings, imageSize: item.originalImage.size)
+    processedImage = applyBlurRegions(processedImage, regions: croppedRegions)
 }
 ```
 
-The body of the closure is unchanged — only the outer wrapper changes.
+**Important:** The transform must also be accounted for. Currently blur regions are stored
+in original-image space (inverse-transformed on storage). The transform needs to be applied
+to the blur coordinates before `relativeToCrop`, because `cropSettings` refers to the
+transformed image dimensions. Use `region.normalizedRect.applyingTransform(transform)`
+before passing to `relativeToCrop`.
+
+Actually — looking more carefully: `regionsForExport` takes `cropSettings` and `imageSize`
+(the original image size). The `cropArea` is built from crop pixel values divided by image
+dimensions. If the image has been transformed (rotated), `imageSize` must be the
+**transformed** size (width/height swapped for 90/270). And the regions must be in
+transformed space too (via `applyingTransform`).
+
+So the correct sequence after reordering is:
+1. Apply transform to image
+2. Crop the transformed image
+3. Transform blur regions: `region.normalizedRect.applyingTransform(transform)`
+4. Build crop area from `cropSettings` and **transformed** image size
+5. Clip and remap each blur region via `relativeToCrop`
+6. Apply remapped blur to the cropped image
+
+**Success criteria:**
+- [ ] Pipeline order is Transform → Crop → Blur → Corner Mask → Grid → Resize → Watermark
+- [ ] Blur appears at correct coordinates in export matching the editor overlay position
+- [ ] Blur regions outside crop area are not applied
+- [ ] Blur regions partially outside crop area are clipped
+- [ ] Blur with no crop (all zeros) works unchanged
 
 ---
 
-### Issue 3 — MEDIUM: Watermark drop gives no user feedback on load failure
+### Task 1.2 — Corner radius auto-sets PNG format
+**Files:** `Views/SidebarComponents/CropControlsView.swift`, `Views/SidebarComponents/ExportFormatView.swift`
 
-**File:** `Views/ExportSettingsView.swift` — `loadWatermarkImage(from:isSecurityScoped:)`
+When `cornerRadiusEnabled` is toggled ON:
+1. Save current format to a `@State` or `@AppStorage` variable
+2. Set `appState.exportSettings.format = .png`
 
-**Why it matters:** If `Data(contentsOf: url)` fails (permissions, file moved, I/O error),
-the error is logged but the user sees nothing. They're left wondering why the watermark didn't load.
+When toggled OFF:
+1. Restore the saved format
 
-**The fix:** Surface the error through the view's local state.
+Also: in the format picker, when `cornerRadiusEnabled` is true, disable the picker
+and show a caption like "PNG required for corner radius transparency".
 
-Step 1: Identify where `loadWatermarkImage` lives — it's a private func inside a view struct
-(or its container). Confirm the exact struct name, then add a `@State var watermarkError: String?`.
+The existing small caption at line 67 of CropControlsView ("Exports as PNG for transparency")
+can stay, but the format picker itself should visually lock.
 
-Step 2: In `loadWatermarkImage`, set `watermarkError = "Could not load watermark image."` in the
-guard's else branch (keep the logger call too):
-
-```swift
-guard let imageData = try? Data(contentsOf: url),
-      let image = NSImage(data: imageData) else {
-    CropBatchLogger.ui.error("Failed to load watermark image from: \(url.path)")
-    watermarkError = "Could not load watermark image."  // NEW
-    return
-}
-watermarkError = nil  // clear on success — NEW
-```
-
-Step 3: Show the error. Find the watermark section's UI — add a small inline error label
-next to where the watermark thumbnail is shown (or use `.alert`):
-
-```swift
-// Inline (preferred — stays in context):
-if let error = watermarkError {
-    Text(error)
-        .font(.caption)
-        .foregroundStyle(.red)
-}
-
-// OR: reuse the existing alert pattern in ExportSettingsView if one already exists
-```
-
-Inline label is preferred over an alert — it's lower friction for a recoverable UI action.
+**Success criteria:**
+- [ ] Enable corner radius → format switches to PNG
+- [ ] Disable corner radius → format restores previous selection
+- [ ] Format picker disabled/greyed when corner radius is on
+- [ ] Output filename preview shows .png extension
 
 ---
 
-### Issue 4 — LOW: Drop handler passes `isSecurityScoped: false`
-
-**File:** `Views/ExportSettingsView.swift` — `handleDrop(_:)`
-
-**Why it matters:** The file-picker path (`handleFileSelection`) correctly calls
-`loadWatermarkImage(from: url, isSecurityScoped: true)`. The drag-drop path calls
-`loadWatermarkImage(from: url)` (defaulting to `false`). For the current non-sandboxed app,
-`startAccessingSecurityScopedResource()` returns `false` and is a no-op anyway — so there's
-no actual bug. But the inconsistency is a gotcha if sandboxing is ever enabled.
-
-**The fix:** One character change.
-
-```swift
-// Before
-loadWatermarkImage(from: url)
-
-// After
-loadWatermarkImage(from: url, isSecurityScoped: true)
-```
-
----
-
-## Wave Plan
-
-### Wave 1 — Compiler-validated (do together, build after)
-- [x] **1.1** Add `@MainActor` to `ImageManager.swift`
-- [x] **1.2** Add `@MainActor` to `BlurManager.swift`
-- [x] **1.3** Add `@MainActor` to `CropManager.swift`
-- [x] **1.4** Add `@MainActor` to `SnapPointsManager.swift`
-- [x] **1.5** Add `@MainActor` to `AppState.swift`
-- [x] **1.6** Clean build — fix any new compiler errors
-- [x] **1.7** Fix `FolderWatcher.processNewFile` dispatch → Task
-- [x] **1.8** Fix drop handler `isSecurityScoped` (1 word change)
-
-### Wave 2 — UI change (requires verifying the view layout first)
-- [x] **2.1** Add `@State var watermarkError: String?` to watermark view
-- [x] **2.2** Set `watermarkError` in `loadWatermarkImage` guard else branch
-- [x] **2.3** Add inline error label to watermark UI section
-- [ ] **2.4** Manual test: drag a non-image file onto watermark drop zone → error appears
-
-### Deferred
-- Large files (ExportSettingsView 1,484 lines) — "works for me" policy, not a correctness issue
-- ThumbnailCache — no issue (false positive, actor prevents the race)
-
----
+## Wave 2 (depends on Wave 1 — verification)
+- [ ] **2.1** Clean build, zero errors
+- [ ] **2.2** Test: blur region placed inside crop area → correct position in export
+- [ ] **2.3** Test: blur region at different crop offsets (large top crop, large bottom crop)
+- [ ] **2.4** Test: corner radius toggle flips format to PNG and back
+- [ ] **2.5** Test: blur + rotation + crop combo
 
 ## Definition of Done
-- [x] Clean build, zero errors or warnings introduced by these changes
-- [x] Watermark error message visible in UI when load fails (code done, needs manual test)
-- [x] FolderWatcher uses Task-based delay (no DispatchQueue.main.asyncAfter)
-- [x] All 5 model classes have `@MainActor`
-- [ ] Ready for v1.4 release prep
+- [ ] Blur exports at correct coordinates matching editor overlay
+- [ ] Corner radius auto-switches format to PNG
+- [ ] Clean build
+- [ ] Ready for v1.4 release
 
 ---
-*Created 2026-04-03. Replaces previous quality-fixes plan (complete).*
+*Created 2026-04-03. Supersedes production hardening plan (complete).*

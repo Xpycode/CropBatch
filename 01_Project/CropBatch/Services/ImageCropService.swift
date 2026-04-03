@@ -880,24 +880,34 @@ struct ImageCropService {
     ) throws -> [(gridPosition: (row: Int, col: Int)?, image: NSImage, format: UTType)] {
         var processedImage = item.originalImage
 
-        // Pipeline order: Blur -> Transform -> Crop -> Corner Mask -> Grid Split -> Resize -> Watermark
-        // IMPORTANT: Blur FIRST on original image - no coordinate transform needed!
-        // The blur "bakes into" pixels, then rotates naturally with the image.
+        // Pipeline order: Transform -> Crop -> Blur -> Corner Mask -> Grid Split -> Resize -> Watermark
 
-        // 1. Apply blur regions FIRST - coords are already in original image space
-        if let imageBlurData = blurRegions[item.id], imageBlurData.hasRegions {
-            // Blur regions stored in normalized (0-1) original image coordinates
-            // Apply directly - no coordinate transformation needed!
-            processedImage = applyBlurRegions(processedImage, regions: imageBlurData.regions)
-        }
-
-        // 2. Apply transform (rotation/flip) AFTER blur
+        // 1. Apply transform (rotation/flip)
         if !transform.isIdentity {
             processedImage = try applyTransform(processedImage, transform: transform)
         }
 
-        // 3. Apply crop
+        // 2. Apply crop
         processedImage = try crop(processedImage, with: cropSettings)
+
+        // 3. Apply blur regions (after crop, with remapped coordinates)
+        if let imageBlurData = blurRegions[item.id], imageBlurData.hasRegions {
+            // Get the transformed (pre-crop) image size for cropArea calculation
+            let transformedSize = transform.transformedSize(item.originalImage.size)
+            let cropArea = NormalizedRect.cropArea(from: cropSettings, imageSize: transformedSize)
+
+            let remappedRegions: [BlurRegion] = imageBlurData.regions.compactMap { region in
+                // Transform region from original space to transformed space
+                let transformedRect = region.normalizedRect.applyingTransform(transform)
+                // Remap to post-crop coordinate space
+                guard let croppedRect = transformedRect.relativeToCrop(cropArea) else { return nil }
+                return BlurRegion(id: region.id, normalizedRect: croppedRect, style: region.style, intensity: region.intensity)
+            }
+
+            if !remappedRegions.isEmpty {
+                processedImage = ImageCropService.applyBlurRegions(processedImage, regions: remappedRegions)
+            }
+        }
 
         // 3.5. Apply rounded corner mask (must be after crop)
         if let radii = cropSettings.effectiveCornerRadii(for: processedImage.size) {
