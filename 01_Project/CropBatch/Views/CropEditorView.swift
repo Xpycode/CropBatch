@@ -175,6 +175,7 @@ struct CropEditorView: View {
                 // Show crop overlays in crop mode
                 if appState.currentTool == .crop {
                     cropOverlay
+                    gridOverlay
                     snapGuidesOverlay
                     aspectRatioGuideOverlay
                     dimensionsOverlay
@@ -317,6 +318,15 @@ struct CropEditorView: View {
             imageSize: displayedImageSize,
             displayedSize: scaledImageSize,
             cropSettings: appState.cropSettings
+        )
+    }
+
+    private var gridOverlay: some View {
+        GridOverlayView(
+            imageSize: displayedImageSize,
+            displayedSize: scaledImageSize,
+            cropSettings: appState.cropSettings,
+            gridSettings: appState.exportSettings.gridSettings
         )
     }
 

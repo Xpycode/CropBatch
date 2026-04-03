@@ -98,32 +98,31 @@ struct WatermarkPreviewOverlay: View {
             size: settings.fontSize * scale
         ) ?? settings.textFont
 
+        let shadowColor: Color = settings.shadow.isEnabled
+            ? Color(nsColor: settings.shadow.color.nsColor)
+            : .clear
+        let shadowRadius = settings.shadow.isEnabled ? settings.shadow.blur * scale : 0
+        let shadowX = settings.shadow.isEnabled ? settings.shadow.offsetX * scale : 0
+        let shadowY = settings.shadow.isEnabled ? settings.shadow.offsetY * scale : 0
+
         Text(previewText)
             .font(Font(scaledFont))
             .foregroundColor(Color(nsColor: settings.textColor.nsColor))
             .opacity(isDragging ? min(settings.opacity + 0.3, 1.0) : settings.opacity)
-            .shadow(
-                color: settings.shadow.isEnabled
-                    ? Color(nsColor: settings.shadow.color.nsColor)
-                    : .clear,
-                radius: settings.shadow.isEnabled ? settings.shadow.blur * scale : 0,
-                x: settings.shadow.isEnabled ? settings.shadow.offsetX * scale : 0,
-                y: settings.shadow.isEnabled ? settings.shadow.offsetY * scale : 0
-            )
-            .overlay(
-                // Show outline as stroke (SwiftUI doesn't have native stroke text)
-                settings.outline.isEnabled ?
-                Text(previewText)
-                    .font(Font(scaledFont))
-                    .foregroundColor(.clear)
-                    .overlay(
-                        Text(previewText)
-                            .font(Font(scaledFont))
-                            .foregroundColor(Color(nsColor: settings.outline.color.nsColor))
-                    )
-                    .opacity(0.5)
-                : nil
-            )
+            .shadow(color: shadowColor, radius: shadowRadius, x: shadowX, y: shadowY)
+            .overlay {
+                if settings.outline.isEnabled {
+                    Text(previewText)
+                        .font(Font(scaledFont))
+                        .foregroundColor(.clear)
+                        .overlay(
+                            Text(previewText)
+                                .font(Font(scaledFont))
+                                .foregroundColor(Color(nsColor: settings.outline.color.nsColor))
+                        )
+                        .opacity(0.5)
+                }
+            }
             .padding(4)
             .background(
                 RoundedRectangle(cornerRadius: 4)

@@ -1,4 +1,5 @@
 import SwiftUI
+import os
 
 struct ExportSettingsView: View {
     @Environment(AppState.self) private var appState
@@ -822,6 +823,7 @@ struct WatermarkSettingsSection: View {
     @State private var showingFilePicker = false
     @State private var dragOver = false
     @State private var showVariablesPopover = false
+    @State private var watermarkLoadError: String?
 
     var body: some View {
         if appState.exportSettings.watermarkSettings.isEnabled {
@@ -1258,6 +1260,12 @@ struct WatermarkSettingsSection: View {
                     handleFileSelection(result)
                 }
             }
+
+            if let error = watermarkLoadError {
+                Text(error)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
         }
     }
 
@@ -1474,7 +1482,7 @@ struct WatermarkSettingsSection: View {
                   let url = URL(dataRepresentation: data, relativeTo: nil) else { return }
 
             DispatchQueue.main.async {
-                loadWatermarkImage(from: url)
+                loadWatermarkImage(from: url, isSecurityScoped: true)
             }
         }
         return true
@@ -1498,7 +1506,8 @@ struct WatermarkSettingsSection: View {
         // Load and store the image DATA (not just cache) - survives state changes
         guard let imageData = try? Data(contentsOf: url),
               let image = NSImage(data: imageData) else {
-            print("Failed to load watermark image from: \(url.path)")
+            CropBatchLogger.ui.error("Failed to load watermark image from: \(url.path)")
+            watermarkLoadError = "Could not load watermark image."
             return
         }
 
@@ -1507,6 +1516,7 @@ struct WatermarkSettingsSection: View {
         appState.exportSettings.watermarkSettings.cachedImage = image
         appState.exportSettings.watermarkSettings.isEnabled = true
         appState.markCustomSettings()
+        watermarkLoadError = nil
     }
 
     private func clearWatermark() {

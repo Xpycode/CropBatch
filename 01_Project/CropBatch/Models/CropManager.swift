@@ -1,6 +1,7 @@
 import SwiftUI
 
 /// Manages crop settings, undo/redo history, and presets
+@MainActor
 @Observable
 final class CropManager {
     // MARK: - Crop Settings

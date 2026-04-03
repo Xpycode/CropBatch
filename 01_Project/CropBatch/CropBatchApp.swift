@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import os
 
 @main
 struct CropBatchApp: App {
@@ -289,7 +290,7 @@ struct CropBatchApp: App {
             pasteboard.clearContents()
             pasteboard.writeObjects([croppedImage])
         } catch {
-            print("Failed to copy image: \(error)")
+            CropBatchLogger.ui.error("Failed to copy image: \(error.localizedDescription)")
         }
     }
 
@@ -363,7 +364,7 @@ struct CropBatchApp: App {
                 appState.sendExportNotification(count: results.count)
             }
         } catch {
-            print("Export failed: \(error)")
+            CropBatchLogger.export.error("Export failed: \(error.localizedDescription)")
         }
     }
 }

@@ -1,5 +1,6 @@
 import SwiftUI
 import UniformTypeIdentifiers
+import os
 
 struct ThumbnailStripView: View {
     @Environment(AppState.self) private var appState
@@ -445,7 +446,7 @@ struct ThumbnailItemView: View {
             NSPasteboard.general.clearContents()
             NSPasteboard.general.writeObjects([cropped])
         } catch {
-            print("Copy failed: \(error)")
+            CropBatchLogger.ui.error("Copy failed: \(error.localizedDescription)")
         }
     }
 }

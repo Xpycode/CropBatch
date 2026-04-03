@@ -499,13 +499,24 @@ struct ImageCropService {
         // Calculate text rect
         let textRect = settings.textWatermarkRect(for: imageSize, text: resolvedText)
 
-        // Create NSImage for drawing (NSGraphicsContext is easier for text)
-        let resultImage = NSImage(size: imageSize)
-        resultImage.lockFocus()
+        let width = Int(imageSize.width)
+        let height = Int(imageSize.height)
 
-        // Draw source image
-        let nsContext = NSGraphicsContext.current!
-        let cgContext = nsContext.cgContext
+        guard let rep = NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: width,
+            pixelsHigh: height,
+            bitsPerSample: 8,
+            samplesPerPixel: 4,
+            hasAlpha: true,
+            isPlanar: false,
+            colorSpaceName: .deviceRGB,
+            bytesPerRow: 0,
+            bitsPerPixel: 0
+        ) else { return image }
+        guard let ctx = NSGraphicsContext(bitmapImageRep: rep) else { return image }
+
+        let cgContext = ctx.cgContext
 
         // Flip context for CGImage (CGImage has origin at bottom-left)
         cgContext.translateBy(x: 0, y: imageSize.height)
@@ -515,6 +526,10 @@ struct ImageCropService {
         // Reset transform for text drawing
         cgContext.scaleBy(x: 1.0, y: -1.0)
         cgContext.translateBy(x: 0, y: -imageSize.height)
+
+        // NSGraphicsContext.current is per-thread TLS, safe from background threads
+        let savedContext = NSGraphicsContext.current
+        NSGraphicsContext.current = ctx
 
         // Draw text with attributes
         let attributes = settings.textAttributes(scale: 1.0)
@@ -530,8 +545,10 @@ struct ImageCropService {
 
         attrString.draw(in: drawRect)
 
-        resultImage.unlockFocus()
-        return resultImage
+        NSGraphicsContext.current = savedContext
+
+        guard let resultCGImage = rep.cgImage else { return image }
+        return NSImage(cgImage: resultCGImage, size: imageSize)
     }
 
     // ┌─────────────────────────────────────────────────────────────────────┐
@@ -676,6 +693,42 @@ struct ImageCropService {
         return context.makeImage()
     }
 
+    /// Splits a CGImage into an NxM grid of tiles
+    /// - Parameters:
+    ///   - image: The source CGImage to split
+    ///   - rows: Number of rows
+    ///   - cols: Number of columns
+    /// - Returns: Array of (row, col, CGImage) tuples (1-indexed)
+    static func splitIntoGrid(image: CGImage, rows: Int, cols: Int) -> [(row: Int, col: Int, image: CGImage)] {
+        // 1x1 = no-op
+        guard rows > 1 || cols > 1 else { return [(1, 1, image)] }
+
+        let imageWidth = image.width
+        let imageHeight = image.height
+        let tileWidth = imageWidth / cols
+        let tileHeight = imageHeight / rows
+
+        var tiles: [(row: Int, col: Int, image: CGImage)] = []
+        tiles.reserveCapacity(rows * cols)
+
+        for row in 0..<rows {
+            for col in 0..<cols {
+                // Last tile absorbs remainder pixels
+                let x = col * tileWidth
+                let y = row * tileHeight
+                let w = (col == cols - 1) ? (imageWidth - x) : tileWidth
+                let h = (row == rows - 1) ? (imageHeight - y) : tileHeight
+
+                let rect = CGRect(x: x, y: y, width: w, height: h)
+                if let tile = image.cropping(to: rect) {
+                    tiles.append((row: row + 1, col: col + 1, tile))  // 1-indexed
+                }
+            }
+        }
+
+        return tiles
+    }
+
     /// Saves an NSImage to a file URL
     /// - Parameters:
     ///   - image: The image to save
@@ -784,10 +837,10 @@ struct ImageCropService {
 
         // Process images in parallel using TaskGroup
         let itemCount = items.count
-        return try await withThrowingTaskGroup(of: (Int, URL).self) { group in
+        return try await withThrowingTaskGroup(of: (Int, [URL]).self) { group in
             for (index, item) in items.enumerated() {
                 group.addTask {
-                    let outputURL = try processSingleImage(
+                    let outputURLs = try processSingleImage(
                         item: item,
                         index: index,
                         count: itemCount,
@@ -796,12 +849,12 @@ struct ImageCropService {
                         transform: transform,
                         blurRegions: blurRegions
                     )
-                    return (index, outputURL)
+                    return (index, outputURLs)
                 }
             }
 
             // Collect results and update progress
-            var results = [(Int, URL)]()
+            var results = [(Int, [URL])]()
             for try await result in group {
                 results.append(result)
                 await MainActor.run {
@@ -809,13 +862,14 @@ struct ImageCropService {
                 }
             }
 
-            // Sort by original index to maintain order
-            return results.sorted { $0.0 < $1.0 }.map { $0.1 }
+            // Sort by original index and flatten
+            return results.sorted { $0.0 < $1.0 }.flatMap { $0.1 }
         }
     }
 
-    /// Processes a single image through the full pipeline
-    private static func processSingleImage(
+    /// Processes an image through the full pipeline without saving to disk.
+    /// Returns processed tiles with their resolved output format.
+    static func processImageThroughPipeline(
         item: ImageItem,
         index: Int,
         count: Int,
@@ -823,10 +877,10 @@ struct ImageCropService {
         exportSettings: ExportSettings,
         transform: ImageTransform,
         blurRegions: [UUID: ImageBlurData]
-    ) throws -> URL {
+    ) throws -> [(gridPosition: (row: Int, col: Int)?, image: NSImage, format: UTType)] {
         var processedImage = item.originalImage
 
-        // Pipeline order: Blur -> Transform -> Crop -> Resize -> Watermark
+        // Pipeline order: Blur -> Transform -> Crop -> Corner Mask -> Grid Split -> Resize -> Watermark
         // IMPORTANT: Blur FIRST on original image - no coordinate transform needed!
         // The blur "bakes into" pixels, then rotates naturally with the image.
 
@@ -850,36 +904,25 @@ struct ImageCropService {
             processedImage = applyRoundedCornerMask(processedImage, radii: radii)
         }
 
-        // 4. Apply resize if enabled
-        if let targetSize = calculateResizedSize(from: processedImage.size, with: exportSettings.resizeSettings) {
-            processedImage = try resize(processedImage, to: targetSize)
+        // 3.6. Grid split — produces tiles if enabled, otherwise single image passthrough
+        let gridSettings = exportSettings.gridSettings
+        let imagesToProcess: [(gridPosition: (row: Int, col: Int)?, image: NSImage)]
+
+        if gridSettings.isEnabled && (gridSettings.rows > 1 || gridSettings.columns > 1) {
+            guard let cgImage = processedImage.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+                throw ImageCropError.failedToGetCGImage
+            }
+            let tiles = splitIntoGrid(image: cgImage, rows: gridSettings.rows, cols: gridSettings.columns)
+            imagesToProcess = tiles.map { (gridPosition: ($0.row, $0.col), image: NSImage(cgImage: $0.image, size: CGSize(width: $0.image.width, height: $0.image.height))) }
+        } else {
+            imagesToProcess = [(gridPosition: nil, image: processedImage)]
         }
 
-        // 5. Apply watermark if enabled
-        if exportSettings.watermarkSettings.isValid {
-            let filename = item.url.deletingPathExtension().lastPathComponent
-            processedImage = applyWatermark(
-                processedImage,
-                settings: exportSettings.watermarkSettings,
-                filename: filename,
-                index: index + 1,  // 1-based for user display
-                count: count
-            )
-        }
-
-        // Get output URL from export settings (with index for batch rename)
-        var outputURL = exportSettings.outputURL(for: item.url, index: index)
-
-        // Determine the actual format to use
+        // Resolve format once — applies to all tiles from this image
         // Force PNG when corner radius is enabled (transparency required)
         let format: UTType
         if cropSettings.cornerRadiusEnabled {
             format = UTType.png
-            // Update file extension to .png if corners are enabled
-            let baseName = outputURL.deletingPathExtension().lastPathComponent
-            outputURL = outputURL.deletingLastPathComponent()
-                .appendingPathComponent(baseName)
-                .appendingPathExtension("png")
         } else if exportSettings.preserveOriginalFormat {
             let ext = item.url.pathExtension.lowercased()
             format = ExportFormat.allCases.first {
@@ -889,7 +932,84 @@ struct ImageCropService {
             format = exportSettings.format.utType
         }
 
-        try save(processedImage, to: outputURL, format: format, quality: exportSettings.quality)
-        return outputURL
+        var result: [(gridPosition: (row: Int, col: Int)?, image: NSImage, format: UTType)] = []
+
+        for entry in imagesToProcess {
+            var tileImage = entry.image
+
+            // 4. Apply resize if enabled
+            if let targetSize = calculateResizedSize(from: tileImage.size, with: exportSettings.resizeSettings) {
+                tileImage = try resize(tileImage, to: targetSize)
+            }
+
+            // 5. Apply watermark if enabled
+            if exportSettings.watermarkSettings.isValid {
+                let filename = item.url.deletingPathExtension().lastPathComponent
+                tileImage = applyWatermark(
+                    tileImage,
+                    settings: exportSettings.watermarkSettings,
+                    filename: filename,
+                    index: index + 1,  // 1-based for user display
+                    count: count
+                )
+            }
+
+            result.append((gridPosition: entry.gridPosition, image: tileImage, format: format))
+        }
+
+        return result
+    }
+
+    /// Processes a single image through the full pipeline
+    private static func processSingleImage(
+        item: ImageItem,
+        index: Int,
+        count: Int,
+        cropSettings: CropSettings,
+        exportSettings: ExportSettings,
+        transform: ImageTransform,
+        blurRegions: [UUID: ImageBlurData]
+    ) throws -> [URL] {
+        let tiles = try processImageThroughPipeline(
+            item: item,
+            index: index,
+            count: count,
+            cropSettings: cropSettings,
+            exportSettings: exportSettings,
+            transform: transform,
+            blurRegions: blurRegions
+        )
+
+        let gridSettings = exportSettings.gridSettings
+        var outputURLs: [URL] = []
+
+        for tile in tiles {
+            var tileOutputURL = exportSettings.outputURL(for: item.url, index: index)
+
+            // Force .png extension when corner radius is enabled
+            if cropSettings.cornerRadiusEnabled {
+                let baseName = tileOutputURL.deletingPathExtension().lastPathComponent
+                tileOutputURL = tileOutputURL.deletingLastPathComponent()
+                    .appendingPathComponent(baseName)
+                    .appendingPathExtension("png")
+            }
+
+            // Add grid suffix to filename if this is a grid tile
+            if let gridPos = tile.gridPosition {
+                let suffix = gridSettings.namingSuffix
+                    .replacingOccurrences(of: "{row}", with: "\(gridPos.row)")
+                    .replacingOccurrences(of: "{col}", with: "\(gridPos.col)")
+                let baseName = tileOutputURL.deletingPathExtension().lastPathComponent
+                let ext = tileOutputURL.pathExtension
+                tileOutputURL = tileOutputURL.deletingLastPathComponent()
+                    .appendingPathComponent("\(baseName)\(suffix)")
+                    .appendingPathExtension(ext)
+            }
+
+            try save(tile.image, to: tileOutputURL, format: tile.format, quality: exportSettings.quality)
+            outputURLs.append(tileOutputURL)
+        }
+
+        return outputURLs
     }
 }

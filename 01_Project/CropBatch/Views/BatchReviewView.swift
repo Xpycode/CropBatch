@@ -90,7 +90,8 @@ struct BatchReviewView: View {
                 ForEach(previews) { item in
                     PreviewItemView(
                         item: item,
-                        isSelected: selectedIDs.contains(item.id)
+                        isSelected: selectedIDs.contains(item.id),
+                        gridSettings: appState.exportSettings.gridSettings
                     ) {
                         toggleSelection(item.id)
                     }
@@ -115,6 +116,15 @@ struct BatchReviewView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+
+                if appState.exportSettings.gridSettings.isEnabled {
+                    let grid = appState.exportSettings.gridSettings
+                    let tilesPerImage = grid.rows * grid.columns
+                    let totalFiles = selectedIDs.count * tilesPerImage
+                    Text("\(selectedIDs.count) images × \(tilesPerImage) tiles = \(totalFiles) files")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             Spacer()
@@ -125,7 +135,12 @@ struct BatchReviewView: View {
             }
             .keyboardShortcut(.cancelAction)
 
-            Button("Export \(selectedIDs.count) Images") {
+            let gridActive = appState.exportSettings.gridSettings.isEnabled &&
+                (appState.exportSettings.gridSettings.rows > 1 || appState.exportSettings.gridSettings.columns > 1)
+            let fileCount = gridActive ?
+                selectedIDs.count * appState.exportSettings.gridSettings.rows * appState.exportSettings.gridSettings.columns :
+                selectedIDs.count
+            Button("Export \(fileCount) \(fileCount == 1 ? "File" : "Files")") {
                 let selectedImages = images.filter { selectedIDs.contains($0.id) }
                 onConfirm(selectedImages)
                 dismiss()
@@ -224,9 +239,14 @@ struct PreviewItem: Identifiable {
 struct PreviewItemView: View {
     let item: PreviewItem
     let isSelected: Bool
+    let gridSettings: GridSettings
     let onToggle: () -> Void
 
     @State private var showOriginal = false
+
+    private var gridActive: Bool {
+        gridSettings.isEnabled && (gridSettings.rows > 1 || gridSettings.columns > 1)
+    }
 
     var body: some View {
         VStack(spacing: 6) {
@@ -237,6 +257,30 @@ struct PreviewItemView: View {
                     .aspectRatio(contentMode: .fit)
                     .frame(height: 120)
                     .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .overlay {
+                        // Grid lines on cropped preview
+                        if !showOriginal && gridActive {
+                            GeometryReader { geo in
+                                Path { path in
+                                    let w = geo.size.width
+                                    let h = geo.size.height
+                                    for col in 1..<gridSettings.columns {
+                                        let x = w * CGFloat(col) / CGFloat(gridSettings.columns)
+                                        path.move(to: CGPoint(x: x, y: 0))
+                                        path.addLine(to: CGPoint(x: x, y: h))
+                                    }
+                                    for row in 1..<gridSettings.rows {
+                                        let y = h * CGFloat(row) / CGFloat(gridSettings.rows)
+                                        path.move(to: CGPoint(x: 0, y: y))
+                                        path.addLine(to: CGPoint(x: w, y: y))
+                                    }
+                                }
+                                .stroke(Color.yellow.opacity(0.7), style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
+                            }
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                            .allowsHitTesting(false)
+                        }
+                    }
                     .overlay {
                         RoundedRectangle(cornerRadius: 8)
                             .strokeBorder(isSelected ? Color.accentColor : Color.gray.opacity(0.3), lineWidth: isSelected ? 3 : 1)

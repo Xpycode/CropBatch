@@ -204,7 +204,7 @@ extension View {
             )) {
                 Button("OK", role: .cancel) {}
             } message: {
-                Text("Successfully exported \(coordinator.exportedCount) images")
+                Text("Successfully exported \(coordinator.exportedCount) \(coordinator.exportedCount == 1 ? "file" : "files")")
             }
             .alert("Export Failed", isPresented: Binding(
                 get: { coordinator.showErrorAlert },

@@ -13,6 +13,9 @@ struct CLIHandler {
         var format: ExportFormat = .png
         var quality: Double = 0.9
         var suffix: String = "_cropped"
+        var gridRows: Int = 1
+        var gridCols: Int = 1
+        var gridSuffix: String = "_{row}_{col}"
         var help: Bool = false
         var version: Bool = false
     }
@@ -101,6 +104,21 @@ struct CLIHandler {
                     i += 1
                     options.suffix = args[i]
                 }
+            case "--grid-rows":
+                if i + 1 < args.count {
+                    i += 1
+                    options.gridRows = max(1, min(10, Int(args[i]) ?? 1))
+                }
+            case "--grid-cols":
+                if i + 1 < args.count {
+                    i += 1
+                    options.gridCols = max(1, min(10, Int(args[i]) ?? 1))
+                }
+            case "--grid-suffix":
+                if i + 1 < args.count {
+                    i += 1
+                    options.gridSuffix = args[i]
+                }
             default:
                 // Treat as input file path, but skip system args
                 let systemPrefixes = ["-NS", "-Apple", "-com.apple.", "-CF"]
@@ -136,11 +154,15 @@ struct CLIHandler {
             -f, --format <FORMAT>   Output format: png, jpg, heic, tiff (default: png)
             -q, --quality <1-100>   JPEG/HEIC quality percentage (default: 90)
             -s, --suffix <SUFFIX>   Filename suffix (default: _cropped)
+            --grid-rows <N>         Split into N rows (1-10, default: 1 = disabled)
+            --grid-cols <N>         Split into N columns (1-10, default: 1 = disabled)
+            --grid-suffix <PATTERN> Grid tile suffix (default: _{row}_{col})
 
         EXAMPLES:
             CropBatch -t 50 -b 50 image.png
             CropBatch -t 60 -b 34 -f jpg -q 85 *.png
             CropBatch -t 100 -o ./output/ screenshots/*.png
+            CropBatch --grid-rows 3 --grid-cols 3 image.png
 
         """
         print(help)
@@ -201,6 +223,16 @@ struct CLIHandler {
             suffix: options.suffix
         )
 
+        // Enable grid split if rows or cols > 1
+        if options.gridRows > 1 || options.gridCols > 1 {
+            exportSettings.gridSettings = GridSettings(
+                isEnabled: true,
+                columns: options.gridCols,
+                rows: options.gridRows,
+                namingSuffix: options.gridSuffix
+            )
+        }
+
         if let outputDir = options.outputDir {
             let expandedPath = (outputDir as NSString).expandingTildeInPath
             let outputURL = URL(fileURLWithPath: expandedPath)
@@ -241,7 +273,7 @@ struct CLIHandler {
                 // Progress is handled silently in CLI mode
             }
 
-            print("Successfully exported \(outputURLs.count) image(s):")
+            print("Successfully exported \(outputURLs.count) file(s):")
             for url in outputURLs {
                 print("  → \(url.lastPathComponent)")
             }

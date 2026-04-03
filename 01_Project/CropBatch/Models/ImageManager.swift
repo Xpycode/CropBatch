@@ -1,6 +1,7 @@
 import SwiftUI
 
 /// Manages the collection of loaded images and selection state
+@MainActor
 @Observable
 final class ImageManager {
     // MARK: - Image Collection

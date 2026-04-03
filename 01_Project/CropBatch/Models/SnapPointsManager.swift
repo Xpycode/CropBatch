@@ -1,6 +1,7 @@
 import SwiftUI
 
 /// Manages snap point detection and caching for rectangle snapping
+@MainActor
 @Observable
 final class SnapPointsManager {
     // MARK: - Snap Points Cache

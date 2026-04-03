@@ -1,6 +1,7 @@
 import SwiftUI
 
 /// Manages blur regions and image transforms
+@MainActor
 @Observable
 final class BlurManager {
     // MARK: - Blur Regions

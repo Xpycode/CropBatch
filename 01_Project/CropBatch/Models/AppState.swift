@@ -48,6 +48,7 @@ enum EditorTool: String, CaseIterable, Identifiable {
 /// Main application state that composes specialized managers
 /// This class acts as a facade, delegating to focused managers while
 /// maintaining backward compatibility with existing views
+@MainActor
 @Observable
 final class AppState {
 
@@ -456,6 +457,7 @@ final class AppState {
          hasAnyTransforms ||
          exportSettings.resizeSettings.isEnabled ||
          exportSettings.renameSettings.mode == .pattern ||
+         (exportSettings.gridSettings.isEnabled && (exportSettings.gridSettings.rows > 1 || exportSettings.gridSettings.columns > 1)) ||
          !exportSettings.preserveOriginalFormat)
     }
 
@@ -536,10 +538,14 @@ final class AppState {
             var nonConflicting: [(index: Int, item: ImageItem)] = []
             var conflicting: [(index: Int, item: ImageItem, renamedURL: URL)] = []
 
+            // Use findExistingFiles which is grid-aware (checks all tile URLs per image)
+            let existingFiles = capturedExportSettings.findExistingFiles(items: imagesToExport)
+            let conflictingIndices = Set(existingFiles.map { $0.index })
+
             for (index, item) in imagesToExport.enumerated() {
-                let plannedURL = capturedExportSettings.outputURL(for: item.url, index: index)
-                if FileManager.default.fileExists(atPath: plannedURL.path) {
-                    let renamedURL = ExportSettings.appendNumericSuffix(to: plannedURL)
+                if conflictingIndices.contains(index) {
+                    let baseURL = capturedExportSettings.outputURL(for: item.url, index: index)
+                    let renamedURL = ExportSettings.appendNumericSuffix(to: baseURL)
                     conflicting.append((index, item, renamedURL))
                 } else {
                     nonConflicting.append((index, item))
@@ -559,15 +565,14 @@ final class AppState {
                     exportSettings: capturedExportSettings,
                     transform: capturedTransform,
                     blurRegions: capturedBlurRegions
-                ) { progress in
+                ) { [weak self] progress in
                     let completed = Double(nonConflicting.count) * progress
-                    Task { @MainActor in
-                        self?.processingProgress = completed / total
-                    }
+                    self?.processingProgress = completed / total
                 }
 
-                for (i, result) in batchResults.enumerated() {
-                    results.append((nonConflicting[i].index, result))
+                // batchCrop returns flattened tile URLs (multiple per image when grid is enabled)
+                for url in batchResults {
+                    results.append((0, url))
                 }
             }
 
@@ -575,52 +580,45 @@ final class AppState {
             for (i, (originalIndex, item, renamedURL)) in conflicting.enumerated() {
                 try Task.checkCancellation()
 
-                var processedImage = item.originalImage
+                let tiles = try ImageCropService.processImageThroughPipeline(
+                    item: item,
+                    index: originalIndex,
+                    count: imagesToExport.count,
+                    cropSettings: capturedCropSettings,
+                    exportSettings: capturedExportSettings,
+                    transform: capturedTransform,
+                    blurRegions: capturedBlurRegions
+                )
 
-                if !capturedTransform.isIdentity {
-                    processedImage = try ImageCropService.applyTransform(processedImage, transform: capturedTransform)
-                }
+                let gridSettings = capturedExportSettings.gridSettings
 
-                // Blur regions are stored in ORIGINAL image coordinates
-                // The image has been transformed, so we need to transform the blur coords too
-                if let imageBlurData = capturedBlurRegions[item.id], imageBlurData.hasRegions {
-                    let transformedRegions = imageBlurData.regions.map { region in
-                        var transformed = region
-                        transformed.normalizedRect = region.normalizedRect.applyingTransform(capturedTransform)
-                        return transformed
+                for tile in tiles {
+                    var tileURL = renamedURL
+
+                    // Force .png extension when corner radius is enabled
+                    if capturedCropSettings.cornerRadiusEnabled {
+                        let baseName = tileURL.deletingPathExtension().lastPathComponent
+                        tileURL = tileURL.deletingLastPathComponent()
+                            .appendingPathComponent(baseName)
+                            .appendingPathExtension("png")
                     }
-                    processedImage = ImageCropService.applyBlurRegions(processedImage, regions: transformedRegions)
+
+                    // Add grid suffix if this is a grid tile
+                    if let gridPos = tile.gridPosition {
+                        let suffix = gridSettings.namingSuffix
+                            .replacingOccurrences(of: "{row}", with: "\(gridPos.row)")
+                            .replacingOccurrences(of: "{col}", with: "\(gridPos.col)")
+                        let baseName = tileURL.deletingPathExtension().lastPathComponent
+                        let ext = tile.format == .png ? "png" : tileURL.pathExtension
+                        tileURL = tileURL.deletingLastPathComponent()
+                            .appendingPathComponent("\(baseName)\(suffix)")
+                            .appendingPathExtension(ext)
+                    }
+
+                    try ImageCropService.save(tile.image, to: tileURL, format: tile.format,
+                                              quality: capturedExportSettings.quality)
+                    results.append((originalIndex, tileURL))
                 }
-
-                processedImage = try ImageCropService.crop(processedImage, with: capturedCropSettings)
-
-                if let targetSize = ImageCropService.calculateResizedSize(from: processedImage.size, with: capturedExportSettings.resizeSettings) {
-                    processedImage = try ImageCropService.resize(processedImage, to: targetSize)
-                }
-
-                if capturedExportSettings.watermarkSettings.isValid {
-                    let filename = item.url.deletingPathExtension().lastPathComponent
-                    processedImage = ImageCropService.applyWatermark(
-                        processedImage,
-                        settings: capturedExportSettings.watermarkSettings,
-                        filename: filename,
-                        index: originalIndex + 1,
-                        count: imagesToExport.count
-                    )
-                }
-
-                let format: UTType
-                if capturedExportSettings.preserveOriginalFormat {
-                    let ext = item.url.pathExtension.lowercased()
-                    format = ExportFormat.allCases.first {
-                        $0.fileExtension == ext || (ext == "jpeg" && $0 == .jpeg)
-                    }?.utType ?? capturedExportSettings.format.utType
-                } else {
-                    format = capturedExportSettings.format.utType
-                }
-
-                try ImageCropService.save(processedImage, to: renamedURL, format: format, quality: capturedExportSettings.quality)
-                results.append((originalIndex, renamedURL))
 
                 let completed = Double(nonConflicting.count + i + 1)
                 Task { @MainActor in

@@ -112,8 +112,9 @@ final class FolderWatcher {
         guard let outputFolder = outputFolder else { return }
 
         // Small delay to ensure file is fully written
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-            guard let self = self else { return }
+        Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(500))
+            guard let self else { return }
 
             do {
                 // Load image
