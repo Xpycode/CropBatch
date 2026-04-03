@@ -11,22 +11,22 @@ A macOS app for batch cropping images with configurable edge trimming.
 
 ## Screenshots
 
-![Grid Split](03_Screenshots/mainWindow5-GridSplit.png)
+![Grid Split](03_Screenshots/mainWindow5-GridSplit.jpg)
 *Grid Split — divide cropped images into tiles with configurable rows and columns*
 
-![Corner Radius](03_Screenshots/mainWindow6-CornerRadius.png)
+![Corner Radius](03_Screenshots/mainWindow6-CornerRadius.jpg)
 *Corner Radius — round corners with per-corner control, auto-exports as PNG*
 
-![Blur Regions](03_Screenshots/mainWindow7-Blur.png)
+![Blur Regions](03_Screenshots/mainWindow7-Blur.jpg)
 *Blur — redact sensitive areas with adjustable intensity*
 
-![Watermark](03_Screenshots/mainWindow10-Watermark.png)
+![Watermark](03_Screenshots/mainWindow10-Watermark.jpg)
 *Watermark — text or image overlays with variables, color, shadow, and outline*
 
-![Snap-to-Edge](03_Screenshots/mainWindow11-Snap.png)
+![Snap-to-Edge](03_Screenshots/mainWindow11-Snap.jpg)
 *Snap-to-Edge — crop handles snap to detected element boundaries in screenshots*
 
-![Snap Debug](03_Screenshots/mainWindow12-SnapDEBUG.png)
+![Snap Debug](03_Screenshots/mainWindow12-SnapDEBUG.jpg)
 *Edge detection debug view — visualize all detected edges*
 
 ## Features
