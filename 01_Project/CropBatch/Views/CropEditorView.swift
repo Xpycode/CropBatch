@@ -18,10 +18,12 @@ struct CropEditorView: View {
     var body: some View {
         GeometryReader { geometry in
             Group {
-                if needsScrollView {
-                    scrollableEditor
-                } else {
-                    fittedEditor
+                if viewSize.width > 0, viewSize.height > 0 {
+                    if needsScrollView {
+                        scrollableEditor
+                    } else {
+                        fittedEditor
+                    }
                 }
             }
             .onChange(of: geometry.size, initial: true) { _, newSize in
@@ -290,8 +292,11 @@ struct CropEditorView: View {
                 .aspectRatio(contentMode: .fill)
         } else {
             // For downscaling, use CG-scaled image for better quality
+            // .resizable() ensures the image fits the frame even on cache miss
             Image(nsImage: highQualityScaledImage)
                 .interpolation(.high)
+                .resizable()
+                .aspectRatio(contentMode: .fill)
         }
     }
 
