@@ -30,21 +30,6 @@ enum ZoomMode: String, CaseIterable, Identifiable {
     }
 }
 
-/// Editor tool mode
-enum EditorTool: String, CaseIterable, Identifiable {
-    case crop = "Crop"
-    case blur = "Blur"
-
-    var id: String { rawValue }
-
-    var icon: String {
-        switch self {
-        case .crop: return "crop"
-        case .blur: return "eye.slash"
-        }
-    }
-}
-
 /// Main application state that composes specialized managers
 /// This class acts as a facade, delegating to focused managers while
 /// maintaining backward compatibility with existing views
@@ -82,7 +67,7 @@ final class AppState {
 
     var zoomMode: ZoomMode = .fit
     var showBeforeAfter = false
-    var currentTool: EditorTool = .crop
+    var isBlurDrawingEnabled = false
 
     // MARK: - Initialization
 

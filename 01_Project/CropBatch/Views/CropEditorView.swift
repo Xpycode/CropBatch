@@ -51,20 +51,16 @@ struct CropEditorView: View {
         .onKeyPress(keys: [.leftArrow, .rightArrow, .upArrow, .downArrow], phases: [.down, .repeat]) { keyPress in
             handleKeyPress(keyPress)
         }
-        // Blur tool shortcuts
+        // Blur drawing toggle
         .onKeyPress(.init("b")) {
-            appState.currentTool = appState.currentTool == .blur ? .crop : .blur
-            return .handled
-        }
-        .onKeyPress(.init("c")) {
-            appState.currentTool = .crop
+            appState.isBlurDrawingEnabled.toggle()
             return .handled
         }
         .onKeyPress(.escape) {
             if appState.selectedBlurRegionID != nil {
                 appState.selectBlurRegion(nil)
-            } else if appState.currentTool == .blur {
-                appState.currentTool = .crop
+            } else if appState.isBlurDrawingEnabled {
+                appState.isBlurDrawingEnabled = false
             }
             return .handled
         }
@@ -174,34 +170,24 @@ struct CropEditorView: View {
 
             // Only show overlays when not in Before/After mode
             if !appState.showBeforeAfter {
-                // Show crop overlays in crop mode
-                if appState.currentTool == .crop {
-                    cropOverlay
-                    gridOverlay
-                    snapGuidesOverlay
-                    aspectRatioGuideOverlay
-                    dimensionsOverlay
-                    cropHandles
-                }
-
-                // Blur tool overlay
-                if appState.currentTool == .blur {
+                // Blur regions (rendered UNDER crop overlay for natural dimming)
+                if !appState.activeImageBlurRegions.isEmpty || appState.isBlurDrawingEnabled {
                     BlurEditorView(
                         originalImageSize: image.originalSize,
                         displayedSize: scaledImageSize,
                         transform: currentTransform,
-                        displayedImage: image.originalImage
+                        displayedImage: image.originalImage,
+                        isDrawingEnabled: appState.isBlurDrawingEnabled
                     )
                 }
 
-                // Show blur regions preview when in crop mode (read-only)
-                if appState.currentTool == .crop && !appState.activeImageBlurRegions.isEmpty {
-                    BlurRegionsCropPreview(
-                        originalImageSize: image.originalSize,
-                        displayedSize: scaledImageSize,
-                        transform: currentTransform
-                    )
-                }
+                // Crop overlays (always visible)
+                cropOverlay
+                gridOverlay
+                snapGuidesOverlay
+                aspectRatioGuideOverlay
+                dimensionsOverlay
+                cropHandles
 
                 // Watermark preview (shows where watermark will appear on export)
                 if appState.exportSettings.watermarkSettings.isValid {

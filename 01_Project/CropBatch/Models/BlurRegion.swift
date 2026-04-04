@@ -59,7 +59,7 @@ struct BlurRegion: Identifiable, Equatable, Hashable {
     func effectivePixelateScale(for imageSize: CGSize) -> Double {
         let pixelRect = self.pixelRect(for: imageSize)
         let baseScale = max(pixelRect.width, pixelRect.height) / 20.0
-        return baseScale * (0.3 + intensity * 0.7)  // 30% to 100% of base
+        return baseScale * intensity  // 0% = no pixelation, 100% = full
     }
 
     // MARK: - Crop Interaction

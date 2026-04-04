@@ -86,6 +86,7 @@ struct SidebarView: View {
     @Environment(AppState.self) private var appState
 
     // Collapsed state persistence
+    @AppStorage("sidebar.blurExpanded") private var blurExpanded = false
     @AppStorage("sidebar.snapExpanded") private var snapExpanded = false
     @AppStorage("sidebar.qualityResizeExpanded") private var qualityResizeExpanded = false
     @AppStorage("sidebar.watermarkExpanded") private var watermarkExpanded = false
@@ -98,19 +99,6 @@ struct SidebarView: View {
         VStack(spacing: 0) {
             // Scrollable content using Form for inspector-style layout
             Form {
-                // ═══════════════════════════════════════
-                // TOOL SELECTOR - Crop / Blur tabs
-                // ═══════════════════════════════════════
-                Section {
-                    Picker("Tool", selection: $state.currentTool) {
-                        ForEach(EditorTool.allCases) { tool in
-                            Label(tool.rawValue, systemImage: tool.icon).tag(tool)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
-                }
-
                 // Resolution warning (always visible if needed)
                 if appState.hasResolutionMismatch {
                     Section {
@@ -119,27 +107,39 @@ struct SidebarView: View {
                 }
 
                 // ═══════════════════════════════════════
-                // TOOL-SPECIFIC CONTROLS
+                // CROP - Primary controls (always visible)
                 // ═══════════════════════════════════════
-                if appState.currentTool == .crop {
-                    // CROP - Primary controls
-                    Section {
-                        CropControlsView()
-                    }
+                Section {
+                    CropControlsView()
+                }
 
-                    // ASPECT GUIDE - Quick access
-                    Section {
-                        AspectGuideView()
-                    }
+                // ASPECT GUIDE - Quick access
+                Section {
+                    AspectGuideView()
+                }
 
-                    // TRANSFORM - Rotation/Flip
-                    Section {
-                        TransformRowView()
-                    }
-                } else if appState.currentTool == .blur {
-                    // BLUR - Settings panel
-                    Section {
-                        BlurToolSettingsPanel()
+                // TRANSFORM - Rotation/Flip
+                Section {
+                    TransformRowView()
+                }
+
+                // ═══════════════════════════════════════
+                // BLUR REGIONS - Toggle drawing in header
+                // ═══════════════════════════════════════
+                Section(isExpanded: $blurExpanded) {
+                    BlurToolSettingsPanel()
+                } header: {
+                    HStack {
+                        Text("Blur Regions")
+                        Spacer()
+                        Toggle("", isOn: $state.isBlurDrawingEnabled)
+                            .labelsHidden()
+                            .controlSize(.small)
+                            .onChange(of: appState.isBlurDrawingEnabled) { _, isEnabled in
+                                if isEnabled {
+                                    withAnimation { blurExpanded = true }
+                                }
+                            }
                     }
                 }
 

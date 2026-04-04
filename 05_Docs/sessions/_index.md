@@ -10,6 +10,7 @@ CropBatch — macOS batch image cropping app
 
 | Date | Focus | Outcome | Log |
 |------|-------|---------|-----|
+| 2026-04-03c | v1.5 planning: unified crop/blur tool | Research complete, 4-wave plan ready, toggle+B activation confirmed | [2026-04-03-c](2026-04-03-c.md) |
 | 2026-04-03b | v1.4 release: hardening, bug fixes, ship | 8 commits, 4 bugs fixed, v1.4 released, Sparkle update verified | [2026-04-03-b](2026-04-03-b.md) |
 | 2026-04-03a | Production review + fix plan pre-v1.4 | 4 issues, plan written, ThumbnailCache false positive dismissed | [2026-04-03-a](2026-04-03-a.md) |
 | 2026-04-01a | Code review + implementation plan for fixes | 3 issues found, plan ready | [2026-04-01-a](2026-04-01-a.md) |

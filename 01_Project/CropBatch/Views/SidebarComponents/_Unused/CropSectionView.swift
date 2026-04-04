@@ -1,6 +1,8 @@
 import SwiftUI
 
+#if false
 // MARK: - Crop Section (Primary)
+// NOTE: This file is unused. Wrapped in #if false after EditorTool removal in v1.5.
 
 struct CropSectionView: View {
     @Environment(AppState.self) private var appState
@@ -216,3 +218,4 @@ struct CropSectionView: View {
         return parts.isEmpty ? "" : "(\(parts.joined(separator: ", ")))"
     }
 }
+#endif
