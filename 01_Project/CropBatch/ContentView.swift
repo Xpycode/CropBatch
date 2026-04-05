@@ -1,8 +1,17 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
+// MARK: - Sidebar Tab
+
+enum SidebarTab: String, CaseIterable {
+    case crop, effects, export
+}
+
+// MARK: - Content View
+
 struct ContentView: View {
     @Environment(AppState.self) private var appState
+    @State private var showShortcutsPopover = false
 
     var body: some View {
         @Bindable var state = appState
@@ -33,7 +42,24 @@ struct ContentView: View {
             handleDrop(providers: providers)
         }
         .toolbar {
-            // Center: Zoom controls only
+            // Left: Undo/Redo
+            ToolbarItemGroup(placement: .navigation) {
+                if !appState.images.isEmpty {
+                    Button { appState.undo() } label: {
+                        Label("Undo", systemImage: "arrow.uturn.backward")
+                    }
+                    .disabled(!appState.canUndo)
+                    .help("Undo (⌘Z)")
+
+                    Button { appState.redo() } label: {
+                        Label("Redo", systemImage: "arrow.uturn.forward")
+                    }
+                    .disabled(!appState.canRedo)
+                    .help("Redo (⇧⌘Z)")
+                }
+            }
+
+            // Center: Zoom controls
             ToolbarItem(placement: .principal) {
                 if !appState.images.isEmpty {
                     ZoomPicker(selection: Binding(
@@ -43,9 +69,18 @@ struct ContentView: View {
                 }
             }
 
-            // Right side: buttons only
+            // Right side: buttons
             ToolbarItemGroup(placement: .primaryAction) {
                 if !appState.images.isEmpty {
+                    Button { showShortcutsPopover.toggle() } label: {
+                        Label("Shortcuts", systemImage: "questionmark.circle")
+                    }
+                    .popover(isPresented: $showShortcutsPopover) {
+                        KeyboardShortcutsContentView()
+                            .padding()
+                    }
+                    .help("Keyboard Shortcuts")
+
                     Button {
                         appState.showImportPanel()
                     } label: {
@@ -82,16 +117,20 @@ struct ContentView: View {
     }
 }
 
+// MARK: - Sidebar View
+
 struct SidebarView: View {
     @Environment(AppState.self) private var appState
+
+    // Tab persistence
+    @AppStorage("sidebar.selectedTab") private var selectedTab = SidebarTab.crop.rawValue
 
     // Collapsed state persistence
     @AppStorage("sidebar.blurExpanded") private var blurExpanded = false
     @AppStorage("sidebar.snapExpanded") private var snapExpanded = false
-    @AppStorage("sidebar.qualityResizeExpanded") private var qualityResizeExpanded = false
     @AppStorage("sidebar.watermarkExpanded") private var watermarkExpanded = false
     @AppStorage("sidebar.gridSplitExpanded") private var gridSplitExpanded = false
-    @AppStorage("sidebar.shortcutsExpanded") private var shortcutsExpanded = false
+    @AppStorage("sidebar.folderWatcherExpanded") private var folderWatcherExpanded = false
 
     var body: some View {
         @Bindable var state = appState
@@ -99,7 +138,7 @@ struct SidebarView: View {
         VStack(spacing: 0) {
             // Scrollable content using Form for inspector-style layout
             Form {
-                // Resolution warning (always visible if needed)
+                // Resolution warning (always visible, above tabs)
                 if appState.hasResolutionMismatch {
                     Section {
                         ResolutionWarningView()
@@ -107,121 +146,131 @@ struct SidebarView: View {
                 }
 
                 // ═══════════════════════════════════════
-                // CROP - Primary controls (always visible)
+                // TAB PICKER
                 // ═══════════════════════════════════════
                 Section {
-                    CropControlsView()
-                }
-
-                // ASPECT GUIDE - Quick access
-                Section {
-                    AspectGuideView()
-                }
-
-                // TRANSFORM - Rotation/Flip
-                Section {
-                    TransformRowView()
+                    Picker("Tab", selection: $selectedTab) {
+                        Text("Crop").tag(SidebarTab.crop.rawValue)
+                        Text("Effects").tag(SidebarTab.effects.rawValue)
+                        Text("Export").tag(SidebarTab.export.rawValue)
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
                 }
 
                 // ═══════════════════════════════════════
-                // BLUR REGIONS - Toggle drawing in header
+                // CROP TAB
                 // ═══════════════════════════════════════
-                Section(isExpanded: $blurExpanded) {
-                    BlurToolSettingsPanel()
-                } header: {
-                    HStack {
-                        Text("Blur Regions")
-                        Spacer()
-                        Toggle("", isOn: $state.isBlurDrawingEnabled)
-                            .labelsHidden()
-                            .controlSize(.small)
-                            .onChange(of: appState.isBlurDrawingEnabled) { _, isEnabled in
-                                if isEnabled {
-                                    withAnimation { blurExpanded = true }
+                if selectedTab == SidebarTab.crop.rawValue {
+                    Section {
+                        CropControlsView()
+                    }
+
+                    Section {
+                        AspectGuideView()
+                    }
+
+                    Section {
+                        TransformRowView()
+                    }
+
+                    Section(isExpanded: $snapExpanded) {
+                        SnapOptionsView()
+                    } header: {
+                        HStack {
+                            Text("Snap to Edges")
+                            Spacer()
+                            Toggle("", isOn: $state.snapEnabled)
+                                .labelsHidden()
+                                .controlSize(.small)
+                                .onChange(of: appState.snapEnabled) { _, isEnabled in
+                                    if isEnabled {
+                                        withAnimation { snapExpanded = true }
+                                    }
                                 }
-                            }
+                        }
                     }
                 }
 
                 // ═══════════════════════════════════════
-                // SNAP - Toggle in header, options when expanded
+                // EFFECTS TAB
                 // ═══════════════════════════════════════
-                Section(isExpanded: $snapExpanded) {
-                    SnapOptionsView()
-                } header: {
-                    HStack {
-                        Text("Snap to Edges")
-                        Spacer()
-                        Toggle("", isOn: $state.snapEnabled)
-                            .labelsHidden()
-                            .controlSize(.small)
-                            .onChange(of: appState.snapEnabled) { _, isEnabled in
-                                if isEnabled {
-                                    withAnimation { snapExpanded = true }
+                if selectedTab == SidebarTab.effects.rawValue {
+                    Section(isExpanded: $blurExpanded) {
+                        BlurToolSettingsPanel()
+                    } header: {
+                        HStack {
+                            Text("Blur Regions")
+                            Spacer()
+                            Toggle("", isOn: $state.isBlurDrawingEnabled)
+                                .labelsHidden()
+                                .controlSize(.small)
+                                .onChange(of: appState.isBlurDrawingEnabled) { _, isEnabled in
+                                    if isEnabled {
+                                        withAnimation { blurExpanded = true }
+                                    }
                                 }
-                            }
+                        }
+                    }
+
+                    Section(isExpanded: $gridSplitExpanded) {
+                        GridSplitOptionsView()
+                    } header: {
+                        HStack {
+                            Text("Grid Split")
+                            Spacer()
+                            Toggle("", isOn: $state.exportSettings.gridSettings.isEnabled)
+                                .labelsHidden()
+                                .controlSize(.small)
+                                .onChange(of: appState.exportSettings.gridSettings.isEnabled) { _, isEnabled in
+                                    if isEnabled {
+                                        withAnimation { gridSplitExpanded = true }
+                                    }
+                                }
+                        }
                     }
                 }
 
                 // ═══════════════════════════════════════
-                // EXPORT FORMAT - Always visible
+                // EXPORT TAB
                 // ═══════════════════════════════════════
-                Section {
-                    ExportFormatView()
-                }
-
-                // ═══════════════════════════════════════
-                // GRID SPLIT - Toggle in header
-                // ═══════════════════════════════════════
-                Section(isExpanded: $gridSplitExpanded) {
-                    GridSplitOptionsView()
-                } header: {
-                    HStack {
-                        Text("Grid Split")
-                        Spacer()
-                        Toggle("", isOn: $state.exportSettings.gridSettings.isEnabled)
-                            .labelsHidden()
-                            .controlSize(.small)
-                            .onChange(of: appState.exportSettings.gridSettings.isEnabled) { _, isEnabled in
-                                if isEnabled {
-                                    withAnimation { gridSplitExpanded = true }
-                                }
-                            }
+                if selectedTab == SidebarTab.export.rawValue {
+                    Section {
+                        ExportFormatView()
                     }
-                }
 
-                // ═══════════════════════════════════════
-                // QUALITY & RESIZE - Collapsed by default
-                // ═══════════════════════════════════════
-                Section("Quality & Resize", isExpanded: $qualityResizeExpanded) {
-                    QualityResizeView()
-                }
-
-                // ═══════════════════════════════════════
-                // WATERMARK - Toggle in header
-                // ═══════════════════════════════════════
-                Section(isExpanded: $watermarkExpanded) {
-                    WatermarkSettingsSection()
-                } header: {
-                    HStack {
-                        Text("Watermark")
-                        Spacer()
-                        Toggle("", isOn: $state.exportSettings.watermarkSettings.isEnabled)
-                            .labelsHidden()
-                            .controlSize(.small)
-                            .onChange(of: appState.exportSettings.watermarkSettings.isEnabled) { _, isEnabled in
-                                if isEnabled {
-                                    withAnimation { watermarkExpanded = true }
-                                }
-                            }
+                    Section {
+                        QualityResizeView()
                     }
-                }
 
-                // ═══════════════════════════════════════
-                // KEYBOARD SHORTCUTS - Collapsed
-                // ═══════════════════════════════════════
-                Section("Keyboard Shortcuts", isExpanded: $shortcutsExpanded) {
-                    KeyboardShortcutsContentView()
+                    Section(isExpanded: $watermarkExpanded) {
+                        WatermarkSettingsSection()
+                    } header: {
+                        HStack {
+                            Text("Watermark")
+                            Spacer()
+                            Toggle("", isOn: $state.exportSettings.watermarkSettings.isEnabled)
+                                .labelsHidden()
+                                .controlSize(.small)
+                                .onChange(of: appState.exportSettings.watermarkSettings.isEnabled) { _, isEnabled in
+                                    if isEnabled {
+                                        withAnimation { watermarkExpanded = true }
+                                    }
+                                }
+                        }
+                    }
+
+                    Section(isExpanded: $folderWatcherExpanded) {
+                        FolderWatchView()
+                    } header: {
+                        HStack {
+                            Text("Folder Watcher")
+                            Spacer()
+                            if FolderWatcher.shared.isWatching {
+                                Circle().fill(.green).frame(width: 8, height: 8)
+                            }
+                        }
+                    }
                 }
             }
             .formStyle(.grouped)

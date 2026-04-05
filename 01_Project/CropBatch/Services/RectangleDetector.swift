@@ -80,6 +80,7 @@ struct RectangleDetector {
         // Edge detection settings
         var detectEdges: Bool = true
         var edgeIntensity: Float = 1.0
+        var edgeBrightnessThreshold: Int = 100
 
         static let `default` = Configuration()
 
@@ -94,7 +95,8 @@ struct RectangleDetector {
             detectContours: true,
             contourMinimumLength: 30,
             detectEdges: true,
-            edgeIntensity: 1.5
+            edgeIntensity: 1.5,
+            edgeBrightnessThreshold: 100
         )
     }
 
@@ -236,7 +238,7 @@ struct RectangleDetector {
         }
 
         // Analyze edge image to find strong horizontal/vertical lines
-        return analyzeEdgeImage(edgeCGImage, originalWidth: cgImage.width, originalHeight: cgImage.height)
+        return analyzeEdgeImage(edgeCGImage, originalWidth: cgImage.width, originalHeight: cgImage.height, configuration: configuration)
     }
 
     // MARK: - Snap Point Extraction
@@ -341,7 +343,7 @@ struct RectangleDetector {
         )
     }
 
-    private static func analyzeEdgeImage(_ cgImage: CGImage, originalWidth: Int, originalHeight: Int) -> SnapPoints {
+    private static func analyzeEdgeImage(_ cgImage: CGImage, originalWidth: Int, originalHeight: Int, configuration: Configuration = .screenshot) -> SnapPoints {
         var horizontalEdges = Set<Int>()
         var verticalEdges = Set<Int>()
 
@@ -370,7 +372,7 @@ struct RectangleDetector {
             for x in 0..<width {
                 let offset = (y * width + x) * 4
                 let brightness = Int(buffer[offset]) + Int(buffer[offset + 1]) + Int(buffer[offset + 2])
-                if brightness > 100 {  // Edge detected
+                if brightness > configuration.edgeBrightnessThreshold {
                     edgeCount += 1
                 }
             }
@@ -388,7 +390,7 @@ struct RectangleDetector {
             for y in 0..<height {
                 let offset = (y * width + x) * 4
                 let brightness = Int(buffer[offset]) + Int(buffer[offset + 1]) + Int(buffer[offset + 2])
-                if brightness > 100 {
+                if brightness > configuration.edgeBrightnessThreshold {
                     edgeCount += 1
                 }
             }

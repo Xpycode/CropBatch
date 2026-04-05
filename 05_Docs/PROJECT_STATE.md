@@ -8,10 +8,10 @@
 - **Started:** December 2025
 
 ## Current Position
-- **Phase:** released
-- **Focus:** v1.5 — unified crop/blur tool (plan ready, implementation next)
-- **Status:** v1.4 released, v1.5 plan complete
-- **Last updated:** 2026-04-03
+- **Phase:** development
+- **Focus:** v1.5 feature-complete on `feature/unified-blur-crop` — testing before merge
+- **Status:** All v1.5 features implemented (10 waves across 2 sessions)
+- **Last updated:** 2026-04-04
 
 ## Progress
 ```
@@ -47,14 +47,19 @@
 ## Blockers
 [None]
 
-## Next Actions (v1.5)
-- **[DONE]** Unified crop+blur tool — Waves 1-3 implemented (live preview, no segmented picker, B toggle)
-- **[TODO]** Wave 4: Pixelate live preview, cached composite performance
-- **[TODO]** Global blur regions — blur should apply to all images by default, with per-image opt-out/override
-- Undo/redo toolbar buttons for discoverability
-- Keyboard shortcuts as toolbar popover (instead of sidebar section)
-- Folder watcher GUI (currently CLI-only)
-- Snap-to-edge: consider minimum edge strength filter for natural photos (too noisy on organic images)
+## v1.5 (on `feature/unified-blur-crop` — testing)
+- **[DONE]** Unified crop/blur canvas — live blur preview, no mode switching, z-order crop dimming
+- **[DONE]** Pixelate live preview via CIPixellate + BlurPreviewCache (100ms debounce)
+- **[DONE]** 3-tab sidebar (Crop / Effects / Export) — replaces 12 flat sections
+- **[DONE]** Keyboard shortcuts → toolbar `?` popover
+- **[DONE]** Undo/redo toolbar buttons (left side)
+- **[DONE]** Global blur regions — apply to all images, per-image skip/customize override
+- **[DONE]** Folder Watcher GUI wired into Export tab
+- **[DONE]** Snap edge sensitivity slider (Low/Med/High)
+
+## Next Actions
+- Test all v1.5 features, commit, merge to main
+- Bump version, build DMG, update appcast, release
 
 ---
 *Updated by Claude. Source of truth for project position.*

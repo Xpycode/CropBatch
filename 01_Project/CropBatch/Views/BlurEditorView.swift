@@ -210,6 +210,13 @@ struct BlurEditorView: View {
             scheduleCacheUpdate()
         }
         .onChange(of: appState.activeImageBlurRegions) { _, _ in scheduleCacheUpdate() }
+        .onChange(of: gestureState) { old, new in
+            // When a drag ends, invalidate stale cache so the live .blur() fallback
+            // continues until the new cache renders at the updated position
+            if case .idle = new, old != .idle {
+                previewCache.invalidate()
+            }
+        }
         .onChange(of: displayedImage) { _, _ in
             previewCache.invalidate()
             scheduleCacheUpdate()
@@ -363,6 +370,15 @@ struct BlurRegionOverlay: View {
 
     @State private var isHovering = false
 
+    /// Whether this region is being actively dragged or resized
+    private var isBeingDragged: Bool {
+        switch gestureState {
+        case .moving(let id, _, _) where id == region.id: return true
+        case .resizing(let id, _, _) where id == region.id: return true
+        default: return false
+        }
+    }
+
     /// The current rect in TRANSFORMED coordinates (accounts for live drag/resize)
     private var currentDisplayRect: NormalizedRect {
         // During move/resize, show the live position
@@ -446,8 +462,8 @@ struct BlurRegionOverlay: View {
     private var previewContent: some View {
         switch region.style {
         case .blur:
-            if let cached = cachedBlurImage {
-                // Cache hit: clip the pre-composited image — single composite, no per-region .blur()
+            if let cached = cachedBlurImage, !isBeingDragged {
+                // Cache hit (static): clip the pre-composited image
                 GeometryReader { _ in
                     Image(nsImage: cached)
                         .resizable()
@@ -458,7 +474,7 @@ struct BlurRegionOverlay: View {
                 .frame(width: displayRect.width, height: displayRect.height)
                 .clipped()
             } else {
-                // Cache miss (first frame or rapid change): fall back to SwiftUI .blur()
+                // During drag or cache miss: live SwiftUI .blur() tracks position instantly
                 GeometryReader { _ in
                     Image(nsImage: displayedImage)
                         .resizable()
@@ -472,8 +488,8 @@ struct BlurRegionOverlay: View {
             }
 
         case .pixelate:
-            if let cached = cachedBlurImage {
-                // Cache hit: CIPixellate already baked into the composite
+            if let cached = cachedBlurImage, !isBeingDragged {
+                // Cache hit (static): CIPixellate already baked into the composite
                 GeometryReader { _ in
                     Image(nsImage: cached)
                         .resizable()
@@ -484,11 +500,13 @@ struct BlurRegionOverlay: View {
                 .frame(width: displayRect.width, height: displayRect.height)
                 .clipped()
             } else {
-                // Cache miss: show tinted placeholder while CIPixellate renders
+                // During drag or cache miss: show tinted placeholder
                 ZStack {
                     Color.purple.opacity(0.25)
-                    ProgressView()
-                        .controlSize(.small)
+                    if !isBeingDragged {
+                        ProgressView()
+                            .controlSize(.small)
+                    }
                 }
             }
 
@@ -792,21 +810,58 @@ struct BlurToolSettingsPanel: View {
                 }
             }
 
-            // Apply to all images button
-            if !appState.activeImageBlurRegions.isEmpty && appState.images.count > 1 {
-                Button {
-                    appState.applyBlurRegionsToAllImages()
-                } label: {
-                    Label("Apply to All Images", systemImage: "rectangle.stack")
+            // Per-image controls (when multiple images loaded)
+            if appState.images.count > 1 {
+                Divider()
+
+                if appState.isActiveImageBlurOptedOut {
+                    HStack {
+                        Label("Blur skipped", systemImage: "eye.slash")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                        Spacer()
+                        Button("Enable") {
+                            appState.toggleBlurOptOut()
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.mini)
+                    }
+                } else if appState.activeImageHasCustomBlur {
+                    HStack {
+                        Label("Custom", systemImage: "pencil")
+                            .font(.caption)
+                            .foregroundStyle(.blue)
+                        Spacer()
+                        Button("Use Global") {
+                            appState.resetBlurForActiveImage()
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.mini)
+                    }
+                } else {
+                    HStack(spacing: 8) {
+                        Button {
+                            appState.toggleBlurOptOut()
+                        } label: {
+                            Label("Skip This Image", systemImage: "eye.slash")
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.mini)
+
+                        Button {
+                            appState.customizeBlurForActiveImage()
+                        } label: {
+                            Label("Customize", systemImage: "pencil")
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.mini)
+                    }
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .help("Copy these blur regions to all other images")
             }
 
             // Instructions
             VStack(alignment: .leading, spacing: 4) {
-                Text("Toggle drawing, then drag on canvas")
+                Text("Blur applies to all images")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Text("Press B to toggle drawing mode")

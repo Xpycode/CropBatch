@@ -26,6 +26,9 @@ final class SnapPointsManager {
     /// Show all detected edges overlay (debug)
     var showDebug = false
 
+    /// Edge detection sensitivity (0.0 = strong edges only, 1.0 = subtle edges)
+    var edgeSensitivity: Double = 0.5
+
     // MARK: - Snap Point Access
 
     /// Get snap points for an image (includes center lines if enabled)
@@ -53,10 +56,18 @@ final class SnapPointsManager {
 
         isDetecting = true
 
-        let snapPoints = await RectangleDetector.detect(in: image.originalImage)
+        let brightnessThreshold = Int(200 - 170 * edgeSensitivity)
+        var config = RectangleDetector.Configuration.screenshot
+        config.edgeBrightnessThreshold = brightnessThreshold
+        let snapPoints = await RectangleDetector.detect(in: image.originalImage, configuration: config)
         cache[image.id] = snapPoints
 
         isDetecting = false
+    }
+
+    /// Invalidate cache when sensitivity changes (forces re-detection)
+    func invalidateAllCache() {
+        cache.removeAll()
     }
 
     /// Find the nearest snap point for a given edge value

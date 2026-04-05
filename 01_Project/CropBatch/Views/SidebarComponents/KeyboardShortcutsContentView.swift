@@ -16,6 +16,7 @@ struct KeyboardShortcutsContentView: View {
                 ShortcutRow(keys: "⇧⌃ Arrow", description: "×10 adjust")
                 ShortcutRow(keys: "⌃ Drag", description: "Snap grid")
                 ShortcutRow(keys: "⌥ Drag", description: "Bypass snap")
+                ShortcutRow(keys: "B", description: "Toggle blur draw")
                 ShortcutRow(keys: "S", description: "Toggle snap")
                 ShortcutRow(keys: "Dbl-click", description: "Reset")
             }

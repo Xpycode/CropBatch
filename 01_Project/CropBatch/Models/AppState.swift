@@ -139,8 +139,7 @@ final class AppState {
     }
 
     var blurRegions: [UUID: ImageBlurData] {
-        get { blurManager.regions }
-        set { blurManager.regions = newValue }
+        blurManager.blurRegionsForExport(imageIDs: images.map(\.id))
     }
 
     var selectedBlurRegionID: UUID? {
@@ -183,6 +182,17 @@ final class AppState {
     var showSnapDebug: Bool {
         get { snapManager.showDebug }
         set { snapManager.showDebug = newValue }
+    }
+
+    var edgeSensitivity: Double {
+        get { snapManager.edgeSensitivity }
+        set { snapManager.edgeSensitivity = newValue }
+    }
+
+    /// Call after sensitivity editing completes to re-detect edges
+    func applyEdgeSensitivity() {
+        snapManager.invalidateAllCache()
+        Task { await detectSnapPointsForActiveImage() }
     }
 
     // MARK: - Backward Compatible Methods
@@ -305,26 +315,34 @@ final class AppState {
         blurManager.clearRegions(for: id)
     }
 
-    /// Copy blur regions from active image to all other images
-    func applyBlurRegionsToAllImages() {
-        guard let sourceID = activeImageID else { return }
-        let sourceRegions = blurManager.regionsForImage(sourceID)
-        guard !sourceRegions.isEmpty else { return }
+    /// Reset the active image's override so it uses global blur regions
+    func resetBlurForActiveImage() {
+        guard let id = activeImageID else { return }
+        blurManager.imageOverrides.removeValue(forKey: id)
+    }
 
-        for image in images where image.id != sourceID {
-            // Clear existing regions for this image
-            blurManager.clearRegions(for: image.id)
-            // Copy all regions from source
-            for region in sourceRegions {
-                // Create new region with same properties but new ID
-                let newRegion = BlurRegion(
-                    normalizedRect: region.normalizedRect,
-                    style: region.style,
-                    intensity: region.intensity
-                )
-                blurManager.addRegion(newRegion, to: image.id)
-            }
-        }
+    /// Toggle blur opt-out for the active image
+    func toggleBlurOptOut() {
+        guard let id = activeImageID else { return }
+        blurManager.toggleOptOut(id)
+    }
+
+    /// Create per-image custom blur regions for the active image
+    func customizeBlurForActiveImage() {
+        guard let id = activeImageID else { return }
+        blurManager.customizeImage(id)
+    }
+
+    /// Whether the active image is opted out of blur
+    var isActiveImageBlurOptedOut: Bool {
+        guard let id = activeImageID else { return false }
+        return blurManager.isOptedOut(id)
+    }
+
+    /// Whether the active image has custom blur regions
+    var activeImageHasCustomBlur: Bool {
+        guard let id = activeImageID else { return false }
+        return blurManager.hasCustomRegions(id)
     }
 
     func blurRegionsForImage(_ imageID: UUID) -> [BlurRegion] {
