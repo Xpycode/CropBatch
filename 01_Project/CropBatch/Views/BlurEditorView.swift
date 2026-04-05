@@ -1,5 +1,118 @@
 import SwiftUI
+import AppKit
 import Combine
+
+// MARK: - Blur Preview Cache
+
+/// Pre-renders a single composite NSImage with all blur regions baked in at display resolution.
+/// Each BlurRegionOverlay then clips from this cached image instead of running independent
+/// SwiftUI .blur() modifiers, reducing GPU compositing work from O(n) full-image blurs to one.
+@Observable
+final class BlurPreviewCache {
+    var cachedImage: NSImage?
+
+    private var cachedImageID: UUID?
+    private var cachedRegionHash: Int = 0
+    private var cachedDisplayedSize: CGSize = .zero
+
+    private var debounceTask: Task<Void, Never>?
+
+    /// Schedules a cache update, debounced by 100ms to avoid thrashing during rapid changes.
+    @MainActor
+    func scheduleUpdate(
+        displayedImage: NSImage,
+        imageID: UUID?,
+        regions: [BlurRegion],
+        displayedSize: CGSize,
+        transform: ImageTransform
+    ) {
+        let newHash = Self.hash(regions: regions, size: displayedSize)
+        let unchanged = imageID == cachedImageID
+            && newHash == cachedRegionHash
+            && displayedSize == cachedDisplayedSize
+
+        guard !unchanged else { return }
+
+        debounceTask?.cancel()
+
+        // Capture only value types so the task closure is safe under Swift 6 concurrency.
+        let capturedRegions = regions
+        let capturedSize = displayedSize
+        let capturedTransform = transform
+        let capturedImageID = imageID
+        let capturedHash = newHash
+
+        debounceTask = Task { @MainActor in
+            do {
+                try await Task.sleep(for: .milliseconds(100))
+            } catch {
+                return  // Task was cancelled — a newer update supersedes this one
+            }
+            guard !Task.isCancelled else { return }
+
+            let displayResImage = Self.createDisplayResolutionImage(from: displayedImage, size: capturedSize)
+            let transformedRegions = capturedRegions.map { region in
+                BlurRegion(
+                    id: region.id,
+                    normalizedRect: region.normalizedRect.applyingTransform(capturedTransform),
+                    style: region.style,
+                    intensity: region.intensity
+                )
+            }
+
+            let rendered = ImageCropService.applyBlurRegions(displayResImage, regions: transformedRegions)
+
+            self.cachedImage = rendered
+            self.cachedImageID = capturedImageID
+            self.cachedRegionHash = capturedHash
+            self.cachedDisplayedSize = capturedSize
+        }
+    }
+
+    @MainActor
+    func invalidate() {
+        debounceTask?.cancel()
+        cachedImage = nil
+        cachedImageID = nil
+        cachedRegionHash = 0
+        cachedDisplayedSize = .zero
+    }
+
+    // MARK: - Helpers
+
+    private static func hash(regions: [BlurRegion], size: CGSize) -> Int {
+        var hasher = Hasher()
+        for region in regions {
+            hasher.combine(region.normalizedRect)
+            hasher.combine(region.style)
+            hasher.combine(region.intensity)
+        }
+        hasher.combine(size.width)
+        hasher.combine(size.height)
+        return hasher.finalize()
+    }
+
+    /// Produces a display-resolution copy of the source image so applyBlurRegions
+    /// operates on a small bitmap rather than the full 4K original.
+    private static func createDisplayResolutionImage(from source: NSImage, size: CGSize) -> NSImage {
+        guard size.width > 0, size.height > 0 else { return source }
+        guard let cgImage = source.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return source }
+        let colorSpace = cgImage.colorSpace ?? CGColorSpaceCreateDeviceRGB()
+        guard let context = CGContext(
+            data: nil,
+            width: Int(size.width),
+            height: Int(size.height),
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: colorSpace,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return source }
+        context.interpolationQuality = .high
+        context.draw(cgImage, in: CGRect(origin: .zero, size: size))
+        guard let scaled = context.makeImage() else { return source }
+        return NSImage(cgImage: scaled, size: size)
+    }
+}
 
 // MARK: - Gesture State Machine
 
@@ -34,8 +147,12 @@ struct BlurEditorView: View {
     /// The displayed image for preview rendering
     let displayedImage: NSImage
 
+    /// Whether drawing new blur regions is enabled (toggle + B key)
+    let isDrawingEnabled: Bool
+
     @State private var gestureState: BlurGestureState = .idle
     @State private var converter: CoordinateConverter?
+    @State private var previewCache = BlurPreviewCache()
 
     /// Image size after transform (accounts for rotation swapping dimensions)
     private var transformedImageSize: CGSize {
@@ -68,6 +185,7 @@ struct BlurEditorView: View {
                     gestureState: $gestureState,
                     isSelected: appState.selectedBlurRegionID == region.id,
                     displayedImage: displayedImage,
+                    cachedBlurImage: previewCache.cachedImage,
                     onSelect: { appState.selectBlurRegion(region.id) },
                     onDelete: { appState.removeBlurRegion(region.id) },
                     onUpdate: { newNormalizedRect in
@@ -83,21 +201,59 @@ struct BlurEditorView: View {
                 drawingPreview(start: start, current: current)
             }
         }
-        .onAppear { converter = currentConverter }
-        .onChange(of: displayedSize) { _, _ in converter = currentConverter }
+        .onAppear {
+            converter = currentConverter
+            scheduleCacheUpdate()
+        }
+        .onChange(of: displayedSize) { _, _ in
+            converter = currentConverter
+            scheduleCacheUpdate()
+        }
+        .onChange(of: appState.activeImageBlurRegions) { _, _ in scheduleCacheUpdate() }
+        .onChange(of: gestureState) { old, new in
+            // When a drag ends, invalidate stale cache so the live .blur() fallback
+            // continues until the new cache renders at the updated position
+            if case .idle = new, old != .idle {
+                previewCache.invalidate()
+            }
+        }
+        .onChange(of: displayedImage) { _, _ in
+            previewCache.invalidate()
+            scheduleCacheUpdate()
+        }
+    }
+
+    private func scheduleCacheUpdate() {
+        previewCache.scheduleUpdate(
+            displayedImage: displayedImage,
+            imageID: appState.activeImageID,
+            regions: appState.activeImageBlurRegions,
+            displayedSize: displayedSize,
+            transform: transform
+        )
     }
 
     // MARK: - Drawing Layer
 
     @ViewBuilder
     private func drawingLayer(converter: CoordinateConverter) -> some View {
-        Rectangle()
-            .fill(Color.clear)
-            .contentShape(Rectangle())
-            .onTapGesture {
-                appState.selectBlurRegion(nil)
-            }
-            .gesture(drawingGesture(converter: converter))
+        if isDrawingEnabled {
+            Rectangle()
+                .fill(Color.clear)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    appState.selectBlurRegion(nil)
+                }
+                .gesture(drawingGesture(converter: converter))
+        } else {
+            Rectangle()
+                .fill(Color.clear)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    appState.selectBlurRegion(nil)
+                }
+                .allowsHitTesting(!appState.activeImageBlurRegions.isEmpty)
+        }
     }
 
     private func drawingGesture(converter: CoordinateConverter) -> some Gesture {
@@ -204,12 +360,24 @@ struct BlurRegionOverlay: View {
     @Binding var gestureState: BlurGestureState
     let isSelected: Bool
     let displayedImage: NSImage
+    /// Pre-composited image with all blur regions applied, used as an efficient clip source.
+    /// Nil on cache miss — falls back to SwiftUI .blur() modifier.
+    let cachedBlurImage: NSImage?
     let onSelect: () -> Void
     let onDelete: () -> Void
     /// Callback with rect in TRANSFORMED coordinates
     let onUpdate: (NormalizedRect) -> Void
 
     @State private var isHovering = false
+
+    /// Whether this region is being actively dragged or resized
+    private var isBeingDragged: Bool {
+        switch gestureState {
+        case .moving(let id, _, _) where id == region.id: return true
+        case .resizing(let id, _, _) where id == region.id: return true
+        default: return false
+        }
+    }
 
     /// The current rect in TRANSFORMED coordinates (accounts for live drag/resize)
     private var currentDisplayRect: NormalizedRect {
@@ -294,24 +462,52 @@ struct BlurRegionOverlay: View {
     private var previewContent: some View {
         switch region.style {
         case .blur:
-            // Live blur preview - show the image portion with blur applied
-            GeometryReader { geo in
-                Image(nsImage: displayedImage)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .frame(width: converter.displayedSize.width, height: converter.displayedSize.height)
-                    .blur(radius: 30 * region.intensity)
-                    .offset(x: -displayRect.minX, y: -displayRect.minY)
+            if let cached = cachedBlurImage, !isBeingDragged {
+                // Cache hit (static): clip the pre-composited image
+                GeometryReader { _ in
+                    Image(nsImage: cached)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: converter.displayedSize.width, height: converter.displayedSize.height)
+                        .offset(x: -displayRect.minX, y: -displayRect.minY)
+                }
+                .frame(width: displayRect.width, height: displayRect.height)
+                .clipped()
+            } else {
+                // During drag or cache miss: live SwiftUI .blur() tracks position instantly
+                GeometryReader { _ in
+                    Image(nsImage: displayedImage)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: converter.displayedSize.width, height: converter.displayedSize.height)
+                        .blur(radius: 30 * region.intensity)
+                        .offset(x: -displayRect.minX, y: -displayRect.minY)
+                }
+                .frame(width: displayRect.width, height: displayRect.height)
+                .clipped()
             }
-            .frame(width: displayRect.width, height: displayRect.height)
-            .clipped()
 
         case .pixelate:
-            // Pixelate preview - mosaic effect indicator
-            ZStack {
-                Color.purple.opacity(0.2)
-                GridPattern(spacing: max(4, 12 * (1 - region.intensity)))
-                    .stroke(Color.purple.opacity(0.4), lineWidth: 1)
+            if let cached = cachedBlurImage, !isBeingDragged {
+                // Cache hit (static): CIPixellate already baked into the composite
+                GeometryReader { _ in
+                    Image(nsImage: cached)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: converter.displayedSize.width, height: converter.displayedSize.height)
+                        .offset(x: -displayRect.minX, y: -displayRect.minY)
+                }
+                .frame(width: displayRect.width, height: displayRect.height)
+                .clipped()
+            } else {
+                // During drag or cache miss: show tinted placeholder
+                ZStack {
+                    Color.purple.opacity(0.25)
+                    if !isBeingDragged {
+                        ProgressView()
+                            .controlSize(.small)
+                    }
+                }
             }
 
         case .solidBlack:
@@ -530,83 +726,6 @@ struct DiagonalLinesPattern: Shape {
     }
 }
 
-// MARK: - Blur Regions Crop Preview
-
-/// Shows blur regions as outlines when in crop mode (read-only preview)
-struct BlurRegionsCropPreview: View {
-    @Environment(AppState.self) private var appState
-
-    /// Original image size (pre-transform)
-    let originalImageSize: CGSize
-
-    /// Displayed size on screen
-    let displayedSize: CGSize
-
-    /// Current transform
-    let transform: ImageTransform
-
-    /// Transformed image size (accounts for rotation)
-    private var transformedImageSize: CGSize {
-        transform.transformedSize(originalImageSize)
-    }
-
-    var body: some View {
-        let converter = CoordinateConverter(
-            imageSize: transformedImageSize,
-            displayedSize: displayedSize,
-            displayOffset: .zero
-        )
-
-        ZStack {
-            ForEach(appState.activeImageBlurRegions) { region in
-                // Crop calculations use ORIGINAL coords
-                let isOutside = region.isOutsideCrop(appState.cropSettings, imageSize: originalImageSize)
-                let isPartial = region.isPartiallyCropped(appState.cropSettings, imageSize: originalImageSize)
-                // Display uses TRANSFORMED coords
-                let transformedRect = region.normalizedRect.applyingTransform(transform)
-                let displayRect = converter.normalizedToView(transformedRect)
-
-                ZStack {
-                    Rectangle()
-                        .fill(regionColor(region.style, isOutside: isOutside).opacity(isOutside ? 0.1 : 0.15))
-                        .overlay(
-                            Rectangle()
-                                .strokeBorder(
-                                    regionColor(region.style, isOutside: isOutside).opacity(isOutside ? 0.3 : 0.6),
-                                    style: StrokeStyle(lineWidth: 1, dash: isOutside ? [2, 2] : [4, 2])
-                                )
-                        )
-                        .frame(width: displayRect.width, height: displayRect.height)
-                        .position(x: displayRect.midX, y: displayRect.midY)
-
-                    if isOutside {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 14))
-                            .foregroundStyle(.red.opacity(0.7))
-                            .position(x: displayRect.midX, y: displayRect.midY)
-                    } else if isPartial {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .font(.system(size: 12))
-                            .foregroundStyle(.orange.opacity(0.8))
-                            .position(x: displayRect.maxX - 8, y: displayRect.minY + 8)
-                    }
-                }
-            }
-        }
-        .allowsHitTesting(false)
-    }
-
-    private func regionColor(_ style: BlurRegion.BlurStyle, isOutside: Bool) -> Color {
-        if isOutside { return .red }
-        switch style {
-        case .blur: return .blue
-        case .pixelate: return .purple
-        case .solidBlack: return .black
-        case .solidWhite: return .gray
-        }
-    }
-}
-
 // MARK: - Blur Tool Settings Panel
 
 /// Sidebar settings for blur tool
@@ -646,17 +765,16 @@ struct BlurToolSettingsPanel: View {
                     }
                 }
 
-                // Note: Pixelate hidden until live preview is implemented (see future-features.md)
                 Picker("Style", selection: styleBinding) {
-                    ForEach(BlurRegion.BlurStyle.allCases.filter { $0 != .pixelate }) { style in
+                    ForEach(BlurRegion.BlurStyle.allCases) { style in
                         Text(style.rawValue).tag(style)
                     }
                 }
                 .pickerStyle(.segmented)
             }
 
-            // Intensity slider (for blur style)
-            if currentStyle == .blur {
+            // Intensity slider (for blur and pixelate styles)
+            if currentStyle == .blur || currentStyle == .pixelate {
                 VStack(alignment: .leading, spacing: 6) {
                     HStack {
                         Text("Intensity")
@@ -692,24 +810,61 @@ struct BlurToolSettingsPanel: View {
                 }
             }
 
-            // Apply to all images button
-            if !appState.activeImageBlurRegions.isEmpty && appState.images.count > 1 {
-                Button {
-                    appState.applyBlurRegionsToAllImages()
-                } label: {
-                    Label("Apply to All Images", systemImage: "rectangle.stack")
+            // Per-image controls (when multiple images loaded)
+            if appState.images.count > 1 {
+                Divider()
+
+                if appState.isActiveImageBlurOptedOut {
+                    HStack {
+                        Label("Blur skipped", systemImage: "eye.slash")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                        Spacer()
+                        Button("Enable") {
+                            appState.toggleBlurOptOut()
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.mini)
+                    }
+                } else if appState.activeImageHasCustomBlur {
+                    HStack {
+                        Label("Custom", systemImage: "pencil")
+                            .font(.caption)
+                            .foregroundStyle(.blue)
+                        Spacer()
+                        Button("Use Global") {
+                            appState.resetBlurForActiveImage()
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.mini)
+                    }
+                } else {
+                    HStack(spacing: 8) {
+                        Button {
+                            appState.toggleBlurOptOut()
+                        } label: {
+                            Label("Skip This Image", systemImage: "eye.slash")
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.mini)
+
+                        Button {
+                            appState.customizeBlurForActiveImage()
+                        } label: {
+                            Label("Customize", systemImage: "pencil")
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.mini)
+                    }
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .help("Copy these blur regions to all other images")
             }
 
             // Instructions
             VStack(alignment: .leading, spacing: 4) {
-                Text("Draw rectangles to add blur regions")
+                Text("Blur applies to all images")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Text("Press B to toggle blur mode")
+                Text("Press B to toggle drawing mode")
                     .font(.caption)
                     .foregroundStyle(.tertiary)
             }

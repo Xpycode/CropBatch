@@ -1,13 +1,22 @@
 import SwiftUI
 
+/// Per-image blur override when global regions don't apply
+enum ImageBlurOverride: Equatable {
+    case optedOut
+    case custom([BlurRegion])
+}
+
 /// Manages blur regions and image transforms
 @MainActor
 @Observable
 final class BlurManager {
-    // MARK: - Blur Regions
+    // MARK: - Global Blur Regions
 
-    /// Blur regions keyed by image ID
-    var regions: [UUID: ImageBlurData] = [:]
+    /// Blur regions shared across all images by default
+    var globalRegions: [BlurRegion] = []
+
+    /// Per-image overrides: opted out or custom regions
+    var imageOverrides: [UUID: ImageBlurOverride] = [:]
 
     /// Currently selected region for editing
     var selectedRegionID: UUID?
@@ -25,22 +34,67 @@ final class BlurManager {
 
     // MARK: - Blur Region Management
 
-    /// Get blur regions for a specific image
+    /// Get blur regions for a specific image (respects overrides)
     func regionsForImage(_ imageID: UUID) -> [BlurRegion] {
-        regions[imageID]?.regions ?? []
-    }
-
-    /// Add a blur region to an image
-    func addRegion(_ region: BlurRegion, to imageID: UUID) {
-        if regions[imageID] == nil {
-            regions[imageID] = ImageBlurData()
+        switch imageOverrides[imageID] {
+        case .optedOut:
+            return []
+        case .custom(let regions):
+            return regions
+        case nil:
+            return globalRegions
         }
-        regions[imageID]?.regions.append(region)
     }
 
-    /// Remove a blur region from an image
+    /// Import per-image regions as overrides (migration/undo path)
+    func setRegions(_ newValue: [UUID: ImageBlurData]) {
+        for (imageID, data) in newValue {
+            if data.regions.isEmpty {
+                imageOverrides.removeValue(forKey: imageID)
+            } else {
+                imageOverrides[imageID] = .custom(data.regions)
+            }
+        }
+    }
+
+    /// Build blur regions dict for a set of images (for export)
+    func blurRegionsForExport(imageIDs: [UUID]) -> [UUID: ImageBlurData] {
+        var result: [UUID: ImageBlurData] = [:]
+        for id in imageIDs {
+            let regions = regionsForImage(id)
+            if !regions.isEmpty {
+                result[id] = ImageBlurData(regions: regions)
+            }
+        }
+        return result
+    }
+
+    /// Add a blur region (global by default, or to custom override)
+    func addRegion(_ region: BlurRegion, to imageID: UUID) {
+        switch imageOverrides[imageID] {
+        case .custom(var regions):
+            regions.append(region)
+            imageOverrides[imageID] = .custom(regions)
+        case .optedOut:
+            // Can't add to opted-out image
+            break
+        case nil:
+            // Add to global regions
+            globalRegions.append(region)
+        }
+    }
+
+    /// Remove a blur region
     func removeRegion(_ regionID: UUID, from imageID: UUID) {
-        regions[imageID]?.regions.removeAll { $0.id == regionID }
+        switch imageOverrides[imageID] {
+        case .custom(var regions):
+            regions.removeAll { $0.id == regionID }
+            imageOverrides[imageID] = .custom(regions)
+        case .optedOut:
+            break
+        case nil:
+            globalRegions.removeAll { $0.id == regionID }
+        }
         if selectedRegionID == regionID {
             selectedRegionID = nil
         }
@@ -48,27 +102,39 @@ final class BlurManager {
 
     /// Clear all blur regions for an image
     func clearRegions(for imageID: UUID) {
-        regions.removeValue(forKey: imageID)
+        switch imageOverrides[imageID] {
+        case .custom:
+            imageOverrides[imageID] = .custom([])
+        case .optedOut:
+            break
+        case nil:
+            globalRegions.removeAll()
+        }
         selectedRegionID = nil
     }
 
     /// Clear blur regions for multiple images
     func clearRegions(for imageIDs: Set<UUID>) {
         for id in imageIDs {
-            regions.removeValue(forKey: id)
+            imageOverrides.removeValue(forKey: id)
         }
     }
 
-    /// Check if any image has blur regions
+    /// Check if any regions exist (global or custom)
     var hasAnyRegions: Bool {
-        regions.values.contains { $0.hasRegions }
+        if !globalRegions.isEmpty { return true }
+        return imageOverrides.values.contains { override in
+            if case .custom(let regions) = override, !regions.isEmpty {
+                return true
+            }
+            return false
+        }
     }
 
     /// Get the currently selected blur region
     func selectedRegion(for imageID: UUID) -> BlurRegion? {
-        guard let regionID = selectedRegionID,
-              let data = regions[imageID] else { return nil }
-        return data.regions.first { $0.id == regionID }
+        guard let regionID = selectedRegionID else { return nil }
+        return regionsForImage(imageID).first { $0.id == regionID }
     }
 
     /// Select a blur region for editing
@@ -77,20 +143,56 @@ final class BlurManager {
     }
 
     /// Update a blur region's properties
-    /// Uses direct array mutation to avoid copy-mutate-writeback fragility
     func updateRegion(_ regionID: UUID, in imageID: UUID, normalizedRect: NormalizedRect? = nil, style: BlurRegion.BlurStyle? = nil, intensity: Double? = nil) {
-        guard regions[imageID] != nil,
-              let index = regions[imageID]?.regions.firstIndex(where: { $0.id == regionID }) else { return }
+        switch imageOverrides[imageID] {
+        case .custom(var regions):
+            guard let index = regions.firstIndex(where: { $0.id == regionID }) else { return }
+            if let normalizedRect { regions[index].normalizedRect = normalizedRect.clamped() }
+            if let style { regions[index].style = style }
+            if let intensity { regions[index].intensity = intensity }
+            imageOverrides[imageID] = .custom(regions)
+        case .optedOut:
+            break
+        case nil:
+            guard let index = globalRegions.firstIndex(where: { $0.id == regionID }) else { return }
+            if let normalizedRect { globalRegions[index].normalizedRect = normalizedRect.clamped() }
+            if let style { globalRegions[index].style = style }
+            if let intensity { globalRegions[index].intensity = intensity }
+        }
+    }
 
-        if let normalizedRect = normalizedRect {
-            regions[imageID]?.regions[index].normalizedRect = normalizedRect.clamped()
+    // MARK: - Per-Image Override Management
+
+    /// Toggle opt-out for an image
+    func toggleOptOut(_ imageID: UUID) {
+        if case .optedOut = imageOverrides[imageID] {
+            imageOverrides.removeValue(forKey: imageID)
+        } else {
+            imageOverrides[imageID] = .optedOut
+            if let selectedRegionID, regionsForImage(imageID).first(where: { $0.id == selectedRegionID }) == nil {
+                self.selectedRegionID = nil
+            }
         }
-        if let style = style {
-            regions[imageID]?.regions[index].style = style
-        }
-        if let intensity = intensity {
-            regions[imageID]?.regions[index].intensity = intensity
-        }
+    }
+
+    /// Create a per-image custom copy of global regions
+    func customizeImage(_ imageID: UUID) {
+        guard imageOverrides[imageID] == nil else { return }
+        imageOverrides[imageID] = .custom(globalRegions.map { region in
+            BlurRegion(normalizedRect: region.normalizedRect, style: region.style, intensity: region.intensity)
+        })
+    }
+
+    /// Check if image is opted out
+    func isOptedOut(_ imageID: UUID) -> Bool {
+        if case .optedOut = imageOverrides[imageID] { return true }
+        return false
+    }
+
+    /// Check if image has custom regions
+    func hasCustomRegions(_ imageID: UUID) -> Bool {
+        if case .custom = imageOverrides[imageID] { return true }
+        return false
     }
 
     /// Count of blur regions outside the crop area
@@ -105,12 +207,10 @@ final class BlurManager {
 
     // MARK: - Transform Management
 
-    /// Check if any transform is applied
     var hasAnyTransforms: Bool {
         !transform.isIdentity
     }
 
-    /// Rotate images
     func rotate(clockwise: Bool) {
         if clockwise {
             transform.rotation.rotateCW()
@@ -119,7 +219,6 @@ final class BlurManager {
         }
     }
 
-    /// Flip images
     func flip(horizontal: Bool) {
         if horizontal {
             transform.flipHorizontal.toggle()
@@ -128,21 +227,19 @@ final class BlurManager {
         }
     }
 
-    /// Reset transform
     func resetTransform() {
         transform = .identity
     }
 
-    /// Get the effective size after transform (rotation may swap dimensions)
     func effectiveSize(for originalSize: CGSize) -> CGSize {
         transform.transformedSize(originalSize)
     }
 
     // MARK: - Cleanup
 
-    /// Clear all state
     func clearAll() {
-        regions.removeAll()
+        globalRegions.removeAll()
+        imageOverrides.removeAll()
         selectedRegionID = nil
         transform = .identity
     }
