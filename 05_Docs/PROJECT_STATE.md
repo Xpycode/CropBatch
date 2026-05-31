@@ -9,9 +9,9 @@
 
 ## Current Position
 - **Phase:** development
-- **Focus:** v1.5 feature-complete on `feature/unified-blur-crop` — testing before merge
-- **Status:** All v1.5 features implemented (10 waves across 2 sessions)
-- **Last updated:** 2026-04-04
+- **Focus:** REAL WebP export — plan ready, awaiting Xcode SPM package add
+- **Status:** v1.5 features done. WebP export found broken (ships but fails); fix plan written for v1.6.
+- **Last updated:** 2026-05-29
 
 ## Progress
 ```
@@ -45,9 +45,13 @@
 - FolderWatcher structured concurrency
 
 ## Blockers
-[None]
+- WebP export is **broken** — `.webp` case + 2 presets + sidebar button ship, but all writes route through ImageIO/`CGImageDestination`, which cannot encode WebP on macOS (verified: writable = false on 26.5). Plan written to fix via SDWebImageWebPCoder.
+- CropBatch is **not under git** — `git init` needed before the WebP change ships.
 
-## v1.5 (on `feature/unified-blur-crop` — testing)
+## Deferred to v2.0
+- (none currently)
+
+## v1.5 (merged to main — UI polish on `feature/ui-polish`)
 - **[DONE]** Unified crop/blur canvas — live blur preview, no mode switching, z-order crop dimming
 - **[DONE]** Pixelate live preview via CIPixellate + BlurPreviewCache (100ms debounce)
 - **[DONE]** 3-tab sidebar (Crop / Effects / Export) — replaces 12 flat sections
@@ -56,10 +60,19 @@
 - **[DONE]** Global blur regions — apply to all images, per-image skip/customize override
 - **[DONE]** Folder Watcher GUI wired into Export tab
 - **[DONE]** Snap edge sensitivity slider (Low/Med/High)
+- **[DONE]** Flat toolbar buttons — FCPToolbarButtonStyle + .hiddenTitleBar + UIDesignRequiresCompatibility
 
 ## Next Actions
-- Test all v1.5 features, commit, merge to main
-- Bump version, build DMG, update appcast, release
+### REAL WebP export (v1.6) — plan: `POLISH_PLAN_webp_support.md`
+- **User:** add SDWebImageWebPCoder 0.15.0 package in Xcode (File ▸ Add Package Dependencies → CropBatch target) — Wave A
+- Wave B: `WebPEncoder.swift` + `lossless` model plumbing; branch `save()` + `encode()`; forward flag from AppState:621 / FolderWatcher:148 / processSingleImage:1019; CLI `webp` case + `--lossless`
+- Wave C: Lossless toggle + Quality↔Effort label flip (both UIs); FileSizeEstimator lossless branch
+- Wave D: smoke-test all 6 export flows + profile persistence round-trip
+- Wave E: `git init`, bump 1.5→1.6, build DMG, notarize, update appcast
+
+### Carryover
+- Test all v1.5 features (blur global/override, sidebar tabs, snap sensitivity, undo/redo, flat toolbar)
+- Ship v1.5 (version bump, DMG, appcast) if not folding into v1.6
 
 ---
 *Updated by Claude. Source of truth for project position.*

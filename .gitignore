@@ -40,6 +40,11 @@ CropBatch-iconNEW.icon/
 
 # Tool configs
 .serena/
+.fastembed_cache/
 
 # Lock files
 *~lock~
+
+# editor/backup cruft
+*.bak
+*.bak-*

@@ -24,8 +24,9 @@ struct CropBatchApp: App {
         WindowGroup(id: "main") {
             ContentView()
                 .environment(appState)
+                .preferredColorScheme(.dark)
         }
-        .windowStyle(.automatic)
+        .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentSize)
         .defaultSize(width: 900, height: 600)
         .commands {

@@ -10,6 +10,10 @@ CropBatch — macOS batch image cropping app
 
 | Date | Focus | Outcome | Log |
 |------|-------|---------|-----|
+| 2026-05-29a | REAL WebP export plan (adapt SFV approach) | WebP found broken-not-missing; 3-agent recon; CB-specific plan written | [2026-05-29-a](2026-05-29-a.md) |
+| 2026-04-05c | Flat toolbar buttons — SUCCESS | UIDesignRequiresCompatibility in Info.plist was the missing key. Cookbook updated. | [2026-04-05-c](2026-04-05-c.md) |
+| 2026-04-05b | Flat toolbar buttons migration (5 approaches) | All failed — missing Info.plist key (discovered in 2026-04-05-c) | [2026-04-05-b](2026-04-05-b.md) |
+| 2026-04-05a | Code review + UI polish (toolbar investigation) | 4 code review fixes, blur drag fix, sidebar tab centered, toolbar migration blocked by layout bug | [2026-04-05-a](2026-04-05-a.md) |
 | 2026-04-04b | v1.5 sidebar reorg + remaining features | 6 waves: 3-tab sidebar, shortcuts popover, undo/redo, global blur, folder watcher, snap sensitivity | [2026-04-04-b](2026-04-04-b.md) |
 | 2026-04-04a | v1.5 implementation: unified crop/blur tool | All 4 waves done, pixelate live preview, performance cache, intensity fix | [2026-04-04-a](2026-04-04-a.md) |
 | 2026-04-03c | v1.5 planning: unified crop/blur tool | Research complete, 4-wave plan ready, toggle+B activation confirmed | [2026-04-03-c](2026-04-03-c.md) |

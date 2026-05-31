@@ -45,17 +45,28 @@ struct ContentView: View {
             // Left: Undo/Redo
             ToolbarItemGroup(placement: .navigation) {
                 if !appState.images.isEmpty {
-                    Button { appState.undo() } label: {
-                        Label("Undo", systemImage: "arrow.uturn.backward")
-                    }
-                    .disabled(!appState.canUndo)
-                    .help("Undo (⌘Z)")
+                    HStack {
+                        Button { appState.undo() } label: {
+                            Image(systemName: "arrow.uturn.backward")
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .frame(width: 16, height: 16)
+                        }
+                        .buttonStyle(FCPToolbarButtonStyle())
+                        .disabled(!appState.canUndo)
+                        .help("Undo (⌘Z)")
 
-                    Button { appState.redo() } label: {
-                        Label("Redo", systemImage: "arrow.uturn.forward")
+                        Button { appState.redo() } label: {
+                            Image(systemName: "arrow.uturn.forward")
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .frame(width: 16, height: 16)
+                        }
+                        .buttonStyle(FCPToolbarButtonStyle())
+                        .disabled(!appState.canRedo)
+                        .help("Redo (⇧⌘Z)")
                     }
-                    .disabled(!appState.canRedo)
-                    .help("Redo (⇧⌘Z)")
+                    .buttonStyle(.borderless)
                 }
             }
 
@@ -72,29 +83,45 @@ struct ContentView: View {
             // Right side: buttons
             ToolbarItemGroup(placement: .primaryAction) {
                 if !appState.images.isEmpty {
-                    Button { showShortcutsPopover.toggle() } label: {
-                        Label("Shortcuts", systemImage: "questionmark.circle")
-                    }
-                    .popover(isPresented: $showShortcutsPopover) {
-                        KeyboardShortcutsContentView()
-                            .padding()
-                    }
-                    .help("Keyboard Shortcuts")
+                    HStack {
+                        Button { showShortcutsPopover.toggle() } label: {
+                            Image(systemName: "questionmark.circle")
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .frame(width: 16, height: 16)
+                        }
+                        .buttonStyle(FCPToolbarButtonStyle())
+                        .popover(isPresented: $showShortcutsPopover) {
+                            KeyboardShortcutsContentView()
+                                .padding()
+                        }
+                        .help("Keyboard Shortcuts")
 
-                    Button {
-                        appState.showImportPanel()
-                    } label: {
-                        Label("Add Images", systemImage: "plus")
-                    }
+                        Button {
+                            appState.showImportPanel()
+                        } label: {
+                            Image(systemName: "plus")
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .frame(width: 16, height: 16)
+                        }
+                        .buttonStyle(FCPToolbarButtonStyle())
 
-                    Button(role: .destructive) {
-                        appState.clearAll()
-                    } label: {
-                        Label("Clear All", systemImage: "trash")
+                        Button {
+                            appState.clearAll()
+                        } label: {
+                            Image(systemName: "trash")
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .frame(width: 16, height: 16)
+                        }
+                        .buttonStyle(FCPToolbarButtonStyle())
                     }
+                    .buttonStyle(.borderless)
                 }
             }
         }
+        .toolbarRole(.editor)
     }
 
     private func handleDrop(providers: [NSItemProvider]) -> Bool {
@@ -132,10 +159,25 @@ struct SidebarView: View {
     @AppStorage("sidebar.gridSplitExpanded") private var gridSplitExpanded = false
     @AppStorage("sidebar.folderWatcherExpanded") private var folderWatcherExpanded = false
 
+    private var selectedTabBinding: Binding<SidebarTab> {
+        Binding(
+            get: { SidebarTab(rawValue: selectedTab) ?? .crop },
+            set: { selectedTab = $0.rawValue }
+        )
+    }
+
     var body: some View {
         @Bindable var state = appState
 
         VStack(spacing: 0) {
+            // Tab picker — centered above scrollable form
+            AppKitSegmented(
+                items: [("Crop", SidebarTab.crop), ("Effects", SidebarTab.effects), ("Export", SidebarTab.export)],
+                selection: selectedTabBinding
+            )
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+
             // Scrollable content using Form for inspector-style layout
             Form {
                 // Resolution warning (always visible, above tabs)
@@ -143,19 +185,6 @@ struct SidebarView: View {
                     Section {
                         ResolutionWarningView()
                     }
-                }
-
-                // ═══════════════════════════════════════
-                // TAB PICKER
-                // ═══════════════════════════════════════
-                Section {
-                    Picker("Tab", selection: $selectedTab) {
-                        Text("Crop").tag(SidebarTab.crop.rawValue)
-                        Text("Effects").tag(SidebarTab.effects.rawValue)
-                        Text("Export").tag(SidebarTab.export.rawValue)
-                    }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
                 }
 
                 // ═══════════════════════════════════════
