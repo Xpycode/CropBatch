@@ -2,6 +2,8 @@ import SwiftUI
 
 struct FCPToolbarButtonStyle: ButtonStyle {
     var isOn: Bool = false
+    // Custom ButtonStyles don't dim automatically on .disabled() — read it ourselves
+    @Environment(\.isEnabled) private var isEnabled
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
@@ -27,5 +29,6 @@ struct FCPToolbarButtonStyle: ButtonStyle {
             )
             .scaleEffect(configuration.isPressed ? 0.95 : 1.0)
             .animation(.easeInOut(duration: 0.1), value: configuration.isPressed)
+            .opacity(isEnabled ? 1.0 : 0.35)
     }
 }
