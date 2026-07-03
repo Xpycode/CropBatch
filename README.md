@@ -5,8 +5,8 @@ A macOS app for batch cropping images with configurable edge trimming.
 ![macOS](https://img.shields.io/badge/macOS-15.0+-blue.svg)
 ![Swift](https://img.shields.io/badge/Swift-6.0-orange.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
-![Version](https://img.shields.io/badge/version-1.4-brightgreen.svg)
-[![Download](https://img.shields.io/badge/Download-v1.4-blue.svg)](https://github.com/Xpycode/CropBatch/releases/latest)
+![Version](https://img.shields.io/badge/version-1.6-brightgreen.svg)
+[![Download](https://img.shields.io/badge/Download-v1.6-blue.svg)](https://github.com/Xpycode/CropBatch/releases/latest)
 ![Downloads](https://img.shields.io/github/downloads/Xpycode/CropBatch/total.svg)
 
 ## Screenshots
@@ -15,7 +15,7 @@ A macOS app for batch cropping images with configurable edge trimming.
 *Grid Split — divide cropped images into tiles with configurable rows and columns*
 
 ![Corner Radius](03_Screenshots/mainWindow6-CornerRadius.png)
-*Corner Radius — round corners with per-corner control, auto-exports as PNG*
+*Corner Radius — round corners with per-corner control, exports as PNG or WebP*
 
 ![Blur Regions](03_Screenshots/mainWindow7-Blur.png)
 *Blur — redact sensitive areas with adjustable intensity*
@@ -35,14 +35,16 @@ A macOS app for batch cropping images with configurable edge trimming.
 - **Visual Crop Editor** — Draggable handles on the image preview
 - **Grid Split** — Divide cropped images into rows and columns with customizable tile naming
 - **Save in Place** — Overwrite originals directly, no folder picker needed
-- **Corner Radius** — Round corners with per-corner control (auto-switches to PNG)
-- **Blur Regions** — Blur sensitive areas with adjustable intensity
+- **Corner Radius** — Round corners with per-corner control (exports as PNG or WebP)
+- **Blur Regions** — Blur or pixelate sensitive areas with a live preview and adjustable intensity
 - **Watermarks** — Add image or text overlays with position, opacity, color, shadow, and outline
 - **Snap-to-Edge** — Crop handles snap to detected UI element boundaries
+- **Undo / Redo** — Step backward and forward through edits from the toolbar
+- **Folder Watcher** — Auto-process images dropped into a watched folder
 - **Auto-Update** — Check for updates from the app menu
 - **Scrubber Controls** — Drag the T/B/L/R labels to quickly adjust crop values
 - **Aspect Ratio Guides** — 16:9, 4:3, 1:1, 9:16, 3:2, 21:9 overlays
-- **Multiple Export Formats** — PNG, JPEG, HEIC, TIFF, WebP
+- **Multiple Export Formats** — PNG, JPEG, HEIC, TIFF, and WebP (lossy + true bit-exact lossless)
 - **Resize Options** — Exact size, max width/height, or percentage scaling
 - **Flexible Naming** — Keep original names with suffix, or use patterns
 - **File Size Estimation** — Preview output size for current file and batch
@@ -50,7 +52,7 @@ A macOS app for batch cropping images with configurable edge trimming.
 
 ## Installation
 
-1. Download `CropBatch-1.4.dmg` from [Releases](https://github.com/Xpycode/CropBatch/releases/latest)
+1. Download `CropBatch-1.6.dmg` from [Releases](https://github.com/Xpycode/CropBatch/releases/latest)
 2. Open the DMG and drag CropBatch to Applications
 3. Launch from Applications folder
 

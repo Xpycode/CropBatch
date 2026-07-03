@@ -191,6 +191,36 @@ final class ImageCropServiceTests: XCTestCase {
         assertWebPMagic(data)
     }
 
+    /// v1.6 regression guard: corner radius makes corners transparent, and the
+    /// relaxation now lets it export as *lossy* WebP too. libwebp stores alpha as
+    /// a separate plane even in lossy mode, so the transparency must survive the
+    /// round-trip. (Lossless is already covered by the bit-exact test.)
+    func testWebPLossyPreservesAlpha() throws {
+        let (w, h) = (32, 32)
+        func rgbaContext(_ buf: UnsafeMutableRawPointer) -> CGContext {
+            CGContext(data: buf, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4,
+                      space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue | CGImageByteOrderInfo.order32Big.rawValue)!
+        }
+        // Opaque red everywhere, with a fully-transparent 8×8 top-left corner.
+        var src = [UInt8](repeating: 0, count: w * h * 4)
+        for i in stride(from: 0, to: src.count, by: 4) { src[i] = 255; src[i + 3] = 255 }
+        for y in 0..<8 { for x in 0..<8 { src[(y * w + x) * 4 + 3] = 0 } }
+        let cg = rgbaContext(&src).makeImage()!
+        let image = NSImage(cgImage: cg, size: NSSize(width: w, height: h))
+
+        let data = try WebPEncoder.encodedData(from: image, quality: 0.9, lossless: false)
+        guard let decoded = NSImage(data: data)?.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+            return XCTFail("Could not decode lossy WebP")
+        }
+        var out = [UInt8](repeating: 0, count: w * h * 4)
+        rgbaContext(&out).draw(decoded, in: CGRect(x: 0, y: 0, width: w, height: h))
+
+        XCTAssertLessThan(Int(out[3]), 128, "Lossy WebP dropped the transparent corner (alpha=\(out[3]))")
+        let centerAlpha = out[((h / 2) * w + (w / 2)) * 4 + 3]
+        XCTAssertGreaterThan(Int(centerAlpha), 200, "Opaque region should stay opaque (alpha=\(centerAlpha))")
+    }
+
     func testWebPEncoderLosslessProducesValidData() throws {
         let data = try WebPEncoder.encodedData(from: makeTestNSImage(), quality: 0.9, lossless: true)
         assertWebPMagic(data)
