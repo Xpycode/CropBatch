@@ -23,9 +23,10 @@ macOS batch image cropping app. Born from needing to crop iOS screenshots for pd
 
 ### Image Processing Pipeline
 ```
-Blur → Transform → Crop → Corner Mask → Resize → Watermark
+Transform → Crop → Blur → Corner Mask → Grid Split → Resize → Watermark
 ```
-Each step depends on the previous. Order matters.
+Each step depends on the previous. Order matters. (Blur runs after Crop with
+coordinate remapping — v1.4 pipeline reorder; see processImageThroughPipeline.)
 
 ### Core Files
 | File | Purpose |
