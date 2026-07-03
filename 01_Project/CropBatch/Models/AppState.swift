@@ -601,12 +601,14 @@ final class AppState {
                 for tile in tiles {
                     var tileURL = renamedURL
 
-                    // Force .png extension when corner radius is enabled
+                    // Corner radius output uses whichever alpha-capable format was
+                    // resolved (PNG or WebP) — match the extension to it.
                     if capturedCropSettings.cornerRadiusEnabled {
+                        let ext = tile.format.preferredFilenameExtension ?? "png"
                         let baseName = tileURL.deletingPathExtension().lastPathComponent
                         tileURL = tileURL.deletingLastPathComponent()
                             .appendingPathComponent(baseName)
-                            .appendingPathExtension("png")
+                            .appendingPathExtension(ext)
                     }
 
                     // Add grid suffix if this is a grid tile

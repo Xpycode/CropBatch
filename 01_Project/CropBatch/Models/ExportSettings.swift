@@ -37,6 +37,23 @@ enum ExportFormat: String, CaseIterable, Identifiable, Codable {
         case .png, .tiff: return false
         }
     }
+
+    /// Whether this format preserves an alpha channel on export.
+    ///
+    /// Corner radius makes the four corners transparent, so it can only be
+    /// applied to a format that keeps alpha. Historically that was PNG only;
+    /// v1.6 added real WebP export (libwebp keeps alpha for both lossy and
+    /// lossless), so WebP can now carry the rounded-corner transparency too.
+    ///
+    /// This is the single source of truth the corner-radius flow consults —
+    /// the format picker, the pipeline, the file-extension logic, and the
+    /// Save-in-Place validator all read this instead of comparing to `.png`.
+    var supportsTransparency: Bool {
+        switch self {
+        case .png, .webp: return true
+        case .jpeg, .heic, .tiff: return false
+        }
+    }
 }
 
 /// Resize mode options
@@ -234,16 +251,21 @@ struct ExportSettings: Equatable {
             return "Grid split produces multiple tiles per image. Disable grid or use a different output mode."
         }
 
-        // Corner radius requires PNG (transparency). Block if any original isn't PNG.
+        // Corner radius needs an alpha channel. In Save-in-Place mode the output
+        // keeps each original's own format, so block any original whose format
+        // can't carry alpha (anything but PNG/WebP).
         if cornerRadiusEnabled {
-            let nonPNGFiles = items.filter { item in
+            let nonAlphaFiles = items.filter { item in
                 let ext = item.url.pathExtension.lowercased()
-                return ext != "png"
+                let fmt = ExportFormat.allCases.first {
+                    $0.fileExtension == ext || (ext == "jpeg" && $0 == .jpeg)
+                }
+                return !(fmt?.supportsTransparency ?? false)
             }
-            if !nonPNGFiles.isEmpty {
-                let count = nonPNGFiles.count
+            if !nonAlphaFiles.isEmpty {
+                let count = nonAlphaFiles.count
                 let fileWord = count == 1 ? "file" : "files"
-                return "Corner radius requires PNG format. \(count) \(fileWord) would need format conversion."
+                return "Corner radius needs PNG or WebP. \(count) \(fileWord) would need format conversion."
             }
         }
 

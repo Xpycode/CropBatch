@@ -938,10 +938,12 @@ struct ImageCropService {
         }
 
         // Resolve format once — applies to all tiles from this image
-        // Force PNG when corner radius is enabled (transparency required)
         let format: UTType
         if cropSettings.cornerRadiusEnabled {
-            format = UTType.png
+            // Corner radius needs alpha: honor the selected format if it keeps
+            // alpha (PNG/WebP), otherwise fall back to PNG. Bypass
+            // preserveOriginalFormat here — the original might be alpha-less JPEG.
+            format = exportSettings.format.supportsTransparency ? exportSettings.format.utType : UTType.png
         } else if exportSettings.preserveOriginalFormat {
             let ext = item.url.pathExtension.lowercased()
             format = ExportFormat.allCases.first {
@@ -1005,12 +1007,14 @@ struct ImageCropService {
         for tile in tiles {
             var tileOutputURL = exportSettings.outputURL(for: item.url, index: index)
 
-            // Force .png extension when corner radius is enabled
+            // Corner radius output uses whichever alpha-capable format was
+            // resolved above (PNG or WebP) — match the extension to it.
             if cropSettings.cornerRadiusEnabled {
+                let ext = tile.format.preferredFilenameExtension ?? "png"
                 let baseName = tileOutputURL.deletingPathExtension().lastPathComponent
                 tileOutputURL = tileOutputURL.deletingLastPathComponent()
                     .appendingPathComponent(baseName)
-                    .appendingPathExtension("png")
+                    .appendingPathExtension(ext)
             }
 
             // Add grid suffix to filename if this is a grid tile

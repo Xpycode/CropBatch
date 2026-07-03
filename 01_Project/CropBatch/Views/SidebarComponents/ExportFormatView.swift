@@ -21,14 +21,15 @@ struct ExportFormatView: View {
                     }
                     .buttonStyle(.bordered)
                     .tint(appState.exportSettings.format == fmt ? .accentColor : .secondary)
+                    // With corner radius on, only alpha-capable formats are selectable.
+                    .disabled(appState.cropSettings.cornerRadiusEnabled && !fmt.supportsTransparency)
                 }
             }
             .controlSize(.small)
-            .disabled(appState.cropSettings.cornerRadiusEnabled)
         }
 
         if appState.cropSettings.cornerRadiusEnabled {
-            Text("PNG required for corner radius")
+            Text("Corner radius needs an alpha format (PNG or WebP)")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }

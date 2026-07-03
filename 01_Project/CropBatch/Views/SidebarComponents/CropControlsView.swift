@@ -45,8 +45,12 @@ struct CropControlsView: View {
                 .controlSize(.small)
                 .onChange(of: appState.cropSettings.cornerRadiusEnabled) { _, isEnabled in
                     if isEnabled {
-                        appState.formatBeforeCornerRadius = appState.exportSettings.format
-                        appState.exportSettings.format = .png
+                        // Only override formats that can't carry alpha (JPEG/HEIC/TIFF);
+                        // leave an already-transparent format (PNG/WebP) untouched.
+                        if !appState.exportSettings.format.supportsTransparency {
+                            appState.formatBeforeCornerRadius = appState.exportSettings.format
+                            appState.exportSettings.format = .png
+                        }
                     } else {
                         if let saved = appState.formatBeforeCornerRadius {
                             appState.exportSettings.format = saved
@@ -75,7 +79,7 @@ struct CropControlsView: View {
                     .controlSize(.small)
             }
 
-            Text("Exports as PNG for transparency")
+            Text("Exports as PNG or WebP for transparency")
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
         }

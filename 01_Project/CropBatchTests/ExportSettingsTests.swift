@@ -155,4 +155,40 @@ final class ExportSettingsTests: XCTestCase {
         let decoded = try JSONDecoder().decode(ExportSettingsCodable.self, from: Data(legacyJSON.utf8))
         XCTAssertFalse(decoded.toExportSettings().lossless)
     }
+
+    // MARK: - ExportFormat.supportsTransparency (corner-radius alpha, v1.6)
+
+    func testSupportsTransparencyOnlyPNGAndWebP() {
+        // Corner radius needs alpha: PNG and WebP keep it; the rest don't.
+        XCTAssertTrue(ExportFormat.png.supportsTransparency)
+        XCTAssertTrue(ExportFormat.webp.supportsTransparency)
+        XCTAssertFalse(ExportFormat.jpeg.supportsTransparency)
+        XCTAssertFalse(ExportFormat.heic.supportsTransparency)
+        XCTAssertFalse(ExportFormat.tiff.supportsTransparency)
+    }
+
+    // MARK: - Save-in-Place validation with corner radius (relaxed to PNG *or* WebP)
+
+    func testOverwriteWithCornerRadiusAllowsWebPOriginals() throws {
+        // v1.6: a WebP original can carry corner-radius transparency in-place.
+        var settings = ExportSettings()
+        settings.outputDirectory = .overwriteOriginal
+
+        let pngItem = ImageItem(url: try makeTempFileURL(name: "shot.png"), originalImage: makeDummyImage())
+        let webpItem = ImageItem(url: try makeTempFileURL(name: "shot.webp"), originalImage: makeDummyImage())
+
+        let error = settings.validateOverwriteMode(cornerRadiusEnabled: true, items: [pngItem, webpItem])
+        XCTAssertNil(error, "PNG + WebP originals should both be allowed with corner radius")
+    }
+
+    func testOverwriteWithCornerRadiusBlocksJPEGOriginals() throws {
+        // JPEG has no alpha channel, so overwriting it in place with corner radius must be blocked.
+        var settings = ExportSettings()
+        settings.outputDirectory = .overwriteOriginal
+
+        let jpegItem = ImageItem(url: try makeTempFileURL(name: "photo.jpg"), originalImage: makeDummyImage())
+
+        let error = settings.validateOverwriteMode(cornerRadiusEnabled: true, items: [jpegItem])
+        XCTAssertNotNil(error, "A JPEG original should block corner-radius Save-in-Place")
+    }
 }
