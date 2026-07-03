@@ -8,9 +8,9 @@
 - **Started:** December 2025
 
 ## Current Position
-- **Phase:** released
-- **Focus:** v1.6 **SHIPPED** 2026-07-03 (real WebP + corner-radius→WebP). In-app Help via `HelpMenu` package still pending (separate branch).
-- **Status:** v1.6 live — tag `v1.6`, GitHub release + notarized/stapled DMG (11409899 B), appcast published (EdDSA-signed, Sparkle serving 160/1.6). Corner radius now honors PNG *or* WebP via `ExportFormat.supportsTransparency` (single source of truth across 6 sites). 35 tests green (incl. lossy-WebP alpha guard). Release automated via `scripts/release.sh`.
+- **Phase:** released (v1.6 out, **auto-update blocked pending re-sign**)
+- **Focus:** v1.6 built/notarized/released 2026-07-03, but the **appcast is signed with the wrong Sparkle key** — must re-sign from the M4 Pro before auto-update works (see Blockers). In-app Help still pending (separate branch).
+- **Status:** v1.6 DMG (11409899 B) is notarized+stapled and on the GitHub release (downloadable by hand). Corner radius now honors PNG *or* WebP via `ExportFormat.supportsTransparency` (6 sites); 35 tests green. Release automated via `scripts/release.sh`. Auto-update **broken**: DMG signed with `eH6jo…` (M1 Max keychain = another app's key) but app expects `o388Mk7…`.
 - **Last updated:** 2026-07-03
 
 ## Progress
@@ -45,6 +45,11 @@
 - FolderWatcher structured concurrency
 
 ## Blockers
+- **v1.6 auto-update broken — appcast signed with wrong Sparkle key** (2026-07-03).
+  **What:** Sparkle rejects the 1.6 DMG ("improperly signed"); it was signed with the M1 Max keychain
+  key `eH6jo…` (another app's), but CropBatch embeds `SUPublicEDKey = o388Mk7…`.
+  **Tried:** M1 Max has no matching key — `~/.sparkle-keys/private-key.txt` gone; `99-AUTH/sparkle_private_key.txt` = `eH6jo…`.
+  **Unblock:** on the **M4 Pro** (likely holds `o388Mk7…` from the April v1.4 signing): `sign_update 04_Exports/CropBatch-1.6.dmg`, swap `sparkle:edSignature` in `appcast.xml` (length stays 11409899), push. DMG bytes unchanged → **no re-notarization**. Optionally pull the 1.6 `<item>` from the live appcast meanwhile so 1.4 users stop erroring.
 - ~~WebP export is **broken**~~ — RESOLVED 2026-07-03 on `feature/webp-real-support`: lossy via SDWebImageWebPCoder 0.15.0, lossless via direct libwebp (`use_argb=1`, bit-exact — the coder's own lossless is YUV-degraded, issue #116). All 6 flows + CLI `--format webp --lossless` verified.
 - ~~CropBatch is **not under git**~~ — RESOLVED 2026-05-31: reconnected to `github.com/Xpycode/CropBatch`, history + tags v1.0–v1.4 restored, post-v1.4 work committed & pushed.
 - **Rotate/flip inconsistency:** menu commands shelved (`#if false`, "breaks crop state") but sidebar `TransformRowView` exposes the same actions unguarded. Decide: fix + re-enable menu, or gate both.
