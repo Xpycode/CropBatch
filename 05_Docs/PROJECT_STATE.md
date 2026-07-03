@@ -8,9 +8,9 @@
 - **Started:** December 2025
 
 ## Current Position
-- **Phase:** development
-- **Focus:** v1.6 ship prep (WebP done — version bump, DMG, notarize remain); in-app Help via `HelpMenu` package still pending
-- **Status:** REAL WebP export **implemented & verified** on `feature/webp-real-support` (lossy via SDWebImageWebPCoder, lossless bit-exact via direct libwebp — see decisions.md 2026-07-03). CropBatchTests target restored, 31 tests green. Code-review fixes applied (watermark thread safety, notification auth, corner-radius format restore, dead views deleted).
+- **Phase:** released
+- **Focus:** v1.6 **SHIPPED** 2026-07-03 (real WebP + corner-radius→WebP). In-app Help via `HelpMenu` package still pending (separate branch).
+- **Status:** v1.6 live — tag `v1.6`, GitHub release + notarized/stapled DMG (11409899 B), appcast published (EdDSA-signed, Sparkle serving 160/1.6). Corner radius now honors PNG *or* WebP via `ExportFormat.supportsTransparency` (single source of truth across 6 sites). 35 tests green (incl. lossy-WebP alpha guard). Release automated via `scripts/release.sh`.
 - **Last updated:** 2026-07-03
 
 ## Progress
@@ -24,7 +24,7 @@
 | Planning | done | Feature set defined, 61+ public downloads |
 | Implementation | done | v1.4 shipped |
 | Polish | done | "Works for me" level |
-| Release | **done** | v1.4 live, Sparkle auto-update works |
+| Release | **done** | v1.6 live (2026-07-03); v1.4 → 1.6, Sparkle auto-update works |
 
 ## Tech Stack
 - macOS 15.0+ / Swift 6.0 / SwiftUI / Xcode 16+
@@ -67,9 +67,9 @@
 - **[DONE]** Flat toolbar buttons — FCPToolbarButtonStyle + .hiddenTitleBar + UIDesignRequiresCompatibility
 
 ## Next Actions
-### v1.6 ship (WebP) — Waves A–D DONE 2026-07-03 (`feature/webp-real-support`)
-- Wave E only: merge to main, bump 1.5→1.6 (150→160), build DMG, notarize, re-sign appcast
-- Optional: relax corner-radius PNG force to also allow WebP-lossless (alpha now supported)
+### v1.6 ship (WebP) — DONE & SHIPPED 2026-07-03
+- Wave E complete: merged, bumped 1.5→1.6, corner-radius→WebP relaxation, DMG built,
+  notarized+stapled, EdDSA-signed, GitHub release + appcast published. `scripts/release.sh` automates it.
 
 ### In-app Help (via `HelpMenu` package — appHELP project)
 - Content + 6 lean screenshots done (`01_Project/CropBatch/Help/`, 632KB JPEGs, refs wired). Still **untracked** → commit on `feature/in-app-help`
