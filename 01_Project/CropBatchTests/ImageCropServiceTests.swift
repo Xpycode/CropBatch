@@ -171,4 +171,67 @@ final class ImageCropServiceTests: XCTestCase {
         XCTAssertEqual(result!.width, 500, accuracy: 0.001)
         XCTAssertEqual(result!.height, 250, accuracy: 0.001)
     }
+
+    // MARK: - WebP encoding
+
+    private func makeTestNSImage(width: Int = 64, height: Int = 64) -> NSImage {
+        let cg = createTestCGImage(width: width, height: height)
+        return NSImage(cgImage: cg, size: NSSize(width: width, height: height))
+    }
+
+    /// WebP files start with "RIFF" + 4 size bytes + "WEBP"
+    private func assertWebPMagic(_ data: Data, file: StaticString = #filePath, line: UInt = #line) {
+        XCTAssertGreaterThan(data.count, 12, file: file, line: line)
+        XCTAssertEqual(Array(data.prefix(4)), Array("RIFF".utf8), file: file, line: line)
+        XCTAssertEqual(Array(data[8..<12]), Array("WEBP".utf8), file: file, line: line)
+    }
+
+    func testWebPEncoderLossyProducesValidData() throws {
+        let data = try WebPEncoder.encodedData(from: makeTestNSImage(), quality: 0.9, lossless: false)
+        assertWebPMagic(data)
+    }
+
+    func testWebPEncoderLosslessProducesValidData() throws {
+        let data = try WebPEncoder.encodedData(from: makeTestNSImage(), quality: 0.9, lossless: true)
+        assertWebPMagic(data)
+    }
+
+    func testWebPEncoderLosslessIsBitExact() throws {
+        let source = createTestCGImage(width: 32, height: 32)
+        let image = NSImage(cgImage: source, size: NSSize(width: 32, height: 32))
+        let data = try WebPEncoder.encodedData(from: image, quality: 1.0, lossless: true)
+
+        // Decode via ImageIO (which can READ WebP) and compare pixels through identical sRGB contexts
+        guard let decoded = NSImage(data: data)?.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+            return XCTFail("Could not decode encoded WebP")
+        }
+        func rgba(_ cg: CGImage) -> [UInt8] {
+            var buf = [UInt8](repeating: 0, count: cg.width * cg.height * 4)
+            let ctx = CGContext(data: &buf, width: cg.width, height: cg.height, bitsPerComponent: 8,
+                                bytesPerRow: cg.width * 4, space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue | CGImageByteOrderInfo.order32Big.rawValue)!
+            ctx.draw(cg, in: CGRect(x: 0, y: 0, width: cg.width, height: cg.height))
+            return buf
+        }
+        XCTAssertEqual(rgba(source), rgba(decoded), "Lossless WebP must round-trip bit-exact")
+    }
+
+    func testSaveWebPWritesReadableFile() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("cropbatch_test_\(UUID().uuidString).webp")
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        try ImageCropService.save(makeTestNSImage(), to: url, format: .webP, quality: 0.8)
+
+        let data = try Data(contentsOf: url)
+        assertWebPMagic(data)
+        XCTAssertNotNil(NSImage(contentsOf: url), "ImageIO should be able to read the WebP back")
+    }
+
+    func testEncodeWebPReturnsData() {
+        // Quick Export regression: encode() must not return nil for WebP
+        let data = ImageCropService.encode(makeTestNSImage(), format: .webp, quality: 0.8)
+        XCTAssertNotNil(data)
+        assertWebPMagic(data!)
+    }
 }

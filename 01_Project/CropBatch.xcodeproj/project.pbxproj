@@ -8,10 +8,13 @@
 
 /* Begin PBXBuildFile section */
 		23630F672F150E810067B77B /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 23630F662F150E810067B77B /* Sparkle */; };
+		23630F6A2F150E820067B77B /* SDWebImageWebPCoder in Frameworks */ = {isa = PBXBuildFile; productRef = 23630F692F150E820067B77B /* SDWebImageWebPCoder */; };
+		23630F6D2F150E820067B77B /* libwebp in Frameworks */ = {isa = PBXBuildFile; productRef = 23630F6C2F150E820067B77B /* libwebp */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		A1000001238ABCDE /* CropBatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CropBatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		B2000001238ABCDE /* CropBatchTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CropBatchTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -33,6 +36,11 @@
 			path = CropBatch;
 			sourceTree = "<group>";
 		};
+		B2000002238ABCDE /* CropBatchTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = CropBatchTests;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -41,6 +49,15 @@
 			buildActionMask = 2147483647;
 			files = (
 				23630F672F150E810067B77B /* Sparkle in Frameworks */,
+				23630F6A2F150E820067B77B /* SDWebImageWebPCoder in Frameworks */,
+				23630F6D2F150E820067B77B /* libwebp in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B2000003238ABCDE /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -51,6 +68,7 @@
 			isa = PBXGroup;
 			children = (
 				A1000004238ABCDE /* CropBatch */,
+				B2000002238ABCDE /* CropBatchTests */,
 				A1000007238ABCDE /* Products */,
 			);
 			sourceTree = "<group>";
@@ -59,11 +77,22 @@
 			isa = PBXGroup;
 			children = (
 				A1000001238ABCDE /* CropBatch.app */,
+				B2000001238ABCDE /* CropBatchTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
+
+/* Begin PBXContainerItemProxy section */
+		B2000009238ABCDE /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A100000B238ABCDE /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A1000003238ABCDE;
+			remoteInfo = CropBatch;
+		};
+/* End PBXContainerItemProxy section */
 
 /* Begin PBXNativeTarget section */
 		A1000003238ABCDE /* CropBatch */ = {
@@ -84,10 +113,35 @@
 			name = CropBatch;
 			packageProductDependencies = (
 				23630F662F150E810067B77B /* Sparkle */,
+				23630F692F150E820067B77B /* SDWebImageWebPCoder */,
+				23630F6C2F150E820067B77B /* libwebp */,
 			);
 			productName = CropBatch;
 			productReference = A1000001238ABCDE /* CropBatch.app */;
 			productType = "com.apple.product-type.application";
+		};
+		B2000006238ABCDE /* CropBatchTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B2000007238ABCDE /* Build configuration list for PBXNativeTarget "CropBatchTests" */;
+			buildPhases = (
+				B2000004238ABCDE /* Sources */,
+				B2000003238ABCDE /* Frameworks */,
+				B2000005238ABCDE /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				B2000008238ABCDE /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				B2000002238ABCDE /* CropBatchTests */,
+			);
+			name = CropBatchTests;
+			packageProductDependencies = (
+			);
+			productName = CropBatchTests;
+			productReference = B2000001238ABCDE /* CropBatchTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
 		};
 /* End PBXNativeTarget section */
 
@@ -102,6 +156,10 @@
 					A1000003238ABCDE = {
 						CreatedOnToolsVersion = 16.2;
 					};
+					B2000006238ABCDE = {
+						CreatedOnToolsVersion = 16.2;
+						TestTargetID = A1000003238ABCDE;
+					};
 				};
 			};
 			buildConfigurationList = A100000C238ABCDE /* Build configuration list for PBXProject "CropBatch" */;
@@ -115,6 +173,8 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				23630F652F150E810067B77B /* XCRemoteSwiftPackageReference "Sparkle" */,
+				23630F682F150E820067B77B /* XCRemoteSwiftPackageReference "SDWebImageWebPCoder" */,
+				23630F6B2F150E820067B77B /* XCRemoteSwiftPackageReference "libwebp-Xcode" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = A1000007238ABCDE /* Products */;
@@ -122,12 +182,20 @@
 			projectRoot = "";
 			targets = (
 				A1000003238ABCDE /* CropBatch */,
+				B2000006238ABCDE /* CropBatchTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		A100000A238ABCDE /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B2000005238ABCDE /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -144,7 +212,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		B2000004238ABCDE /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		B2000008238ABCDE /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A1000003238ABCDE /* CropBatch */;
+			targetProxy = B2000009238ABCDE /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		A100000D238ABCDE /* Debug */ = {
@@ -335,6 +418,40 @@
 			};
 			name = Release;
 		};
+		B200000A238ABCDE /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 150;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MARKETING_VERSION = 1.5;
+				PRODUCT_BUNDLE_IDENTIFIER = com.lucesumbrarum.CropBatchTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 6.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/CropBatch.app/Contents/MacOS/CropBatch";
+			};
+			name = Debug;
+		};
+		B200000B238ABCDE /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 150;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MARKETING_VERSION = 1.5;
+				PRODUCT_BUNDLE_IDENTIFIER = com.lucesumbrarum.CropBatchTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 6.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/CropBatch.app/Contents/MacOS/CropBatch";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -343,6 +460,15 @@
 			buildConfigurations = (
 				A100000F238ABCDE /* Debug */,
 				A1000010238ABCDE /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		B2000007238ABCDE /* Build configuration list for PBXNativeTarget "CropBatchTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B200000A238ABCDE /* Debug */,
+				B200000B238ABCDE /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
@@ -367,6 +493,22 @@
 				minimumVersion = 2.8.1;
 			};
 		};
+		23630F682F150E820067B77B /* XCRemoteSwiftPackageReference "SDWebImageWebPCoder" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/SDWebImage/SDWebImageWebPCoder";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.15.0;
+			};
+		};
+		23630F6B2F150E820067B77B /* XCRemoteSwiftPackageReference "libwebp-Xcode" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/SDWebImage/libwebp-Xcode.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.5.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -374,6 +516,16 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 23630F652F150E810067B77B /* XCRemoteSwiftPackageReference "Sparkle" */;
 			productName = Sparkle;
+		};
+		23630F692F150E820067B77B /* SDWebImageWebPCoder */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 23630F682F150E820067B77B /* XCRemoteSwiftPackageReference "SDWebImageWebPCoder" */;
+			productName = SDWebImageWebPCoder;
+		};
+		23630F6C2F150E820067B77B /* libwebp */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 23630F6B2F150E820067B77B /* XCRemoteSwiftPackageReference "libwebp-Xcode" */;
+			productName = libwebp;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

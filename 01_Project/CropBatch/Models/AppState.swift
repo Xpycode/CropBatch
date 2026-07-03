@@ -619,7 +619,8 @@ final class AppState {
                     }
 
                     try ImageCropService.save(tile.image, to: tileURL, format: tile.format,
-                                              quality: capturedExportSettings.quality)
+                                              quality: capturedExportSettings.quality,
+                                              lossless: capturedExportSettings.lossless)
                     results.append((originalIndex, tileURL))
                 }
 

@@ -131,4 +131,28 @@ final class ExportSettingsTests: XCTestCase {
         XCTAssertNotNil(collision)
         XCTAssertEqual(collision, "fixed_name.png")
     }
+
+    // MARK: - Lossless persistence
+
+    func testCodableRoundTripsLossless() throws {
+        var settings = ExportSettings()
+        settings.format = .webp
+        settings.lossless = true
+
+        let encoded = try JSONEncoder().encode(ExportSettingsCodable(from: settings))
+        let decoded = try JSONDecoder().decode(ExportSettingsCodable.self, from: encoded)
+
+        XCTAssertTrue(decoded.toExportSettings().lossless)
+    }
+
+    func testLegacyProfileWithoutLosslessDecodesToFalse() throws {
+        // Simulates a profile saved before the lossless field existed
+        let legacyJSON = """
+        {"format":"WebP","quality":0.9,"suffix":"_cropped","preserveOriginalFormat":false,\
+        "resizeSettings":{"mode":"None","width":1920,"height":1080,"percentage":50,"maintainAspectRatio":true},\
+        "renameSettings":{"mode":"Keep Original","pattern":"{name}_{counter}","startIndex":1,"zeroPadding":2}}
+        """
+        let decoded = try JSONDecoder().decode(ExportSettingsCodable.self, from: Data(legacyJSON.utf8))
+        XCTAssertFalse(decoded.toExportSettings().lossless)
+    }
 }

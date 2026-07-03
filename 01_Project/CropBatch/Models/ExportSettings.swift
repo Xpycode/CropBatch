@@ -125,7 +125,8 @@ struct GridSettings: Equatable, Codable {
 
 struct ExportSettings: Equatable {
     var format: ExportFormat = .png
-    var quality: Double = 0.9  // 0.0 to 1.0, only for JPEG/HEIC
+    var quality: Double = 0.9  // 0.0 to 1.0, only for JPEG/HEIC/WebP
+    var lossless: Bool = false  // WebP only — quality slider becomes encoding effort
     var suffix: String = "_cropped"
     var preserveOriginalFormat: Bool = false
     var outputDirectory: OutputDirectory = .sameAsSource
@@ -429,6 +430,7 @@ struct UserExportProfile: Identifiable, Codable, Equatable {
 struct ExportSettingsCodable: Codable, Equatable {
     var format: ExportFormat
     var quality: Double
+    var lossless: Bool?  // Optional for backward compatibility with existing profiles
     var suffix: String
     var preserveOriginalFormat: Bool
     var resizeSettings: ResizeSettings
@@ -439,6 +441,8 @@ struct ExportSettingsCodable: Codable, Equatable {
     init(from settings: ExportSettings) {
         self.format = settings.format
         self.quality = settings.quality
+        // Only persist when on, mirroring the watermark/grid pattern
+        self.lossless = settings.lossless ? true : nil
         self.suffix = settings.suffix
         self.preserveOriginalFormat = settings.preserveOriginalFormat
         self.resizeSettings = settings.resizeSettings
@@ -458,6 +462,7 @@ struct ExportSettingsCodable: Codable, Equatable {
             resizeSettings: resizeSettings,
             renameSettings: renameSettings
         )
+        settings.lossless = lossless ?? false
         // Restore watermark settings if present
         if let watermark = watermarkSettings {
             settings.watermarkSettings = watermark
