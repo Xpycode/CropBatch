@@ -280,16 +280,17 @@ struct WatermarkSettings: Equatable {
         !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    /// Loads and returns the watermark image (uses cache, then reconstructs from data)
+    /// Loads and returns the watermark image.
+    /// Decodes a fresh instance from imageData every call: this is used from
+    /// batchCrop's concurrent TaskGroup, and NSImage is not thread-safe — every
+    /// settings copy shares the same cachedImage reference, so returning it here
+    /// would let N tasks call into one NSImage at once. cachedImage remains
+    /// main-thread-only for view previews.
     var loadedImage: NSImage? {
-        if let cached = cachedImage {
-            return cached
-        }
-        // Reconstruct from stored image data (security-scoped URL not accessible)
         if let data = imageData {
             return NSImage(data: data)
         }
-        return nil
+        return cachedImage
     }
 
     /// Calculates the watermark size for a given target image size

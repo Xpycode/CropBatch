@@ -4,7 +4,6 @@ import SwiftUI
 
 struct CropControlsView: View {
     @Environment(AppState.self) private var appState
-    @State private var savedFormat: ExportFormat?
 
     var body: some View {
         @Bindable var state = appState
@@ -46,13 +45,13 @@ struct CropControlsView: View {
                 .controlSize(.small)
                 .onChange(of: appState.cropSettings.cornerRadiusEnabled) { _, isEnabled in
                     if isEnabled {
-                        savedFormat = appState.exportSettings.format
+                        appState.formatBeforeCornerRadius = appState.exportSettings.format
                         appState.exportSettings.format = .png
                     } else {
-                        if let saved = savedFormat {
+                        if let saved = appState.formatBeforeCornerRadius {
                             appState.exportSettings.format = saved
                         }
-                        savedFormat = nil
+                        appState.formatBeforeCornerRadius = nil
                     }
                 }
         }
