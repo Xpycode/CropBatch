@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import UserNotifications
 import os
 
 @main
@@ -16,6 +17,17 @@ struct CropBatchApp: App {
             Task {
                 let exitCode = await CLIHandler.run()
                 exit(exitCode)
+            }
+        } else {
+            // Export-complete and folder-watcher notifications are silently
+            // dropped while authorization is .notDetermined — request up front.
+            Task {
+                do {
+                    _ = try await UNUserNotificationCenter.current()
+                        .requestAuthorization(options: [.alert, .sound])
+                } catch {
+                    CropBatchLogger.ui.error("Notification authorization failed: \(error.localizedDescription)")
+                }
             }
         }
     }

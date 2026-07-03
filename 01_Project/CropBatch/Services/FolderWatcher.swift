@@ -145,7 +145,7 @@ final class FolderWatcher {
                     ? self.formatFromExtension(url.pathExtension)
                     : exportSettings.format.utType
 
-                try ImageCropService.save(cropped, to: outputURL, format: format, quality: exportSettings.quality)
+                try ImageCropService.save(cropped, to: outputURL, format: format, quality: exportSettings.quality, lossless: exportSettings.lossless)
 
                 self.processedCount += 1
                 self.lastProcessedFile = url.lastPathComponent
@@ -166,6 +166,7 @@ final class FolderWatcher {
         case "png": return .png
         case "heic": return .heic
         case "tiff", "tif": return .tiff
+        case "webp": return .webP
         default: return .png
         }
     }

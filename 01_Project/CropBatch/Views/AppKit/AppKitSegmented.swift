@@ -20,6 +20,8 @@ struct AppKitSegmented<T: Hashable>: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: NSSegmentedControl, context: Context) {
+        // Refresh the coordinator's copy — a stale parent would write through an old binding
+        context.coordinator.parent = self
         if let idx = items.firstIndex(where: { $0.value == selection }) {
             nsView.selectedSegment = idx
         }
@@ -28,9 +30,10 @@ struct AppKitSegmented<T: Hashable>: NSViewRepresentable {
     func makeCoordinator() -> Coordinator { Coordinator(parent: self) }
 
     class Coordinator: NSObject {
-        let parent: AppKitSegmented
+        var parent: AppKitSegmented
         init(parent: AppKitSegmented) { self.parent = parent }
-        @objc func changed(_ sender: NSSegmentedControl) {
+        // Target/action always fires on the main thread
+        @MainActor @objc func changed(_ sender: NSSegmentedControl) {
             let idx = sender.selectedSegment
             if idx >= 0 && idx < parent.items.count {
                 parent.selection = parent.items[idx].value

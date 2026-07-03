@@ -472,7 +472,7 @@ struct CroppedImageDocument: FileDocument {
 
     func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
         let cropped = try ImageCropService.crop(image, with: cropSettings)
-        guard let data = ImageCropService.encode(cropped, format: exportSettings.format, quality: exportSettings.quality) else {
+        guard let data = ImageCropService.encode(cropped, format: exportSettings.format, quality: exportSettings.quality, lossless: exportSettings.lossless) else {
             throw NSError(domain: "CropBatch", code: 1, userInfo: [NSLocalizedDescriptionKey: "Failed to encode image"])
         }
         return FileWrapper(regularFileWithContents: data)

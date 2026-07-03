@@ -734,8 +734,14 @@ struct ImageCropService {
     ///   - image: The image to save
     ///   - url: Destination file URL
     ///   - format: Image format (png, jpeg, etc.)
-    ///   - quality: Compression quality (0.0 to 1.0) for JPEG/HEIC
-    static func save(_ image: NSImage, to url: URL, format: UTType = .png, quality: Double = 0.9) throws {
+    ///   - quality: Compression quality (0.0 to 1.0) for JPEG/HEIC/WebP
+    ///   - lossless: WebP only — lossless mode (quality becomes encoding effort)
+    static func save(_ image: NSImage, to url: URL, format: UTType = .png, quality: Double = 0.9, lossless: Bool = false) throws {
+        if format == .webP {
+            // ImageIO cannot encode WebP on macOS — route through libwebp
+            try WebPEncoder.encode(image, to: url, quality: quality, lossless: lossless)
+            return
+        }
         guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
             throw ImageCropError.failedToGetCGImage
         }
@@ -768,8 +774,9 @@ struct ImageCropService {
     ///   - image: The image to encode
     ///   - format: Export format
     ///   - quality: Compression quality (0.0 to 1.0) for lossy formats
+    ///   - lossless: WebP only — lossless mode (quality becomes encoding effort)
     /// - Returns: Encoded image data, or nil if encoding fails
-    static func encode(_ image: NSImage, format: ExportFormat, quality: Double = 0.9) -> Data? {
+    static func encode(_ image: NSImage, format: ExportFormat, quality: Double = 0.9, lossless: Bool = false) -> Data? {
         guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
             return nil
         }
@@ -781,13 +788,15 @@ struct ImageCropService {
             return bitmapRep.representation(using: .png, properties: [:])
         case .jpeg:
             return bitmapRep.representation(using: .jpeg, properties: [.compressionFactor: quality])
-        case .heic, .webp:
-            // HEIC and WebP require CGImageDestination
-            let utType = format == .heic ? UTType.heic : UTType.webP
+        case .webp:
+            // ImageIO cannot encode WebP on macOS — route through libwebp
+            return try? WebPEncoder.encodedData(from: image, quality: quality, lossless: lossless)
+        case .heic:
+            // HEIC requires CGImageDestination
             let data = NSMutableData()
             guard let destination = CGImageDestinationCreateWithData(
                 data as CFMutableData,
-                utType.identifier as CFString,
+                UTType.heic.identifier as CFString,
                 1,
                 nil
             ) else { return nil }
@@ -1016,7 +1025,7 @@ struct ImageCropService {
                     .appendingPathExtension(ext)
             }
 
-            try save(tile.image, to: tileOutputURL, format: tile.format, quality: exportSettings.quality)
+            try save(tile.image, to: tileOutputURL, format: tile.format, quality: exportSettings.quality, lossless: exportSettings.lossless)
             outputURLs.append(tileOutputURL)
         }
 

@@ -10,7 +10,19 @@ struct QualityResizeView: View {
 
         // Quality slider (for JPEG/HEIC/WebP)
         if appState.exportSettings.format.supportsCompression {
-            LabeledContent("Quality") {
+            if appState.exportSettings.format == .webp {
+                LabeledContent("Lossless") {
+                    Toggle("", isOn: Binding(
+                        get: { appState.exportSettings.lossless },
+                        set: { appState.exportSettings.lossless = $0; appState.markCustomSettings() }
+                    ))
+                    .toggleStyle(.switch)
+                    .controlSize(.small)
+                    .labelsHidden()
+                }
+                .help("Lossless WebP — bit-exact pixels, usually smaller than PNG. The Quality slider becomes encoding effort: higher = smaller file, slower encode.")
+            }
+            LabeledContent(isEffortMode ? "Effort" : "Quality") {
                 HStack(spacing: 8) {
                     Slider(value: Binding(
                         get: { appState.exportSettings.quality },
@@ -87,6 +99,11 @@ struct QualityResizeView: View {
         if appState.exportSettings.resizeSettings.mode != .none {
             resizeControls
         }
+    }
+
+    /// WebP lossless reuses the quality slider as encoding effort
+    private var isEffortMode: Bool {
+        appState.exportSettings.format == .webp && appState.exportSettings.lossless
     }
 
     private func shortLabel(for mode: ResizeMode) -> String {

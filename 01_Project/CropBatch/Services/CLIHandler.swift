@@ -12,6 +12,7 @@ struct CLIHandler {
         var cropRight: Int = 0
         var format: ExportFormat = .png
         var quality: Double = 0.9
+        var lossless: Bool = false
         var suffix: String = "_cropped"
         var gridRows: Int = 1
         var gridCols: Int = 1
@@ -89,6 +90,7 @@ struct CLIHandler {
                     case "jpg", "jpeg": options.format = .jpeg
                     case "heic": options.format = .heic
                     case "tiff": options.format = .tiff
+                    case "webp": options.format = .webp
                     default: break
                     }
                 }
@@ -99,6 +101,8 @@ struct CLIHandler {
                         options.quality = min(1.0, max(0.1, q / 100.0))
                     }
                 }
+            case "--lossless":
+                options.lossless = true
             case "-s", "--suffix":
                 if i + 1 < args.count {
                     i += 1
@@ -151,8 +155,9 @@ struct CLIHandler {
             -b, --bottom <PIXELS>   Crop from bottom edge
             -l, --left <PIXELS>     Crop from left edge
             -r, --right <PIXELS>    Crop from right edge
-            -f, --format <FORMAT>   Output format: png, jpg, heic, tiff (default: png)
-            -q, --quality <1-100>   JPEG/HEIC quality percentage (default: 90)
+            -f, --format <FORMAT>   Output format: png, jpg, heic, tiff, webp (default: png)
+            -q, --quality <1-100>   JPEG/HEIC/WebP quality percentage (default: 90)
+            --lossless              WebP only: lossless mode (quality becomes encoding effort)
             -s, --suffix <SUFFIX>   Filename suffix (default: _cropped)
             --grid-rows <N>         Split into N rows (1-10, default: 1 = disabled)
             --grid-cols <N>         Split into N columns (1-10, default: 1 = disabled)
@@ -220,6 +225,7 @@ struct CLIHandler {
         var exportSettings = ExportSettings(
             format: options.format,
             quality: options.quality,
+            lossless: options.lossless,
             suffix: options.suffix
         )
 

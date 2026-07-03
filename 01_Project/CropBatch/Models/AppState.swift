@@ -54,6 +54,9 @@ final class AppState {
     // MARK: - Export Settings (kept here as it's tightly coupled with export flow)
 
     var exportSettings = ExportSettings()
+    /// Format in effect before corner radius force-switched export to PNG.
+    /// Lives here (not view @State) so it survives sidebar tab switches.
+    var formatBeforeCornerRadius: ExportFormat?
     var selectedPresetID: String? = "png_lossless"
     var showOutputDirectoryPicker = false
     var isProcessing = false
@@ -619,7 +622,8 @@ final class AppState {
                     }
 
                     try ImageCropService.save(tile.image, to: tileURL, format: tile.format,
-                                              quality: capturedExportSettings.quality)
+                                              quality: capturedExportSettings.quality,
+                                              lossless: capturedExportSettings.lossless)
                     results.append((originalIndex, tileURL))
                 }
 

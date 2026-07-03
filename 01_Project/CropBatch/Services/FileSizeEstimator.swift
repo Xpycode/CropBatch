@@ -97,7 +97,8 @@ struct FileSizeEstimator {
         let formatFactor = formatConversionFactor(
             from: image.fileExtension,
             to: outputFormat,
-            quality: exportSettings.quality
+            quality: exportSettings.quality,
+            lossless: exportSettings.lossless
         )
 
         // 5. Estimate final size
@@ -111,7 +112,8 @@ struct FileSizeEstimator {
     private static func formatConversionFactor(
         from sourceExt: String,
         to targetFormat: ExportFormat,
-        quality: Double
+        quality: Double,
+        lossless: Bool = false
     ) -> Double {
         let sourceIsLossy = ["jpg", "jpeg", "heic", "webp"].contains(sourceExt)
         let sourceIsPNG = sourceExt == "png"
@@ -154,6 +156,14 @@ struct FileSizeEstimator {
             }
 
         case .webp:
+            if lossless {
+                // Lossless WebP ≈ 70-90% of PNG size; quality acts as effort, not size
+                if sourceIsLossy {
+                    return 2.8  // like PNG conversion, slightly smaller
+                } else {
+                    return 0.8
+                }
+            }
             // WebP is similar to HEIC in efficiency
             let qualityFactor = 0.25 + (quality * 0.75)
 
