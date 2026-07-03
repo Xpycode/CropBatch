@@ -10,8 +10,8 @@
 ## Current Position
 - **Phase:** development
 - **Focus:** Two threads — (1) in-app Help via `HelpMenu` package (content + screenshots done, integration pending); (2) REAL WebP export (plan ready, awaiting Xcode SPM add)
-- **Status:** v1.5 features done. Repo reconnected to GitHub. Help content + 6 lean screenshots ready; WebP export found broken (ships but fails), fix plan written for v1.6.
-- **Last updated:** 2026-06-02
+- **Status:** v1.5 features done. Repo re-bootstrapped on this Mac (was Syncthing-stripped); docs on `main`, in-app Help WIP isolated on pushed `feature/in-app-help`. WebP export found broken (ships but fails), fix plan written for v1.6.
+- **Last updated:** 2026-07-03
 
 ## Progress
 ```
@@ -48,6 +48,7 @@
 - WebP export is **broken** — `.webp` case + 2 presets + sidebar button ship, but all writes route through ImageIO/`CGImageDestination`, which cannot encode WebP on macOS (verified: writable = false on 26.5). Plan written to fix via SDWebImageWebPCoder.
 - ~~CropBatch is **not under git**~~ — RESOLVED 2026-05-31: reconnected to `github.com/Xpycode/CropBatch`, history + tags v1.0–v1.4 restored, post-v1.4 work committed & pushed.
 - In-app Help: **MarkdownUI local-image resolution unverified** — `![](file.jpg)` won't resolve without an `imageProvider`/`file://` URL in the `HelpMenu` renderer (owned by appHELP). Confirm before shipping or help shows broken-image placeholders.
+- In-app Help: **pbxproj package linkage is a broken hand-edit** on `feature/in-app-help` (placeholder UUIDs, fragile `../../../appHELP` relativePath). Redo via Xcode *Add Package Dependencies* before trusting it — do not merge to main as-is.
 
 ## Deferred to v2.0
 - (none currently)

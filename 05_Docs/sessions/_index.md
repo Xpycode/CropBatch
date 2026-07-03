@@ -10,6 +10,7 @@ CropBatch — macOS batch image cropping app
 
 | Date | Focus | Outcome | Log |
 |------|-------|---------|-----|
+| 2026-07-03a | Reconcile git — Syncthing-stripped repo (no `.git`) | Bootstrapped repo, recovered history + tags v1.0–v1.4; on-disk was strictly ahead of origin. Split drift: docs → main (`ff0b65b`), whole in-app Help WIP → `feature/in-app-help` (`53a4890`, known-broken pbxproj) — both pushed | [2026-07-03-a](2026-07-03-a.md) |
 | 2026-06-02a | In-app Help screenshots (lean) + wire into markdown | 6 JPEGs @632KB from existing README shots, refs added; MarkdownUI image-provider wiring still to verify | [2026-06-02-a](2026-06-02-a.md) |
 | 2026-05-31a | Reconnect to git/GitHub, clean up duplicate docs | Local folder was not a repo; reconnected to history+tags, post-v1.4 work committed & pushed, build verified | [2026-05-31-a](2026-05-31-a.md) |
 | 2026-05-29a | REAL WebP export plan (adapt SFV approach) | WebP found broken-not-missing; 3-agent recon; CB-specific plan written | [2026-05-29-a](2026-05-29-a.md) |
