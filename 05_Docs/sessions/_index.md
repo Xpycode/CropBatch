@@ -10,6 +10,7 @@ CropBatch — macOS batch image cropping app
 
 | Date | Focus | Outcome | Log |
 |------|-------|---------|-----|
+| 2026-07-03b | Finish REAL WebP export (v1.6 Waves A–D) + code review round | WebP works: lossy via SDWebImageWebPCoder, lossless bit-exact via direct libwebp (coder's lossless is YUV-degraded, #116). pbxproj SPM + missing test target hand-restored, 31 tests green. Review fixes: watermark race, notification auth, corner-radius state, 10 dead views deleted. Undo/redo dim when disabled. Merged+pushed; Wave E (ship) remains | [2026-07-03-b](2026-07-03-b.md) |
 | 2026-07-03a | Reconcile git — Syncthing-stripped repo (no `.git`) | Bootstrapped repo, recovered history + tags v1.0–v1.4; on-disk was strictly ahead of origin. Split drift: docs → main (`ff0b65b`), whole in-app Help WIP → `feature/in-app-help` (`53a4890`, known-broken pbxproj) — both pushed | [2026-07-03-a](2026-07-03-a.md) |
 | 2026-06-02a | In-app Help screenshots (lean) + wire into markdown | 6 JPEGs @632KB from existing README shots, refs added; MarkdownUI image-provider wiring still to verify | [2026-06-02-a](2026-06-02-a.md) |
 | 2026-05-31a | Reconnect to git/GitHub, clean up duplicate docs | Local folder was not a repo; reconnected to history+tags, post-v1.4 work committed & pushed, build verified | [2026-05-31-a](2026-05-31-a.md) |
