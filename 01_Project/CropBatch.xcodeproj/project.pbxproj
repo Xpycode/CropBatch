@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		23630F672F150E810067B77B /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 23630F662F150E810067B77B /* Sparkle */; };
+		FEED0003CAFE0003BEEF0003 /* HelpMenu in Frameworks */ = {isa = PBXBuildFile; productRef = FEED0002CAFE0002BEEF0002 /* HelpMenu */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -41,6 +42,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				23630F672F150E810067B77B /* Sparkle in Frameworks */,
+				FEED0003CAFE0003BEEF0003 /* HelpMenu in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -84,6 +86,7 @@
 			name = CropBatch;
 			packageProductDependencies = (
 				23630F662F150E810067B77B /* Sparkle */,
+				FEED0002CAFE0002BEEF0002 /* HelpMenu */,
 			);
 			productName = CropBatch;
 			productReference = A1000001238ABCDE /* CropBatch.app */;
@@ -115,6 +118,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				23630F652F150E810067B77B /* XCRemoteSwiftPackageReference "Sparkle" */,
+				FEED0001CAFE0001BEEF0001 /* XCLocalSwiftPackageReference "appHELP/01_Project" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = A1000007238ABCDE /* Products */;
@@ -358,6 +362,13 @@
 		};
 /* End XCConfigurationList section */
 
+/* Begin XCLocalSwiftPackageReference section */
+		FEED0001CAFE0001BEEF0001 /* XCLocalSwiftPackageReference "appHELP/01_Project" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = "../../../appHELP/01_Project";
+		};
+/* End XCLocalSwiftPackageReference section */
+
 /* Begin XCRemoteSwiftPackageReference section */
 		23630F652F150E810067B77B /* XCRemoteSwiftPackageReference "Sparkle" */ = {
 			isa = XCRemoteSwiftPackageReference;
@@ -374,6 +385,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 23630F652F150E810067B77B /* XCRemoteSwiftPackageReference "Sparkle" */;
 			productName = Sparkle;
+		};
+		FEED0002CAFE0002BEEF0002 /* HelpMenu */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = FEED0001CAFE0001BEEF0001 /* XCLocalSwiftPackageReference "appHELP/01_Project" */;
+			productName = HelpMenu;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

@@ -1,0 +1,13 @@
+{
+  "windowTitle": "CropBatch Help",
+  "topics": [
+    { "id": "getting-started", "title": "Getting Started",  "markdownFile": "getting-started.md", "group": "Getting Started" },
+    { "id": "cropping",        "title": "Cropping",         "markdownFile": "cropping.md",        "group": "Getting Started" },
+    { "id": "snap",            "title": "Snap-to-Edge",     "markdownFile": "snap.md",            "group": "Getting Started" },
+    { "id": "grid-split",      "title": "Grid Split",       "markdownFile": "grid-split.md",      "group": "Adjustments" },
+    { "id": "effects",         "title": "Corner Radius, Blur & Watermark", "markdownFile": "effects.md", "group": "Adjustments" },
+    { "id": "exporting",       "title": "Exporting & Formats", "markdownFile": "exporting.md",    "group": "Output" },
+    { "id": "shortcuts",       "title": "Keyboard Shortcuts", "markdownFile": "shortcuts.md",     "group": "Reference" },
+    { "id": "faq",             "title": "FAQ",              "markdownFile": "faq.md",             "group": "Reference" }
+  ]
+}

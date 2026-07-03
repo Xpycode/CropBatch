@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import os
+import HelpMenu
 
 @main
 struct CropBatchApp: App {
@@ -275,6 +276,9 @@ struct CropBatchApp: App {
                 .keyboardShortcut(.downArrow, modifiers: [.command, .option, .shift])
                 .disabled(appState.cropSettings.cropBottom == 0)
             }
+
+            // MARK: - Help Menu (HelpMenu package)
+            HelpMenuCommands(content: CropBatchHelp.content, appName: "CropBatch")
         }
     }
 
