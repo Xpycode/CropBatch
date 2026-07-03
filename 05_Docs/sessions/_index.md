@@ -10,6 +10,8 @@ CropBatch — macOS batch image cropping app
 
 | Date | Focus | Outcome | Log |
 |------|-------|---------|-----|
+| 2026-06-02a | In-app Help screenshots (lean) + wire into markdown | 6 JPEGs @632KB from existing README shots, refs added; MarkdownUI image-provider wiring still to verify | [2026-06-02-a](2026-06-02-a.md) |
+| 2026-05-31a | Reconnect to git/GitHub, clean up duplicate docs | Local folder was not a repo; reconnected to history+tags, post-v1.4 work committed & pushed, build verified | [2026-05-31-a](2026-05-31-a.md) |
 | 2026-05-29a | REAL WebP export plan (adapt SFV approach) | WebP found broken-not-missing; 3-agent recon; CB-specific plan written | [2026-05-29-a](2026-05-29-a.md) |
 | 2026-04-05c | Flat toolbar buttons — SUCCESS | UIDesignRequiresCompatibility in Info.plist was the missing key. Cookbook updated. | [2026-04-05-c](2026-04-05-c.md) |
 | 2026-04-05b | Flat toolbar buttons migration (5 approaches) | All failed — missing Info.plist key (discovered in 2026-04-05-c) | [2026-04-05-b](2026-04-05-b.md) |

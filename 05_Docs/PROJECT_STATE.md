@@ -9,9 +9,9 @@
 
 ## Current Position
 - **Phase:** development
-- **Focus:** REAL WebP export — plan ready, awaiting Xcode SPM package add
-- **Status:** v1.5 features done. WebP export found broken (ships but fails); fix plan written for v1.6.
-- **Last updated:** 2026-05-29
+- **Focus:** Two threads — (1) in-app Help via `HelpMenu` package (content + screenshots done, integration pending); (2) REAL WebP export (plan ready, awaiting Xcode SPM add)
+- **Status:** v1.5 features done. Repo reconnected to GitHub. Help content + 6 lean screenshots ready; WebP export found broken (ships but fails), fix plan written for v1.6.
+- **Last updated:** 2026-06-02
 
 ## Progress
 ```
@@ -46,7 +46,8 @@
 
 ## Blockers
 - WebP export is **broken** — `.webp` case + 2 presets + sidebar button ship, but all writes route through ImageIO/`CGImageDestination`, which cannot encode WebP on macOS (verified: writable = false on 26.5). Plan written to fix via SDWebImageWebPCoder.
-- CropBatch is **not under git** — `git init` needed before the WebP change ships.
+- ~~CropBatch is **not under git**~~ — RESOLVED 2026-05-31: reconnected to `github.com/Xpycode/CropBatch`, history + tags v1.0–v1.4 restored, post-v1.4 work committed & pushed.
+- In-app Help: **MarkdownUI local-image resolution unverified** — `![](file.jpg)` won't resolve without an `imageProvider`/`file://` URL in the `HelpMenu` renderer (owned by appHELP). Confirm before shipping or help shows broken-image placeholders.
 
 ## Deferred to v2.0
 - (none currently)
@@ -68,7 +69,12 @@
 - Wave B: `WebPEncoder.swift` + `lossless` model plumbing; branch `save()` + `encode()`; forward flag from AppState:621 / FolderWatcher:148 / processSingleImage:1019; CLI `webp` case + `--lossless`
 - Wave C: Lossless toggle + Quality↔Effort label flip (both UIs); FileSizeEstimator lossless branch
 - Wave D: smoke-test all 6 export flows + profile persistence round-trip
-- Wave E: `git init`, bump 1.5→1.6, build DMG, notarize, update appcast
+- Wave E: ~~`git init`~~ (done), bump 1.5→1.6, build DMG, notarize, update appcast
+
+### In-app Help (via `HelpMenu` package — appHELP project)
+- Content + 6 lean screenshots done (`01_Project/CropBatch/Help/`, 632KB JPEGs, refs wired). Still **untracked** → commit on `feature/in-app-help`
+- Verify/add MarkdownUI bundled-image provider so `![](file.jpg)` renders (see Blockers); build + open Help window to confirm
+- Wire the `HelpMenu` Swift package into the CropBatch target (the earlier pbxproj edit was broken/discarded) so the Help menu actually opens in-app
 
 ### Carryover
 - Test all v1.5 features (blur global/override, sidebar tabs, snap sensitivity, undo/redo, flat toolbar)
