@@ -17,32 +17,17 @@
         -->
 
         <!-- Latest release first -->
-        <item>
-            <title>Version 1.6</title>
-            <description><![CDATA[
-                <h2>What's New in 1.6</h2>
-                <ul>
-                    <li>Real WebP export — both lossy and true bit-exact lossless</li>
-                    <li>Corner radius now exports as PNG <em>or</em> WebP (both keep transparency)</li>
-                    <li>Unified crop &amp; blur canvas with live blur / pixelate preview</li>
-                    <li>Redesigned sidebar — Crop / Effects / Export tabs</li>
-                    <li>Undo / Redo from the toolbar</li>
-                    <li>Global blur regions — apply to all images, override per image</li>
-                    <li>Folder Watcher — auto-process images dropped into a watched folder</li>
-                    <li>Snap-to-edge sensitivity control</li>
-                </ul>
-            ]]></description>
-            <pubDate>Fri, 03 Jul 2026 12:00:00 +0000</pubDate>
-            <enclosure
-                url="https://github.com/Xpycode/CropBatch/releases/download/v1.6/CropBatch-1.6.dmg"
-                sparkle:version="160"
-                sparkle:shortVersionString="1.6"
-                length="11409899"
-                type="application/octet-stream"
-                sparkle:edSignature="g1/8Vl/GEioKlWQYgfYA1bV0c5LZd/Ax37CqeSCBfFiPpFGBEo5ajHOuYVEgecU6ycTU79jrlo6gGz9hnn5ZBw=="
-            />
-            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
-        </item>
+
+        <!--
+        v1.6 ENTRY PULLED 2026-07-14. The v1.6 DMG's appcast signature (g1/8Vl…) was
+        produced with the WRONG Sparkle key (Group B, eH6jo…) on the M1 Max, but installed
+        CropBatch trusts Group A (o388Mk7…). Sparkle rejected every 1.6 update as "improperly
+        signed", so v1.4 users got an error on each update check. The correct Group A private
+        key is currently missing from both Macs (see WORKING_NOTES.md / PROJECT_STATE Blockers).
+        DO NOT re-add a v1.6 <item> until the DMG is re-signed with the Group A key (verify
+        `generate_keys -p` prints o388Mk7QoQjHQ7PBDGrTQ13HkqvO1nyzkfcnmfVumUQ=), or the app
+        is migrated to a new key. The v1.6 DMG stays downloadable by hand from the GitHub release.
+        -->
 
         <item>
             <title>Version 1.4</title>
