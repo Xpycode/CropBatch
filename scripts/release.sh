@@ -33,6 +33,11 @@ SCHEME="CropBatch"
 TEAM_ID="FDMSRXXN73"
 NOTARY_PROFILE="${NOTARY_PROFILE:-DiskVerdict}"   # account-wide key; reused across apps
 SIGN_IDENTITY="${SIGN_IDENTITY:-}"                # auto-detected below
+SPARKLE_ACCOUNT="${SPARKLE_ACCOUNT:-}"            # Keychain account holding THIS app's Sparkle key.
+                                                  # Empty = Sparkle's default 'ed25519' slot. Set it
+                                                  # per-app (e.g. SPARKLE_ACCOUNT=cropbatch) so apps
+                                                  # stop clobbering one shared slot — the bug that
+                                                  # lost the old key. See 05_Docs/sparkle-signing.md.
 
 # ── Paths (repo-root relative) ──────────────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -58,6 +63,18 @@ b()   { printf '\033[1;36m▸ %s\033[0m\n' "$*"; }
 ok()  { printf '\033[1;32m✓ %s\033[0m\n' "$*"; }
 die() { printf '\033[1;31m✗ %s\033[0m\n' "$*" >&2; exit 1; }
 
+# Run a Sparkle tool (generate_keys / sign_update), transparently adding
+# --account when SPARKLE_ACCOUNT is set. A function, not an args array, so the
+# empty-account case needs no array expansion (safe under `set -u` on bash 3.2).
+sparkle_tool() {
+  local tool="$1"; shift
+  if [[ -n "$SPARKLE_ACCOUNT" ]]; then
+    "$tool" --account "$SPARKLE_ACCOUNT" "$@"
+  else
+    "$tool" "$@"
+  fi
+}
+
 # ── Preflight ───────────────────────────────────────────────────────────────
 b "Preflight checks"
 command -v xcodebuild >/dev/null || die "xcodebuild not found (install Xcode)"
@@ -77,6 +94,31 @@ if [[ "$SKIP_NOTARIZE" -eq 0 ]]; then
     || die "notarytool profile '$NOTARY_PROFILE' not found (doc 61, setup step 2, or set NOTARY_PROFILE)."
   ok "notarytool profile: $NOTARY_PROFILE"
 fi
+
+# ── Sparkle signing-key guard (fail BEFORE the expensive build) ──────────────
+# Root cause of the 2026 CropBatch update outage: the DMG was Sparkle-signed on a
+# Mac whose Keychain held a DIFFERENT app's key, nothing checked it, and the bad
+# signature shipped — every installed user's auto-update was rejected as
+# "improperly signed". This guard aborts up front unless the Keychain's Sparkle
+# key matches the SUPublicEDKey embedded in the app being built.
+INFO_PLIST="$PROJECT_DIR/$APP_NAME/Info.plist"
+EXPECTED_EDKEY="$(/usr/libexec/PlistBuddy -c 'Print :SUPublicEDKey' "$INFO_PLIST" 2>/dev/null || true)"
+[[ -n "$EXPECTED_EDKEY" ]] || die "No SUPublicEDKey in $INFO_PLIST — can't verify the signing key."
+
+SPARKLE_BIN="$(find ~/Library/Developer/Xcode/DerivedData -type d -path '*artifacts/sparkle/Sparkle/bin' 2>/dev/null | head -1)"
+[[ -n "$SPARKLE_BIN" ]] || SPARKLE_BIN="$(find ~/ProgrammingProjects -type d -path '*artifacts/sparkle/Sparkle/bin' 2>/dev/null | head -1)"
+[[ -n "$SPARKLE_BIN" ]] || die "Sparkle tools not found — build the app once so SPM resolves Sparkle, then retry."
+GENERATE_KEYS="$SPARKLE_BIN/generate_keys"
+SIGN_UPDATE="$SPARKLE_BIN/sign_update"
+
+ACTUAL_EDKEY="$(sparkle_tool "$GENERATE_KEYS" -p 2>/dev/null || true)"
+# generate_keys prints "ERROR: No existing signing key found!" to stdout when the
+# account is empty — keep the value only if it looks like an Ed25519 public key
+# (32 bytes → 44-char base64), otherwise treat the key as absent.
+[[ "$ACTUAL_EDKEY" =~ ^[A-Za-z0-9+/]{43}=$ ]] || ACTUAL_EDKEY=""
+[[ -n "$ACTUAL_EDKEY" ]] || die "No Sparkle private key in the Keychain${SPARKLE_ACCOUNT:+ (account '$SPARKLE_ACCOUNT')}. The app trusts $EXPECTED_EDKEY — import it (generate_keys -f <file>) or set SPARKLE_ACCOUNT. See 05_Docs/sparkle-signing.md."
+[[ "$ACTUAL_EDKEY" == "$EXPECTED_EDKEY" ]] || die "Sparkle key MISMATCH — refusing to build. Keychain has $ACTUAL_EDKEY but the app embeds $EXPECTED_EDKEY; signing with it would ship an update every installed user rejects. Fix the key (or set SPARKLE_ACCOUNT) first. See 05_Docs/sparkle-signing.md."
+ok "Sparkle key matches embedded SUPublicEDKey (${EXPECTED_EDKEY:0:12}…)"
 
 # Version from the pbxproj MARKETING_VERSION unless overridden on the CLI.
 if [[ -z "$VERSION" ]]; then
@@ -180,18 +222,21 @@ spctl -a -vvv -t open --context context:primary-signature "$DMG_PATH" 2>&1 | hea
 ok "Gatekeeper: accepted / Notarized Developer ID"
 
 # ── Sparkle EdDSA signature (paste into appcast.xml) ─────────────────────────
+# SIGN_UPDATE was resolved and its key verified against the app in preflight.
 b "Sparkle-signing the DMG"
-SIGN_UPDATE="$(find ~/Library/Developer/Xcode/DerivedData -name sign_update -type f 2>/dev/null \
-  | grep -iE 'artifacts/sparkle/Sparkle/bin/sign_update$' | head -1)"
-[[ -z "$SIGN_UPDATE" ]] && SIGN_UPDATE="$(find ~/ProgrammingProjects -name sign_update -type f 2>/dev/null \
-  | grep -iE 'artifacts/sparkle/Sparkle/bin/sign_update$' | head -1)"
-if [[ -n "$SIGN_UPDATE" ]]; then
-  echo "  (using $SIGN_UPDATE)"
-  "$SIGN_UPDATE" "$DMG_PATH"
-  ok "EdDSA signature above → paste sparkle:edSignature + length into appcast.xml"
+echo "  (using $SIGN_UPDATE${SPARKLE_ACCOUNT:+, account '$SPARKLE_ACCOUNT'})"
+sparkle_tool "$SIGN_UPDATE" "$DMG_PATH"
+
+# Belt-and-suspenders to the preflight guard: prove the signature we just wrote
+# actually verifies against the signing key, so a broken sign never reaches the
+# appcast. (Ed25519 is deterministic, so this -p signature equals the one above.)
+EDSIG="$(sparkle_tool "$SIGN_UPDATE" -p "$DMG_PATH")"
+if sparkle_tool "$SIGN_UPDATE" --verify "$DMG_PATH" "$EDSIG" >/dev/null 2>&1; then
+  ok "Signature verified against the signing key (embedded ${EXPECTED_EDKEY:0:12}…)"
 else
-  printf '\033[1;33m! sign_update not found — build the app once so Sparkle resolves, or run it manually.\033[0m\n'
+  die "sign_update --verify FAILED for the DMG — do NOT publish this signature."
 fi
+ok "EdDSA signature above → paste sparkle:edSignature + length into appcast.xml"
 
 echo
 ok "Release artifact ready: $DMG_PATH"
