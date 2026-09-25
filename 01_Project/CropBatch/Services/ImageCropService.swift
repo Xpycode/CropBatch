@@ -587,13 +587,11 @@ struct ImageCropService {
         let cropWidth = originalWidth - settings.cropLeft - settings.cropRight
         let cropHeight = originalHeight - settings.cropTop - settings.cropBottom
 
-        // CRITICAL: CGImage uses bottom-left origin (y=0 at bottom)
-        // User's cropTop means "remove N pixels from visual top" (high Y in CGImage)
-        // User's cropBottom means "remove N pixels from visual bottom" (low Y in CGImage)
-        // Therefore: crop rect starts at y = cropBottom (skip those pixels from CGImage bottom)
+        // CGImage cropping uses pixels from the top-left, unlike CGContext drawing.
+        // Start below the removed top rows; cropBottom only reduces the height.
         let cropRect = CGRect(
             x: settings.cropLeft,
-            y: settings.cropBottom,  // Convert to CGImage coords: y starts at cropBottom from bottom
+            y: settings.cropTop,
             width: cropWidth,
             height: cropHeight
         )
@@ -664,7 +662,7 @@ struct ImageCropService {
         let width = cgImage.width
         let height = cgImage.height
 
-        // Create a bitmap context with standard top-left origin
+        // Create a drawing context with the standard bottom-left origin.
         let colorSpace = cgImage.colorSpace ?? CGColorSpaceCreateDeviceRGB()
         guard let context = CGContext(
             data: nil,

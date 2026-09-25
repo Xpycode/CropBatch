@@ -1,5 +1,6 @@
 import XCTest
 import CoreGraphics
+import AppKit
 @testable import CropBatch
 
 final class ImageCropServiceTests: XCTestCase {
@@ -20,6 +21,58 @@ final class ImageCropServiceTests: XCTestCase {
         context.setFillColor(CGColor(red: 1, green: 0, blue: 0, alpha: 1))
         context.fill(CGRect(x: 0, y: 0, width: width, height: height))
         return context.makeImage()!
+    }
+
+    // MARK: - Crop edge regression (GitHub #1, #2)
+
+    // Exercises normalization and cropping; CLI export is checked separately.
+    private func assertCropPixels(_ settings: CropSettings, pointScale: CGFloat = 1,
+                                  file: StaticString = #filePath, line: UInt = #line) throws {
+        let source = try XCTUnwrap(NSBitmapImageRep(
+            bitmapDataPlanes: nil, pixelsWide: 20, pixelsHigh: 100,
+            bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+            colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0))
+        // Every row and column differs, so dimensions alone cannot hide an offset.
+        for y in 0..<100 {
+            for x in 0..<20 {
+                source.setColor(NSColor(deviceRed: CGFloat(y) / 100,
+                                        green: CGFloat(x) / 20, blue: 0.2, alpha: 1),
+                                atX: x, y: y)
+            }
+        }
+        let image = NSImage(cgImage: try XCTUnwrap(source.cgImage),
+                            size: NSSize(width: 20 / pointScale, height: 100 / pointScale))
+        let cropped = try ImageCropService.crop(image, with: settings)
+        let result = NSBitmapImageRep(cgImage: try XCTUnwrap(
+            cropped.cgImage(forProposedRect: nil, context: nil, hints: nil)))
+        XCTAssertEqual(result.pixelsWide, 20 - settings.cropLeft - settings.cropRight,
+                       file: file, line: line)
+        XCTAssertEqual(result.pixelsHigh, 100 - settings.cropTop - settings.cropBottom,
+                       file: file, line: line)
+        for y in [0, result.pixelsHigh / 2, result.pixelsHigh - 1] {
+            for x in [0, result.pixelsWide - 1] {
+                let actual = try XCTUnwrap(result.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB))
+                let expected = try XCTUnwrap(source.colorAt(
+                    x: x + settings.cropLeft, y: y + settings.cropTop)?.usingColorSpace(.deviceRGB))
+                XCTAssertEqual(actual.redComponent, expected.redComponent, accuracy: 0.02,
+                               "Wrong source row at output (\(x), \(y))", file: file, line: line)
+                XCTAssertEqual(actual.greenComponent, expected.greenComponent, accuracy: 0.02,
+                               "Wrong source column at output (\(x), \(y))", file: file, line: line)
+            }
+        }
+    }
+
+    func testCropTopRemovesVisualTop() throws {
+        try assertCropPixels(CropSettings(cropTop: 54))
+    }
+
+    func testCropBottomRemovesVisualBottom() throws {
+        try assertCropPixels(CropSettings(cropBottom: 54))
+    }
+
+    func testCropUnequalEdgesUsesPixelsOnRetinaImage() throws {
+        try assertCropPixels(CropSettings(cropTop: 30, cropBottom: 10,
+                                          cropLeft: 3, cropRight: 5), pointScale: 2)
     }
 
     // MARK: - splitIntoGrid
