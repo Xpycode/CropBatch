@@ -6,6 +6,12 @@ This file tracks the WHY behind technical and design decisions.
 
 ## Decisions
 
+### 2026-07-14 - Sparkle key custody: per-app keys, mandatory Strongbox backup, release-time key guard
+**Context:** CropBatch's v1.6 auto-update shipped signed with the wrong EdDSA key and was rejected by every installed client. Investigation (this session) found the correct key (`o388Mk7…`, cloned across 4 "Group A" apps) is **lost**: Sparkle's tools default to a single Keychain slot (service `https://sparkle-project.org`, account `ed25519`), so running `generate_keys` for any other app silently overwrote it, and the only file backup had been deleted. It was never in Strongbox. Nothing in the release path checked the key before signing.
+**Decision:** (1) One EdDSA key **per app**, generated under its own Keychain account (`generate_keys --account <app>`), never the shared default slot. (2) **Every** private key is exported to Strongbox at generation time — Strongbox is the durable source of truth. (3) `scripts/release.sh` gains a **pre-build guard** that aborts unless the Keychain's Sparkle key equals the app's embedded `SUPublicEDKey`, plus a post-sign `sign_update --verify`. (4) A canonical cross-app registry (`~/ProgrammingProjects/1-macOS/SPARKLE-KEY-REGISTRY.md`) tracks app → key → account → backup status. CropBatch itself must rotate to a new key (old one unrecoverable).
+**Alternatives considered:** Keep the shared key (rejected — it's lost, and shared keys were an accident with a 4-app blast radius). Keychain-only custody (rejected — Keychains get clobbered/reset; this is exactly how the key was lost). Hunt harder for the key across Macs/Time-Machine (done — all dry).
+**Consequences:** CropBatch v1.4/v1.6 users must download the next version manually once (no auto-update across a key change; precedent: syncthingStatus v1.5→v1.5.1). `release.sh` will now refuse to build CropBatch until its key is rotated — intended (can't sign a valid update today). Slight per-release friction (approve a Keychain prompt for the guard's `generate_keys -p`). Portfolio-wide follow-up: back up the keys that still exist before another is clobbered.
+
 ### 2026-07-03 - REAL WebP export: SDWebImageWebPCoder (lossy) + direct libwebp (lossless)
 **Context:** WebP export shipped broken — ImageIO/CGImageDestination cannot encode WebP on macOS; every write failed since the option appeared.
 **Decision:** Lossy WebP via SDWebImageWebPCoder 0.15.0 (SPM, ~2-4 MB binary growth). Lossless WebP bypasses the coder and calls the libwebp C API directly with `picture.use_argb = 1`.

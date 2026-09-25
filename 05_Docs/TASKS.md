@@ -6,6 +6,15 @@
 <!-- Ideas and future work. Added by /interview, user input, or discovered during development. -->
 <!-- Priority: top = highest, bottom = lowest -->
 
+- [ ] Prepare the next release with the crop fix; resolve Sparkle key rotation/backup and manual-upgrade notice first.
+- [ ] Appearance: inspect current shared implementation in sibling apps and plan adoption.
+- [ ] Help: review current shared Help and preserved CropBatch content; integrate and verify bundled images.
+- [ ] Feedback: inspect current shared feedback flow in sibling apps and plan adoption.
+- [ ] Toolbar: review Penumbra's buttons and plan equivalent appropriate controls for CropBatch.
+
+### Older entries — status needs reconciliation
+The entries below predate v1.6; verify against current code before scheduling.
+
 - [ ] Wire up test target in Xcode (File > New > Target > Unit Testing Bundle → CropBatchTests/)
 - [ ] Manual test grid split end-to-end (GUI 3×3 + CLI --grid-rows 3 --grid-cols 3)
 - [ ] v1.4 release prep (version bump, appcast, notarize)
