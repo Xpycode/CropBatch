@@ -9,9 +9,10 @@
 
 ## Current Position
 - **Phase:** released (v1.6 out, **auto-update needs a key rotation** — old signing key is lost)
-- **Focus:** v1.6 signing key (`o388Mk7…`) is **confirmed lost** (not on either Mac, no backup) — the "re-sign on M4 Pro" plan is dead. Live appcast mitigated (bad v1.6 entry pulled, `d31b68a`); release hardened against a repeat (`368f3d4`). Next real step is a **key rotation** for CropBatch. In-app Help still pending (separate branch).
-- **Status:** v1.6 DMG (11409899 B) is notarized+stapled and on the GitHub release (downloadable by hand). Corner radius now honors PNG *or* WebP via `ExportFormat.supportsTransparency` (6 sites); 35 tests green. Release automated via `scripts/release.sh` (now with a Sparkle key-match guard). Auto-update path forward = rotate to a new per-app key + one-time manual download for v1.4/v1.6 users.
-- **Last updated:** 2026-09-25
+- **Focus:** Prepare the release containing the verified crop fix on the M1 Max. Check its notarization credentials and test Sparkle key rotation.
+- **Status:** v1.6 remains the published download. A verified local cropping build is available on the M4 Pro.
+- **Current handoff:** [M1 Max release pickup and local build details](sessions/2026-11-25.md#resume).
+- **Last updated:** 2026-11-25
 
 ## Progress
 ```
@@ -53,9 +54,7 @@
   on the M4 Pro — all dry; user confirmed no external backup.
   **Mitigated:** bad v1.6 `<item>` pulled from the live appcast (`d31b68a`) → v1.4 users stop erroring;
   `release.sh` now guards key-match + `--verify` (`368f3d4`); custody docs written.
-  **Unblock (the only path):** rotate CropBatch to a **new per-app key** (save to Strongbox at generation),
-  embed new `SUPublicEDKey`, ship v1.7, and post a one-time "download manually" notice for v1.4/v1.6 users
-  (they can't auto-update across a key change). Runbook: `05_Docs/sparkle-signing.md` → "Key rotation".
+  **Next:** rotate to a dedicated CropBatch key, back it up to Strongbox, and test an update signed with the same Developer ID as the installed release. Keep manual download instructions available for unverified or unsupported upgrades. See [key rotation](sparkle-signing.md#key-rotation-required-for-the-next-cropbatch-release).
   Registry: `~/ProgrammingProjects/1-macOS/SPARKLE-KEY-REGISTRY.md`.
 - ~~WebP export is **broken**~~ — RESOLVED 2026-07-03 on `feature/webp-real-support`: lossy via SDWebImageWebPCoder 0.15.0, lossless via direct libwebp (`use_argb=1`, bit-exact — the coder's own lossless is YUV-degraded, issue #116). All 6 flows + CLI `--format webp --lossless` verified.
 - ~~CropBatch is **not under git**~~ — RESOLVED 2026-05-31: reconnected to `github.com/Xpycode/CropBatch`, history + tags v1.0–v1.4 restored, post-v1.4 work committed & pushed.
@@ -79,6 +78,7 @@
 - **[DONE]** Flat toolbar buttons — FCPToolbarButtonStyle + .hiddenTitleBar + UIDesignRequiresCompatibility
 
 ## Recent
+- 2026-11-25: Verified the selected crop against eight originals and preserved a runnable local build. Release preparation continues on the M1 Max.
 - 2026-09-25: Reconciled checkout, fixed reversed crop exports, passed 38 tests, closed both GitHub issues.
 
 ## Next Actions

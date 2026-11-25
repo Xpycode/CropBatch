@@ -6,7 +6,7 @@
 <!-- Ideas and future work. Added by /interview, user input, or discovered during development. -->
 <!-- Priority: top = highest, bottom = lowest -->
 
-- [ ] Prepare the next release with the crop fix; resolve Sparkle key rotation/backup and manual-upgrade notice first.
+- [ ] Prepare the next release with the crop fix; back up the new Sparkle key, test upgrades from released versions, and document the verified upgrade paths.
 - [ ] Appearance: inspect current shared implementation in sibling apps and plan adoption.
 - [ ] Help: review current shared Help and preserved CropBatch content; integrate and verify bundled images.
 - [ ] Feedback: inspect current shared feedback flow in sibling apps and plan adoption.

@@ -2,8 +2,7 @@
 
 > ⚠️ **STATUS 2026-07-14: the original key is LOST.** The private half of the key
 > below (`o388Mk7…`) is not in either Mac's Keychain, its backup file was deleted,
-> and no copy was ever saved to Strongbox. CropBatch cannot ship a v1.4-compatible
-> auto-update again. **Next release must rotate to a NEW key** (see "Key rotation"
+> and no copy was ever saved to Strongbox. Signing another archive with the original key is impossible. **Next release must rotate to a NEW key** (see "Key rotation"
 > below). Canonical cross-app key custody now lives in the portfolio registry:
 > `~/ProgrammingProjects/1-macOS/SPARKLE-KEY-REGISTRY.md`.
 
@@ -49,14 +48,13 @@ Two defences are now in place:
 
 ## Key rotation (required for the next CropBatch release)
 
-Because the old key is unrecoverable, installed users can only be reached by a manual download once:
+Sparkle supports rotating the EdDSA key while retaining the existing Developer ID signing identity. Verify each supported upgrade path against a shipped app before publishing the feed. [Sparkle key rotation](https://sparkle-project.org/documentation/#rotating-signing-keys)
 1. `generate_keys --account cropbatch` → **immediately** export & save to Strongbox (above).
 2. Put the new public key in `01_Project/CropBatch/Info.plist` → `SUPublicEDKey`.
 3. Register it in `SPARKLE-KEY-REGISTRY.md`.
 4. Build + ship the next version (`SPARKLE_ACCOUNT=cropbatch scripts/release.sh`) — the guard now
    passes because Keychain key == embedded key.
-5. Add a one-time notice (README + GitHub release notes) telling v1.4/v1.6 users to download the
-   new version by hand; after that install, auto-update works again.
+5. Test upgrades from v1.4 and v1.6 using an isolated feed. Document which versions can update in-app and provide a manual download for any unverified or unsuccessful path.
    Precedent: SyncthingStatus v1.5 → v1.5.1.
 
 ---
